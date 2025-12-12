@@ -1,0 +1,208 @@
+name: Bundle App
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_path:
+        description: 'Path to app directory (relative to repo root)'
+        required: true
+        default: 'apps/example-deno-app'
+      sign_windows:
+        description: 'Sign Windows MSIX package'
+        required: false
+        default: 'false'
+        type: boolean
+      sign_macos:
+        description: 'Sign and notarize macOS app'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+  APP_PATH: ${{ github.event.inputs.app_path }}
+
+jobs:
+  bundle-windows:
+    name: Bundle Windows MSIX
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-bundle-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build app
+        run: cargo run -p forge -- build ${{ env.APP_PATH }}
+
+      - name: Bundle app
+        run: cargo run -p forge -- bundle ${{ env.APP_PATH }}
+
+      - name: Sign MSIX (if requested)
+        if: github.event.inputs.sign_windows == 'true'
+        run: |
+          # Import certificate from secrets
+          echo "${{ secrets.WINDOWS_CERTIFICATE }}" | base64 -d > cert.pfx
+          cargo run -p forge -- sign --identity cert.pfx ${{ env.APP_PATH }}/bundle/*.msix
+          rm cert.pfx
+        env:
+          FORGE_SIGNING_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+
+      - name: Upload MSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-msix
+          path: ${{ env.APP_PATH }}/bundle/*.msix
+
+  bundle-macos:
+    name: Bundle macOS DMG
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-bundle-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build app
+        run: cargo run -p forge -- build ${{ env.APP_PATH }}
+
+      - name: Import signing certificate (if requested)
+        if: github.event.inputs.sign_macos == 'true'
+        run: |
+          # Create keychain
+          security create-keychain -p "" build.keychain
+          security set-keychain-settings build.keychain
+          security unlock-keychain -p "" build.keychain
+
+          # Import certificate
+          echo "${{ secrets.MACOS_CERTIFICATE }}" | base64 -d > cert.p12
+          security import cert.p12 -k build.keychain -P "${{ secrets.MACOS_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign
+          rm cert.p12
+
+          # Set keychain to be used
+          security list-keychains -s build.keychain
+          security default-keychain -s build.keychain
+
+          # Allow codesign to access keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+
+      - name: Setup notarization credentials (if requested)
+        if: github.event.inputs.sign_macos == 'true'
+        run: |
+          xcrun notarytool store-credentials "forge-notarize" \
+            --apple-id "${{ secrets.APPLE_ID }}" \
+            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
+            --password "${{ secrets.APPLE_APP_PASSWORD }}"
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+
+      - name: Bundle app
+        run: cargo run -p forge -- bundle ${{ env.APP_PATH }}
+        env:
+          FORGE_SIGNING_IDENTITY: ${{ github.event.inputs.sign_macos == 'true' && secrets.MACOS_SIGNING_IDENTITY || '' }}
+          FORGE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          FORGE_NOTARIZE: ${{ github.event.inputs.sign_macos }}
+
+      - name: Cleanup keychain
+        if: always() && github.event.inputs.sign_macos == 'true'
+        run: security delete-keychain build.keychain
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: |
+            ${{ env.APP_PATH }}/bundle/*.dmg
+            ${{ env.APP_PATH }}/bundle/*.app
+
+  bundle-linux:
+    name: Bundle Linux AppImage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            squashfs-tools \
+            fuse
+
+      - name: Install appimagetool
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-bundle-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build app
+        run: cargo run -p forge -- build ${{ env.APP_PATH }}
+
+      - name: Bundle app
+        run: cargo run -p forge -- bundle ${{ env.APP_PATH }}
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: |
+            ${{ env.APP_PATH }}/bundle/*.AppImage
+            ${{ env.APP_PATH }}/bundle/*.tar.gz

@@ -1,0 +1,24 @@
+# Forge Todo App - Demonstrates host:fs, host:ui, and IPC patterns
+[app]
+name = "Forge Todo"
+identifier = "com.forge.todo"
+version = "0.1.0"
+description = "A simple todo list app demonstrating Forge capabilities"
+
+[windows]
+width = 480
+height = 640
+resizable = true
+title = "Forge Todo"
+
+# Capability declarations
+[capabilities]
+
+# Allow reading and writing to user's home directory for persistence
+[capabilities.fs]
+read = ["~/.forge-todo.json"]
+write = ["~/.forge-todo.json"]
+
+# Allow all IPC channels for this demo
+[capabilities.channels]
+allowed = ["*"]

@@ -1,0 +1,29 @@
+# Forge Text Editor - Demonstrates full host:fs, dialogs, context menus, clipboard
+[app]
+name = "Forge Editor"
+identifier = "com.forge.editor"
+version = "0.1.0"
+description = "A simple text editor demonstrating Forge file system capabilities"
+
+[windows]
+width = 800
+height = 600
+resizable = true
+title = "Forge Editor - Untitled"
+
+# Capability declarations
+[capabilities]
+
+# Allow reading and writing to common document locations
+[capabilities.fs]
+read = ["~/*", "./*"]
+write = ["~/*", "./*"]
+
+# Allow clipboard access
+[capabilities.sys]
+clipboard = true
+notifications = true
+
+# Allow all IPC channels
+[capabilities.channels]
+allowed = ["*"]

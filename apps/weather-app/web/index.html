@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forge Weather</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Search Bar -->
+    <div class="search-container">
+      <input
+        type="text"
+        v-model="searchQuery"
+        @keyup.enter="search"
+        placeholder="Search for a city..."
+        class="search-input"
+      />
+      <button @click="search" class="search-btn">Search</button>
+    </div>
+
+    <!-- Search Results -->
+    <div v-if="searchResults.length > 0" class="search-results">
+      <div
+        v-for="loc in searchResults"
+        :key="`${loc.lat}-${loc.lon}`"
+        @click="selectLocation(loc)"
+        class="search-result"
+      >
+        {{ loc.name }}, {{ loc.country }}
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div v-if="state.loading" class="loading">
+      <div class="spinner"></div>
+      <p>Loading...</p>
+    </div>
+
+    <!-- Error State -->
+    <div v-if="state.error" class="error">
+      {{ state.error }}
+    </div>
+
+    <!-- No Location Selected -->
+    <div v-if="!state.location && !state.loading" class="empty-state">
+      <div class="empty-icon">&#127758;</div>
+      <p>Search for a city to see the weather</p>
+    </div>
+
+    <!-- Weather Display -->
+    <div v-if="state.location && state.weather && !state.loading" class="weather-container">
+      <div class="location-header">
+        <h1>{{ state.location.name }}</h1>
+        <p class="country">{{ state.location.country }}</p>
+      </div>
+
+      <div class="current-weather">
+        <div class="temperature">
+          {{ Math.round(state.weather.current.temperature_2m) }}°C
+        </div>
+        <div class="weather-info">
+          <div class="description">{{ state.weatherDescription }}</div>
+          <div class="feels-like">
+            Feels like {{ Math.round(state.weather.current.apparent_temperature) }}°C
+          </div>
+        </div>
+      </div>
+
+      <div class="weather-details">
+        <div class="detail">
+          <span class="label">Humidity</span>
+          <span class="value">{{ state.weather.current.relative_humidity_2m }}%</span>
+        </div>
+        <div class="detail">
+          <span class="label">Wind</span>
+          <span class="value">{{ state.weather.current.wind_speed_10m }} km/h</span>
+        </div>
+      </div>
+
+      <!-- 5-Day Forecast -->
+      <div class="forecast" v-if="state.weather.daily">
+        <h2>5-Day Forecast</h2>
+        <div class="forecast-days">
+          <div
+            v-for="(day, index) in state.weather.daily.time.slice(0, 5)"
+            :key="day"
+            class="forecast-day"
+          >
+            <div class="day-name">{{ formatDay(day) }}</div>
+            <div class="day-temps">
+              <span class="high">{{ Math.round(state.weather.daily.temperature_2m_max[index]) }}°</span>
+              <span class="low">{{ Math.round(state.weather.daily.temperature_2m_min[index]) }}°</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button @click="refresh" class="action-btn">Refresh</button>
+        <button @click="copyWeather" class="action-btn">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vue 3 from CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+  <script>
+    const { createApp, ref, reactive, onMounted, onUnmounted } = Vue;
+
+    createApp({
+      setup() {
+        const searchQuery = ref('');
+        const searchResults = ref([]);
+        const state = reactive({
+          location: null,
+          weather: null,
+          loading: false,
+          error: null,
+          weatherDescription: null,
+          weatherIcon: null
+        });
+
+        const search = () => {
+          if (searchQuery.value.trim()) {
+            window.host.send('search', searchQuery.value);
+            searchResults.value = [];
+          }
+        };
+
+        const selectLocation = (loc) => {
+          window.host.send('select-location', loc);
+          searchResults.value = [];
+          searchQuery.value = '';
+        };
+
+        const refresh = () => {
+          window.host.send('refresh');
+        };
+
+        const copyWeather = () => {
+          window.host.send('copy-weather');
+        };
+
+        const formatDay = (dateStr) => {
+          const date = new Date(dateStr);
+          const today = new Date();
+          if (date.toDateString() === today.toDateString()) return 'Today';
+          return date.toLocaleDateString('en-US', { weekday: 'short' });
+        };
+
+        onMounted(() => {
+          window.host.on('state', (data) => {
+            Object.assign(state, data);
+          });
+
+          window.host.on('search-results', (results) => {
+            searchResults.value = results;
+          });
+
+          window.host.emit('ready');
+        });
+
+        onUnmounted(() => {
+          window.host.off('state');
+          window.host.off('search-results');
+        });
+
+        return {
+          searchQuery,
+          searchResults,
+          state,
+          search,
+          selectLocation,
+          refresh,
+          copyWeather,
+          formatDay
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

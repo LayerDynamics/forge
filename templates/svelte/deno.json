@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext"]
+  },
+  "imports": {
+    "svelte": "https://esm.sh/svelte@4",
+    "svelte/": "https://esm.sh/svelte@4/"
+  }
+}

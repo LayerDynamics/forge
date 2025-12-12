@@ -1,0 +1,13 @@
+[app]
+name = "ExampleDenoApp"
+identifier = "com.example.denoapp"
+version = "0.1.0"
+
+[windows]
+width = 960
+height = 600
+resizable = true
+
+# Capability declarations
+[capabilities.channels]
+allowed = ["*"]  # Allow all IPC channels

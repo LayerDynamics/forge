@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "lib": ["deno.window", "dom"]
+  },
+  "imports": {
+    "host:fs": "./sdk/host.fs.ts",
+    "host:ui": "./sdk/host.ui.ts",
+    "host:net": "./sdk/host.net.ts",
+    "host:sys": "./sdk/host.sys.ts"
+  }
+}

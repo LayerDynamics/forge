@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forge Editor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <div class="toolbar">
+      <span class="filename" id="filename">Untitled</span>
+      <span class="modified" id="modified"></span>
+      <span class="info" id="info">Ln 1, Col 1</span>
+    </div>
+
+    <div class="editor-container">
+      <div class="line-numbers" id="line-numbers"></div>
+      <textarea
+        id="editor"
+        spellcheck="false"
+        placeholder="Start typing or open a file..."
+      ></textarea>
+    </div>
+
+    <!-- Find/Replace Dialog -->
+    <div class="find-dialog" id="find-dialog" style="display: none;">
+      <div class="find-row">
+        <input type="text" id="find-input" placeholder="Find...">
+        <button id="find-prev">Prev</button>
+        <button id="find-next">Next</button>
+        <button id="find-close">X</button>
+      </div>
+      <div class="find-row" id="replace-row" style="display: none;">
+        <input type="text" id="replace-input" placeholder="Replace with...">
+        <button id="replace-one">Replace</button>
+        <button id="replace-all">All</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Editor state
+    let state = {
+      content: '',
+      filePath: null,
+      modified: false,
+      fileName: 'Untitled'
+    };
+
+    let options = {
+      wordWrap: true,
+      lineNumbers: true
+    };
+
+    // DOM elements
+    const editor = document.getElementById('editor');
+    const lineNumbers = document.getElementById('line-numbers');
+    const filenameEl = document.getElementById('filename');
+    const modifiedEl = document.getElementById('modified');
+    const infoEl = document.getElementById('info');
+    const findDialog = document.getElementById('find-dialog');
+    const findInput = document.getElementById('find-input');
+    const replaceInput = document.getElementById('replace-input');
+    const replaceRow = document.getElementById('replace-row');
+
+    // Update line numbers
+    function updateLineNumbers() {
+      if (!options.lineNumbers) {
+        lineNumbers.style.display = 'none';
+        return;
+      }
+      lineNumbers.style.display = 'block';
+
+      const lines = editor.value.split('\n').length;
+      let html = '';
+      for (let i = 1; i <= lines; i++) {
+        html += `<div>${i}</div>`;
+      }
+      lineNumbers.innerHTML = html;
+    }
+
+    // Update cursor position info
+    function updateCursorInfo() {
+      const text = editor.value.substring(0, editor.selectionStart);
+      const lines = text.split('\n');
+      const line = lines.length;
+      const col = lines[lines.length - 1].length + 1;
+      infoEl.textContent = `Ln ${line}, Col ${col}`;
+    }
+
+    // Handle state updates from Deno
+    window.host.on('state', (data) => {
+      state = data;
+      editor.value = state.content;
+      filenameEl.textContent = state.fileName;
+      modifiedEl.textContent = state.modified ? '*' : '';
+      updateLineNumbers();
+    });
+
+    // Handle editor commands
+    window.host.on('editor-command', (cmd) => {
+      switch (cmd) {
+        case 'cut':
+          const cutText = editor.value.substring(editor.selectionStart, editor.selectionEnd);
+          if (cutText) {
+            window.host.send('copy-to-clipboard', cutText);
+            document.execCommand('delete');
+          }
+          break;
+        case 'copy':
+          const copyText = editor.value.substring(editor.selectionStart, editor.selectionEnd);
+          if (copyText) {
+            window.host.send('copy-to-clipboard', copyText);
+          }
+          break;
+        case 'paste':
+          window.host.send('request-paste');
+          break;
+        case 'select-all':
+          editor.select();
+          break;
+        case 'undo':
+          document.execCommand('undo');
+          break;
+        case 'redo':
+          document.execCommand('redo');
+          break;
+        case 'find':
+          findDialog.style.display = 'block';
+          replaceRow.style.display = 'none';
+          findInput.focus();
+          break;
+        case 'replace':
+          findDialog.style.display = 'block';
+          replaceRow.style.display = 'flex';
+          findInput.focus();
+          break;
+      }
+    });
+
+    // Handle paste content
+    window.host.on('paste-content', (text) => {
+      const start = editor.selectionStart;
+      const end = editor.selectionEnd;
+      const before = editor.value.substring(0, start);
+      const after = editor.value.substring(end);
+      editor.value = before + text + after;
+      editor.selectionStart = editor.selectionEnd = start + text.length;
+      editor.dispatchEvent(new Event('input'));
+    });
+
+    // Handle toggle options
+    window.host.on('toggle-option', (option) => {
+      if (option === 'word-wrap') {
+        options.wordWrap = !options.wordWrap;
+        editor.style.whiteSpace = options.wordWrap ? 'pre-wrap' : 'pre';
+      } else if (option === 'line-numbers') {
+        options.lineNumbers = !options.lineNumbers;
+        updateLineNumbers();
+      }
+    });
+
+    // Editor events
+    editor.addEventListener('input', () => {
+      window.host.send('content-changed', editor.value);
+      updateLineNumbers();
+    });
+
+    editor.addEventListener('click', updateCursorInfo);
+    editor.addEventListener('keyup', updateCursorInfo);
+
+    editor.addEventListener('scroll', () => {
+      lineNumbers.scrollTop = editor.scrollTop;
+    });
+
+    // Context menu
+    editor.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      window.host.send('context-menu');
+    });
+
+    // Find functionality
+    let lastFindIndex = 0;
+
+    function findText(direction = 1) {
+      const searchText = findInput.value;
+      if (!searchText) return;
+
+      const text = editor.value.toLowerCase();
+      const search = searchText.toLowerCase();
+
+      let index;
+      if (direction === 1) {
+        index = text.indexOf(search, lastFindIndex + 1);
+        if (index === -1) index = text.indexOf(search);
+      } else {
+        index = text.lastIndexOf(search, lastFindIndex - 1);
+        if (index === -1) index = text.lastIndexOf(search);
+      }
+
+      if (index !== -1) {
+        lastFindIndex = index;
+        editor.focus();
+        editor.setSelectionRange(index, index + searchText.length);
+        updateCursorInfo();
+      }
+    }
+
+    document.getElementById('find-next').addEventListener('click', () => findText(1));
+    document.getElementById('find-prev').addEventListener('click', () => findText(-1));
+    document.getElementById('find-close').addEventListener('click', () => {
+      findDialog.style.display = 'none';
+    });
+
+    findInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        findText(e.shiftKey ? -1 : 1);
+      } else if (e.key === 'Escape') {
+        findDialog.style.display = 'none';
+      }
+    });
+
+    // Replace functionality
+    document.getElementById('replace-one').addEventListener('click', () => {
+      const searchText = findInput.value;
+      const replaceText = replaceInput.value;
+      if (!searchText) return;
+
+      const start = editor.selectionStart;
+      const end = editor.selectionEnd;
+      const selected = editor.value.substring(start, end);
+
+      if (selected.toLowerCase() === searchText.toLowerCase()) {
+        editor.value = editor.value.substring(0, start) + replaceText + editor.value.substring(end);
+        editor.setSelectionRange(start, start + replaceText.length);
+        editor.dispatchEvent(new Event('input'));
+      }
+      findText(1);
+    });
+
+    document.getElementById('replace-all').addEventListener('click', () => {
+      const searchText = findInput.value;
+      const replaceText = replaceInput.value;
+      if (!searchText) return;
+
+      const regex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      editor.value = editor.value.replace(regex, replaceText);
+      editor.dispatchEvent(new Event('input'));
+    });
+
+    // Drag and drop
+    editor.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      editor.classList.add('drag-over');
+    });
+
+    editor.addEventListener('dragleave', () => {
+      editor.classList.remove('drag-over');
+    });
+
+    editor.addEventListener('drop', (e) => {
+      e.preventDefault();
+      editor.classList.remove('drag-over');
+
+      // Note: File drop needs to be handled via main process for security
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        // In a real implementation, we'd get the file path from the dropped file
+        // For now, just show it's possible
+        console.log('File dropped:', files[0].name);
+      }
+    });
+
+    // Keyboard shortcuts (backup for when menu doesn't work)
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault();
+        findDialog.style.display = 'block';
+        replaceRow.style.display = 'none';
+        findInput.focus();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'h') {
+        e.preventDefault();
+        findDialog.style.display = 'block';
+        replaceRow.style.display = 'flex';
+        findInput.focus();
+      }
+    });
+
+    // Initialize
+    updateLineNumbers();
+    window.host.emit('ready');
+  </script>
+</body>
+</html>

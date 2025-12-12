@@ -1,0 +1,29 @@
+# Forge System Monitor - Demonstrates host:sys, host:process, multi-window
+[app]
+name = "Forge Monitor"
+identifier = "com.forge.monitor"
+version = "0.1.0"
+description = "A system monitor demonstrating Forge process and system capabilities"
+
+[windows]
+width = 600
+height = 500
+resizable = true
+title = "Forge System Monitor"
+
+# Capability declarations
+[capabilities]
+
+# Allow system info access
+[capabilities.sys]
+info = true
+notifications = true
+
+# Allow process listing
+[capabilities.process]
+list = true
+spawn = false
+
+# Allow all IPC channels
+[capabilities.channels]
+allowed = ["*"]

@@ -1,0 +1,23 @@
+[package]
+name = "ext_sys"
+version = "0.1.0-alpha.1"
+edition = "2021"
+
+[dependencies]
+deno_core = "*"
+deno_error = "*"
+thiserror = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hostname = "0.3"
+arboard = "3"
+tracing = "0.1"
+dirs = "5"
+tokio = { version = "1", features = ["rt", "sync"] }
+battery = "0.7"
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+notify-rust = "4"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+mac-notification-sys = "0.6"

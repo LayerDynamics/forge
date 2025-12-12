@@ -1,0 +1,11 @@
+[workspace]
+members = [
+  "crates/forge-host",
+  "crates/ext_fs",
+  "crates/ext_ui",
+  "crates/ext_net",
+  "crates/ext_sys",
+  "crates/ext_process",
+  "crates/forge"
+]
+resolver = "2"

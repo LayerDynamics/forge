@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forge System Monitor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- System Overview -->
+    <div class="overview">
+      <div class="stat-card">
+        <div class="stat-icon cpu-icon"></div>
+        <div class="stat-info">
+          <div class="stat-label">CPU Usage</div>
+          <div class="stat-value" id="cpu-value">--%</div>
+          <div class="stat-bar">
+            <div class="stat-bar-fill cpu-bar" id="cpu-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon mem-icon"></div>
+        <div class="stat-info">
+          <div class="stat-label">Memory Usage</div>
+          <div class="stat-value" id="mem-value">--%</div>
+          <div class="stat-bar">
+            <div class="stat-bar-fill mem-bar" id="mem-bar"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Info -->
+    <div class="system-info">
+      <div class="info-item">
+        <span class="info-label">Hostname:</span>
+        <span class="info-value" id="hostname">--</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">OS:</span>
+        <span class="info-value" id="os">--</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Arch:</span>
+        <span class="info-value" id="arch">--</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">CPUs:</span>
+        <span class="info-value" id="cpus">--</span>
+      </div>
+      <div class="info-item" id="battery-info" style="display: none;">
+        <span class="info-label">Battery:</span>
+        <span class="info-value" id="battery">--</span>
+      </div>
+    </div>
+
+    <!-- Process List -->
+    <div class="process-section">
+      <div class="section-header">
+        <h2>Processes</h2>
+        <button class="refresh-btn" onclick="refresh()">Refresh</button>
+      </div>
+      <div class="process-table">
+        <div class="table-header">
+          <div class="col-pid">PID</div>
+          <div class="col-name">Name</div>
+          <div class="col-cpu">CPU %</div>
+          <div class="col-mem">Memory</div>
+          <div class="col-status">Status</div>
+        </div>
+        <div class="table-body" id="process-list">
+          <!-- Processes will be inserted here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let state = null;
+
+    // Update UI with state
+    function updateUI(newState) {
+      state = newState;
+
+      // CPU
+      document.getElementById('cpu-value').textContent = state.cpuUsage.toFixed(1) + '%';
+      document.getElementById('cpu-bar').style.width = state.cpuUsage + '%';
+
+      // Memory
+      document.getElementById('mem-value').textContent = state.memoryUsage.toFixed(1) + '%';
+      document.getElementById('mem-bar').style.width = state.memoryUsage + '%';
+
+      // System info
+      document.getElementById('hostname').textContent = state.hostname;
+      document.getElementById('os').textContent = state.os;
+      document.getElementById('arch').textContent = state.arch;
+      document.getElementById('cpus').textContent = state.cpuCount + ' cores';
+
+      // Battery
+      if (state.battery && state.battery.hasBattery) {
+        document.getElementById('battery-info').style.display = 'flex';
+        const batteryText = state.battery.charging
+          ? `${state.battery.percent}% (charging)`
+          : `${state.battery.percent}%`;
+        document.getElementById('battery').textContent = batteryText;
+      }
+
+      // Process list
+      const processList = document.getElementById('process-list');
+      processList.innerHTML = state.processes.map(p => `
+        <div class="table-row" onclick="openDetail(${p.pid})">
+          <div class="col-pid">${p.pid}</div>
+          <div class="col-name">${p.name}</div>
+          <div class="col-cpu">${p.cpu.toFixed(1)}%</div>
+          <div class="col-mem">${formatMemory(p.memory)}</div>
+          <div class="col-status">
+            <span class="status-badge status-${p.status}">${p.status}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Format memory
+    function formatMemory(mb) {
+      if (mb >= 1024) {
+        return (mb / 1024).toFixed(1) + ' GB';
+      }
+      return mb.toFixed(0) + ' MB';
+    }
+
+    // Open process detail
+    function openDetail(pid) {
+      window.host.send('open-process-detail', pid);
+    }
+
+    // Refresh
+    function refresh() {
+      window.host.send('refresh');
+    }
+
+    // Listen for state updates
+    window.host.on('state', updateUI);
+
+    // Signal ready
+    window.host.emit('ready');
+  </script>
+</body>
+</html>

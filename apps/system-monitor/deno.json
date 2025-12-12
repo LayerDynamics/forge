@@ -1,0 +1,11 @@
+{
+  "name": "forge-system-monitor",
+  "version": "0.1.0",
+  "tasks": {
+    "dev": "forge dev ."
+  },
+  "compilerOptions": {
+    "strict": true,
+    "lib": ["esnext"]
+  }
+}

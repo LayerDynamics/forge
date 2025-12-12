@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forge Todo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React and ReactDOM from CDN for simplicity -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <script>
+    // Todo App React Component
+    const { useState, useEffect, useRef } = React;
+
+    // State from Deno backend
+    let appState = {
+      todos: [],
+      filter: 'all',
+      counts: { all: 0, active: 0, completed: 0 }
+    };
+
+    function TodoApp() {
+      const [state, setState] = useState(appState);
+      const [newTodo, setNewTodo] = useState('');
+      const [editingId, setEditingId] = useState(null);
+      const [editText, setEditText] = useState('');
+      const inputRef = useRef(null);
+
+      useEffect(() => {
+        // Listen for state updates from Deno
+        window.host.on('state', (data) => {
+          appState = data;
+          setState(data);
+        });
+
+        // Listen for focus-input command
+        window.host.on('focus-input', () => {
+          if (inputRef.current) {
+            inputRef.current.focus();
+          }
+        });
+
+        // Signal ready
+        window.host.emit('ready');
+
+        return () => {
+          window.host.off('state');
+          window.host.off('focus-input');
+        };
+      }, []);
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (newTodo.trim()) {
+          window.host.send('add-todo', newTodo);
+          setNewTodo('');
+        }
+      };
+
+      const handleToggle = (id) => {
+        window.host.send('toggle-todo', id);
+      };
+
+      const handleDelete = (id) => {
+        window.host.send('delete-todo', id);
+      };
+
+      const handleEdit = (todo) => {
+        setEditingId(todo.id);
+        setEditText(todo.text);
+      };
+
+      const handleEditSubmit = (id) => {
+        if (editText.trim()) {
+          window.host.send('edit-todo', { id, text: editText });
+        }
+        setEditingId(null);
+        setEditText('');
+      };
+
+      const handleEditKeyDown = (e, id) => {
+        if (e.key === 'Enter') {
+          handleEditSubmit(id);
+        } else if (e.key === 'Escape') {
+          setEditingId(null);
+          setEditText('');
+        }
+      };
+
+      const setFilter = (filter) => {
+        window.host.send('set-filter', filter);
+      };
+
+      const clearCompleted = () => {
+        window.host.send('clear-completed');
+      };
+
+      return React.createElement('div', { className: 'todo-app' },
+        React.createElement('header', { className: 'header' },
+          React.createElement('h1', null, 'todos'),
+          React.createElement('form', { onSubmit: handleSubmit },
+            React.createElement('input', {
+              ref: inputRef,
+              className: 'new-todo',
+              placeholder: 'What needs to be done?',
+              value: newTodo,
+              onChange: (e) => setNewTodo(e.target.value),
+              autoFocus: true
+            })
+          )
+        ),
+
+        state.todos.length > 0 && React.createElement('section', { className: 'main' },
+          React.createElement('ul', { className: 'todo-list' },
+            state.todos.map(todo =>
+              React.createElement('li', {
+                key: todo.id,
+                className: `todo-item ${todo.completed ? 'completed' : ''} ${editingId === todo.id ? 'editing' : ''}`
+              },
+                editingId === todo.id
+                  ? React.createElement('input', {
+                      className: 'edit',
+                      value: editText,
+                      onChange: (e) => setEditText(e.target.value),
+                      onBlur: () => handleEditSubmit(todo.id),
+                      onKeyDown: (e) => handleEditKeyDown(e, todo.id),
+                      autoFocus: true
+                    })
+                  : React.createElement('div', { className: 'view' },
+                      React.createElement('input', {
+                        className: 'toggle',
+                        type: 'checkbox',
+                        checked: todo.completed,
+                        onChange: () => handleToggle(todo.id)
+                      }),
+                      React.createElement('label', {
+                        onDoubleClick: () => handleEdit(todo)
+                      }, todo.text),
+                      React.createElement('button', {
+                        className: 'destroy',
+                        onClick: () => handleDelete(todo.id)
+                      })
+                    )
+              )
+            )
+          )
+        ),
+
+        (state.counts.all > 0) && React.createElement('footer', { className: 'footer' },
+          React.createElement('span', { className: 'todo-count' },
+            React.createElement('strong', null, state.counts.active),
+            ` item${state.counts.active !== 1 ? 's' : ''} left`
+          ),
+          React.createElement('ul', { className: 'filters' },
+            ['all', 'active', 'completed'].map(f =>
+              React.createElement('li', { key: f },
+                React.createElement('a', {
+                  className: state.filter === f ? 'selected' : '',
+                  href: '#',
+                  onClick: (e) => { e.preventDefault(); setFilter(f); }
+                }, f.charAt(0).toUpperCase() + f.slice(1))
+              )
+            )
+          ),
+          state.counts.completed > 0 && React.createElement('button', {
+            className: 'clear-completed',
+            onClick: clearCompleted
+          }, 'Clear completed')
+        )
+      );
+    }
+
+    // Mount the app
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(TodoApp));
+  </script>
+</body>
+</html>

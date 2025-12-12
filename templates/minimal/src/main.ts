@@ -1,0 +1,15 @@
+import { openWindow, windowEvents } from "host:ui";
+
+console.log("Starting Forge app...");
+
+const win = await openWindow({
+  url: "app://index.html",
+  width: 1024,
+  height: 640,
+  title: "Forge App"
+});
+
+// Listen for events from the renderer
+for await (const event of windowEvents()) {
+  console.log("Event from renderer:", event);
+}

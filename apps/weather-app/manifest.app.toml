@@ -1,0 +1,28 @@
+# Forge Weather App - Demonstrates host:net, host:sys notifications, tray icons
+[app]
+name = "Forge Weather"
+identifier = "com.forge.weather"
+version = "0.1.0"
+description = "A weather app demonstrating Forge networking and system features"
+
+[windows]
+width = 400
+height = 500
+resizable = true
+title = "Forge Weather"
+
+# Capability declarations
+[capabilities]
+
+# Allow fetching from weather APIs
+[capabilities.net]
+fetch = ["https://api.open-meteo.com/*", "https://geocoding-api.open-meteo.com/*"]
+
+# Allow system notifications
+[capabilities.sys]
+notifications = true
+clipboard = true
+
+# Allow all IPC channels
+[capabilities.channels]
+allowed = ["*"]

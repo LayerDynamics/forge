@@ -1,0 +1,17 @@
+[package]
+name = "ext_ui"
+version = "0.1.0-alpha.1"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+anyhow = "1"
+deno_core = "*"
+deno_error = "*"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+tokio = { version = "1", features = ["sync"] }
+tao = "0.30"
+wry = "0.46"
+rfd = "0.14"

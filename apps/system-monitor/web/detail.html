@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Process Detail</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      padding: 20px;
+    }
+
+    .detail-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #3c3c3c;
+    }
+
+    .process-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+
+    .process-title h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .process-title .pid {
+      font-size: 14px;
+      color: #858585;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .detail-item {
+      background: #252526;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .detail-label {
+      font-size: 12px;
+      color: #858585;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .detail-value {
+      font-size: 24px;
+      font-weight: 500;
+    }
+
+    .close-btn {
+      width: 100%;
+      padding: 12px;
+      background: #0e639c;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .close-btn:hover {
+      background: #1177bb;
+    }
+  </style>
+</head>
+<body>
+  <div class="detail-header">
+    <div class="process-icon">
+      <span id="icon-letter">?</span>
+    </div>
+    <div class="process-title">
+      <h1 id="process-name">Loading...</h1>
+      <div class="pid">PID: <span id="process-pid">--</span></div>
+    </div>
+  </div>
+
+  <div class="detail-grid">
+    <div class="detail-item">
+      <div class="detail-label">CPU Usage</div>
+      <div class="detail-value" id="cpu-usage">--%</div>
+    </div>
+    <div class="detail-item">
+      <div class="detail-label">Memory</div>
+      <div class="detail-value" id="memory">-- MB</div>
+    </div>
+    <div class="detail-item">
+      <div class="detail-label">Status</div>
+      <div class="detail-value" id="status">--</div>
+    </div>
+    <div class="detail-item">
+      <div class="detail-label">Type</div>
+      <div class="detail-value" id="type">Process</div>
+    </div>
+  </div>
+
+  <button class="close-btn" onclick="closeWindow()">Close</button>
+
+  <script>
+    // Update UI with process detail
+    function updateDetail(process) {
+      document.getElementById('icon-letter').textContent = process.name.charAt(0).toUpperCase();
+      document.getElementById('process-name').textContent = process.name;
+      document.getElementById('process-pid').textContent = process.pid;
+      document.getElementById('cpu-usage').textContent = process.cpu.toFixed(1) + '%';
+      document.getElementById('memory').textContent = formatMemory(process.memory);
+      document.getElementById('status').textContent = process.status;
+    }
+
+    function formatMemory(mb) {
+      if (mb >= 1024) {
+        return (mb / 1024).toFixed(1) + ' GB';
+      }
+      return mb.toFixed(0) + ' MB';
+    }
+
+    function closeWindow() {
+      window.host.send('close-detail');
+    }
+
+    // Listen for process detail
+    window.host.on('process-detail', updateDetail);
+
+    // Signal ready
+    window.host.emit('ready');
+  </script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+[app]
+name = "ForgeDenoApp"
+identifier = "com.example.forge-deno-app"
+version = "0.1.0"
+
+[windows]
+width = 1024
+height = 640
+resizable = true
+
+# Capability declarations
+# Add specific capabilities as needed:
+# [capabilities.fs]
+# read = ["~/.myapp/*"]
+# write = ["~/.myapp/*"]
+
+# [capabilities.net]
+# fetch = ["https://api.example.com/*"]
+
+# [capabilities.sys]
+# clipboard = true
+# notifications = true
+
+# IPC channels between Deno and renderer
+[capabilities.channels]
+allowed = ["*"]  # Allow all channels (use specific channels in production)

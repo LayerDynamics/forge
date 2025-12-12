@@ -1,0 +1,282 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build forge CLI and runtime
+        run: |
+          cargo build -p forge --release
+          cargo build -p forge-host --release
+
+      - name: Package forge binaries
+        run: |
+          mkdir -p forge-dist
+          cp target/release/forge.exe forge-dist/
+          cp target/release/forge-host.exe forge-dist/
+          cd forge-dist && tar -czvf ../forge-x86_64-pc-windows-msvc.tar.gz *
+
+      - name: Build example app
+        run: cargo run -p forge -- build apps/example-deno-app
+
+      - name: Bundle example app (MSIX)
+        run: cargo run -p forge -- bundle apps/example-deno-app
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: |
+            forge-x86_64-pc-windows-msvc.tar.gz
+            apps/example-deno-app/bundle/*.msix
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build forge CLI and runtime
+        run: |
+          cargo build -p forge --release
+          cargo build -p forge-host --release
+
+      - name: Package forge binaries
+        run: |
+          mkdir -p forge-dist
+          cp target/release/forge forge-dist/
+          cp target/release/forge-host forge-dist/
+          cd forge-dist && tar -czvf ../forge-aarch64-apple-darwin.tar.gz *
+
+      - name: Build example app
+        run: cargo run -p forge -- build apps/example-deno-app
+
+      - name: Bundle example app (DMG)
+        run: cargo run -p forge -- bundle apps/example-deno-app
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: |
+            forge-aarch64-apple-darwin.tar.gz
+            apps/example-deno-app/bundle/*.dmg
+            apps/example-deno-app/bundle/*.app
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            squashfs-tools
+
+      - name: Install appimagetool
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build forge CLI and runtime
+        run: |
+          cargo build -p forge --release
+          cargo build -p forge-host --release
+
+      - name: Package forge binaries
+        run: |
+          mkdir -p forge-dist
+          cp target/release/forge forge-dist/
+          cp target/release/forge-host forge-dist/
+          cd forge-dist && tar -czvf ../forge-x86_64-unknown-linux-gnu.tar.gz *
+
+      - name: Build example app
+        run: cargo run -p forge -- build apps/example-deno-app
+
+      - name: Bundle example app (AppImage)
+        run: cargo run -p forge -- bundle apps/example-deno-app
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            forge-x86_64-unknown-linux-gnu.tar.gz
+            apps/example-deno-app/bundle/*.AppImage
+            apps/example-deno-app/bundle/*.tar.gz
+
+  release:
+    name: Create Release
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-artifacts
+          path: artifacts/windows
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-artifacts
+          path: artifacts/macos
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-artifacts
+          path: artifacts/linux
+
+      - name: Rename artifacts for release
+        run: |
+          mkdir -p release
+          # Forge toolchain tarballs (forge + forge-host)
+          cp artifacts/windows/forge-x86_64-pc-windows-msvc.tar.gz release/ || true
+          cp artifacts/macos/forge-aarch64-apple-darwin.tar.gz release/ || true
+          cp artifacts/linux/forge-x86_64-unknown-linux-gnu.tar.gz release/ || true
+          # Example app bundles
+          cp artifacts/windows/apps/example-deno-app/bundle/*.msix release/ || true
+          cp artifacts/macos/apps/example-deno-app/bundle/*.dmg release/ || true
+          cp artifacts/linux/apps/example-deno-app/bundle/*.AppImage release/ || true
+          cp artifacts/linux/apps/example-deno-app/bundle/*.tar.gz release/ || true
+
+      - name: Get tag name
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "TAG=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.TAG }}
+          name: Release ${{ steps.tag.outputs.TAG }}
+          draft: true
+          prerelease: ${{ contains(steps.tag.outputs.TAG, '-') }}
+          files: release/*
+          body: |
+            ## Forge ${{ steps.tag.outputs.TAG }}
+
+            ### Quick Install
+
+            ```bash
+            # macOS/Linux
+            curl -fsSL https://get.forge.dev/install.sh | sh
+
+            # Or download manually and extract
+            tar -xzf forge-x86_64-unknown-linux-gnu.tar.gz -C ~/.forge/bin
+            ```
+
+            ### Downloads
+
+            | Platform | Toolchain | Example App |
+            |----------|-----------|-------------|
+            | Windows x64 | `forge-x86_64-pc-windows-msvc.tar.gz` | `.msix` |
+            | macOS ARM | `forge-aarch64-apple-darwin.tar.gz` | `.dmg` |
+            | Linux x64 | `forge-x86_64-unknown-linux-gnu.tar.gz` | `.AppImage` |
+
+            Each toolchain archive contains:
+            - `forge` - CLI tool
+            - `forge-host` - Runtime binary
+
+            ### Getting Started
+
+            ```bash
+            forge init my-app
+            cd my-app
+            forge dev .
+            ```
+
+            ### Changelog
+
+            See [CHANGELOG.md](CHANGELOG.md) for details.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
