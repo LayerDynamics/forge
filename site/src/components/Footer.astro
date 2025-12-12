@@ -1,0 +1,163 @@
+---
+const links = {
+  docs: [
+    { label: 'Getting Started', href: '/getting-started/' },
+    { label: 'Architecture', href: '/architecture/' },
+    { label: 'API Reference', href: '/api/host-ui/' },
+    { label: 'Manifest', href: '/api/manifest/' },
+  ],
+  community: [
+    { label: 'GitHub', href: 'https://github.com/LayerDynamics/forge' },
+    { label: 'Issues', href: 'https://github.com/LayerDynamics/forge/issues' },
+    { label: 'Discussions', href: 'https://github.com/LayerDynamics/forge/discussions' },
+  ],
+  resources: [
+    { label: 'Examples', href: 'https://github.com/LayerDynamics/forge/tree/main/apps' },
+    { label: 'Changelog', href: 'https://github.com/LayerDynamics/forge/blob/main/CHANGELOG.md' },
+    { label: 'License (MIT)', href: 'https://github.com/LayerDynamics/forge/blob/main/LICENSE' },
+  ],
+};
+---
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="/" class="logo">
+          <svg viewBox="0 0 32 32" fill="none" width="32" height="32">
+            <rect width="32" height="32" rx="6" fill="#0066cc"/>
+            <path d="M8 10h16v2H10v3h12v2H10v5H8V10z" fill="white"/>
+          </svg>
+          <span>Forge</span>
+        </a>
+        <p>Build cross-platform desktop apps with TypeScript and Deno.</p>
+        <p class="copyright">&copy; {new Date().getFullYear()} LayerDynamics. MIT License.</p>
+      </div>
+
+      <div class="footer-links">
+        <div class="link-group">
+          <h4>Documentation</h4>
+          <ul>
+            {links.docs.map((link) => (
+              <li><a href={link.href}>{link.label}</a></li>
+            ))}
+          </ul>
+        </div>
+
+        <div class="link-group">
+          <h4>Community</h4>
+          <ul>
+            {links.community.map((link) => (
+              <li><a href={link.href} target="_blank" rel="noopener">{link.label}</a></li>
+            ))}
+          </ul>
+        </div>
+
+        <div class="link-group">
+          <h4>Resources</h4>
+          <ul>
+            {links.resources.map((link) => (
+              <li><a href={link.href} target="_blank" rel="noopener">{link.label}</a></li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    padding: 4rem 2rem 2rem;
+    background: #0a0a0a;
+    border-top: 1px solid #1a1a1a;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 2fr;
+    gap: 4rem;
+  }
+
+  .footer-brand .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none;
+    color: white;
+    font-weight: 600;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .footer-brand p {
+    color: #666;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    max-width: 300px;
+  }
+
+  .footer-brand .copyright {
+    margin-top: 1.5rem;
+    font-size: 0.85rem;
+    color: #444;
+  }
+
+  .footer-links {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+
+  .link-group h4 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 1rem;
+  }
+
+  .link-group ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .link-group li {
+    margin-bottom: 0.5rem;
+  }
+
+  .link-group a {
+    color: #aaa;
+    text-decoration: none;
+    font-size: 0.95rem;
+    transition: color 0.2s;
+  }
+
+  .link-group a:hover {
+    color: white;
+  }
+
+  @media (max-width: 768px) {
+    .footer-grid {
+      grid-template-columns: 1fr;
+      gap: 3rem;
+    }
+
+    .footer-links {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 480px) {
+    .footer-links {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

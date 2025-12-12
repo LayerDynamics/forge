@@ -1,0 +1,51 @@
+---
+import Hero from '../components/Hero.astro';
+import Features from '../components/Features.astro';
+import CodeExample from '../components/CodeExample.astro';
+import Comparison from '../components/Comparison.astro';
+import QuickStart from '../components/QuickStart.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Forge - Build Desktop Apps with TypeScript</title>
+    <meta name="description" content="Forge is an Electron alternative using Deno and native WebViews. Build cross-platform desktop apps with TypeScript. Smaller, faster, more secure." />
+    <meta property="og:title" content="Forge - Build Desktop Apps with TypeScript" />
+    <meta property="og:description" content="An Electron alternative using Deno and native WebViews. Smaller, faster, more secure." />
+    <meta property="og:image" content="https://forge-deno.com/og-image.png" />
+    <meta property="og:url" content="https://forge-deno.com" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: 'Inter', system-ui, sans-serif;
+        background: #0a0a0a;
+        color: #fafafa;
+        line-height: 1.6;
+      }
+      code, pre {
+        font-family: 'JetBrains Mono', monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <Hero />
+    <Features />
+    <CodeExample />
+    <Comparison />
+    <QuickStart />
+    <Footer />
+  </body>
+</html>

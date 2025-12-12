@@ -1,0 +1,120 @@
+---
+const features = [
+  {
+    icon: '&#9889;',
+    title: 'Native Performance',
+    description: 'Rust-powered runtime with system WebViews. No Chromium bloat. Apps start instantly.',
+  },
+  {
+    icon: '&#128221;',
+    title: 'TypeScript First',
+    description: 'Write your entire app in TypeScript. Full type support with Deno runtime.',
+  },
+  {
+    icon: '&#128274;',
+    title: 'Capability Security',
+    description: 'Explicit permission model. Apps declare exactly what they need. Sandboxed by default.',
+  },
+  {
+    icon: '&#127760;',
+    title: 'Cross-Platform',
+    description: 'Build for macOS, Windows, and Linux from a single codebase. Native look and feel.',
+  },
+  {
+    icon: '&#129513;',
+    title: 'Multiple Frameworks',
+    description: 'Use React, Vue, Svelte, or vanilla JS. Your choice, your workflow.',
+  },
+  {
+    icon: '&#128230;',
+    title: 'Small Bundles',
+    description: '~15MB app bundles vs Electron\'s 150MB+. 10x smaller, faster downloads.',
+  },
+];
+---
+
+<section class="features">
+  <div class="container">
+    <div class="section-header">
+      <h2>Why Forge?</h2>
+      <p>Everything you need to build modern desktop applications</p>
+    </div>
+
+    <div class="features-grid">
+      {features.map((feature) => (
+        <div class="feature-card">
+          <div class="feature-icon" set:html={feature.icon} />
+          <h3>{feature.title}</h3>
+          <p>{feature.description}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .features {
+    padding: 6rem 2rem;
+    background: #0a0a0a;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .section-header {
+    text-align: center;
+    margin-bottom: 4rem;
+  }
+
+  .section-header h2 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    letter-spacing: -0.02em;
+  }
+
+  .section-header p {
+    font-size: 1.25rem;
+    color: #888;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .feature-card {
+    background: linear-gradient(180deg, #151518 0%, #0f0f12 100%);
+    border: 1px solid #222;
+    border-radius: 16px;
+    padding: 2rem;
+    transition: all 0.3s ease;
+  }
+
+  .feature-card:hover {
+    border-color: #0066cc40;
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px -20px rgba(0, 102, 204, 0.2);
+  }
+
+  .feature-icon {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    display: inline-block;
+  }
+
+  .feature-card h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+  }
+
+  .feature-card p {
+    color: #888;
+    line-height: 1.6;
+    font-size: 0.95rem;
+  }
+</style>

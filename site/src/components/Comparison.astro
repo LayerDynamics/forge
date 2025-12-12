@@ -1,0 +1,158 @@
+---
+const comparisons = [
+  { metric: 'Bundle Size', forge: '~15 MB', electron: '~150 MB', better: 'forge' },
+  { metric: 'Startup Time', forge: '~100ms', electron: '~500ms', better: 'forge' },
+  { metric: 'Memory Usage', forge: '~50 MB', electron: '~150 MB', better: 'forge' },
+  { metric: 'Language', forge: 'TypeScript/Deno', electron: 'JavaScript/Node', better: 'forge' },
+  { metric: 'Security Model', forge: 'Capabilities', electron: 'Full Access', better: 'forge' },
+  { metric: 'WebView', forge: 'Native (WKWebView, WebView2)', electron: 'Chromium', better: 'forge' },
+];
+---
+
+<section class="comparison">
+  <div class="container">
+    <div class="section-header">
+      <h2>Forge vs Electron</h2>
+      <p>See how Forge compares to the industry standard</p>
+    </div>
+
+    <div class="comparison-table">
+      <div class="table-header">
+        <div class="metric-col">Metric</div>
+        <div class="forge-col">
+          <svg viewBox="0 0 32 32" fill="none" width="20" height="20">
+            <rect width="32" height="32" rx="6" fill="#0066cc"/>
+            <path d="M8 10h16v2H10v3h12v2H10v5H8V10z" fill="white"/>
+          </svg>
+          Forge
+        </div>
+        <div class="electron-col">Electron</div>
+      </div>
+      {comparisons.map((row) => (
+        <div class="table-row">
+          <div class="metric-col">{row.metric}</div>
+          <div class={`forge-col ${row.better === 'forge' ? 'winner' : ''}`}>
+            {row.forge}
+            {row.better === 'forge' && <span class="check">&#10003;</span>}
+          </div>
+          <div class={`electron-col ${row.better === 'electron' ? 'winner' : ''}`}>
+            {row.electron}
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <p class="disclaimer">
+      * Benchmarks are approximate and may vary based on app complexity and system configuration.
+    </p>
+  </div>
+</section>
+
+<style>
+  .comparison {
+    padding: 6rem 2rem;
+    background: #0a0a0a;
+  }
+
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .section-header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+
+  .section-header h2 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+  }
+
+  .section-header p {
+    font-size: 1.25rem;
+    color: #888;
+  }
+
+  .comparison-table {
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .table-header,
+  .table-row {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .table-header {
+    padding: 1.25rem 1.5rem;
+    background: #0a0a0a;
+    border-bottom: 1px solid #222;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #888;
+  }
+
+  .table-row {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #1a1a1a;
+  }
+
+  .table-row:last-child {
+    border-bottom: none;
+  }
+
+  .metric-col {
+    color: #ccc;
+  }
+
+  .forge-col,
+  .electron-col {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+  }
+
+  .forge-col {
+    color: #888;
+  }
+
+  .forge-col.winner {
+    color: #00cc88;
+  }
+
+  .electron-col {
+    color: #666;
+  }
+
+  .check {
+    color: #00cc88;
+    font-size: 1rem;
+  }
+
+  .disclaimer {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #555;
+    margin-top: 1.5rem;
+  }
+
+  @media (max-width: 640px) {
+    .table-header,
+    .table-row {
+      grid-template-columns: 1fr 1fr;
+      font-size: 0.85rem;
+    }
+
+    .electron-col {
+      display: none;
+    }
+  }
+</style>

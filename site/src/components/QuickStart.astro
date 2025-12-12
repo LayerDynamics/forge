@@ -1,0 +1,157 @@
+---
+const steps = [
+  {
+    step: '1',
+    title: 'Install',
+    code: 'curl -fsSL https://get.forge-deno.com/install.sh | sh',
+  },
+  {
+    step: '2',
+    title: 'Create',
+    code: 'forge init my-app',
+  },
+  {
+    step: '3',
+    title: 'Develop',
+    code: 'cd my-app && forge dev .',
+  },
+  {
+    step: '4',
+    title: 'Build',
+    code: 'forge build . && forge bundle .',
+  },
+];
+---
+
+<section class="quickstart">
+  <div class="container">
+    <div class="section-header">
+      <h2>Get Started in Minutes</h2>
+      <p>From zero to desktop app in four commands</p>
+    </div>
+
+    <div class="steps-grid">
+      {steps.map((item) => (
+        <div class="step-card">
+          <div class="step-number">{item.step}</div>
+          <h3>{item.title}</h3>
+          <div class="step-code">
+            <code>{item.code}</code>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <div class="cta-section">
+      <a href="/getting-started/" class="btn btn-primary">
+        Read the Full Guide
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .quickstart {
+    padding: 6rem 2rem;
+    background: linear-gradient(180deg, #0d0d10 0%, #0a0a0a 100%);
+  }
+
+  .container {
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .section-header {
+    text-align: center;
+    margin-bottom: 4rem;
+  }
+
+  .section-header h2 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+  }
+
+  .section-header p {
+    font-size: 1.25rem;
+    color: #888;
+  }
+
+  .steps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+  }
+
+  .step-card {
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: center;
+  }
+
+  .step-number {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #0066cc, #0088ee);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin: 0 auto 1rem;
+  }
+
+  .step-card h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+
+  .step-code {
+    background: #0a0a0a;
+    border: 1px solid #1a1a1a;
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+
+  .step-code code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: #00cc88;
+    white-space: nowrap;
+  }
+
+  .cta-section {
+    text-align: center;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 1rem;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: #0066cc;
+    color: white;
+  }
+
+  .btn-primary:hover {
+    background: #0077ee;
+    transform: translateY(-2px);
+  }
+</style>

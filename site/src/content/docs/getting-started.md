@@ -1,4 +1,7 @@
-# Getting Started with Forge
+---
+title: Getting Started
+description: Learn how to build your first Forge desktop app with TypeScript and Deno.
+---
 
 Forge is an Electron-like desktop application framework using Rust and Deno. Build cross-platform desktop apps with TypeScript/JavaScript while leveraging native system capabilities through a secure, capability-based API.
 
@@ -6,25 +9,18 @@ Forge is an Electron-like desktop application framework using Rust and Deno. Bui
 
 Before getting started, ensure you have:
 
-- **Rust** 1.70 or later ([rustup.rs](https://rustup.rs))
 - **Deno** 1.40 or later ([deno.land](https://deno.land))
 - A code editor (VS Code recommended)
 
 ## Installation
 
-Install the Forge CLI:
+Install Forge with a single command:
 
 ```bash
-cargo install forge
+curl -fsSL https://get.forge-deno.com/install.sh | sh
 ```
 
-Or build from source:
-
-```bash
-git clone https://github.com/LayerDynamics/forge.git
-cd forge
-cargo build --release
-```
+Or download manually from [GitHub Releases](https://github.com/LayerDynamics/forge/releases).
 
 ## Create Your First App
 
@@ -127,7 +123,7 @@ The UI is standard HTML/CSS/JS served via the `app://` protocol:
 Run your app in development mode with hot reload:
 
 ```bash
-forge dev my-app
+forge dev .
 ```
 
 This starts the Forge runtime with:
@@ -249,13 +245,13 @@ Build your app for distribution:
 
 ```bash
 # Build the app bundle
-forge build my-app
+forge build .
 
 # Create platform-specific packages
-forge bundle my-app
+forge bundle .
 
 # Sign the bundle (macOS/Windows)
-forge sign my-app --identity "Developer ID"
+forge sign ./bundle/MyApp.app --identity "Developer ID"
 ```
 
 ## Example Apps
@@ -269,11 +265,6 @@ Check out the example apps in the `apps/` directory:
 
 ## Next Steps
 
-- Read the [Architecture Overview](./architecture.md)
-- Explore the [API Reference](./api/)
-- Check the [Example Apps](../apps/)
-
-## Getting Help
-
-- GitHub Issues: [github.com/LayerDynamics/forge/issues](https://github.com/LayerDynamics/forge/issues)
-- Documentation: [forge-deno.com/docs](https://forge-deno.com/docs)
+- Read the [Architecture Overview](/docs/architecture)
+- Explore the [API Reference](/docs/api/host-ui)
+- Check the [Example Apps](https://github.com/LayerDynamics/forge/tree/main/apps)

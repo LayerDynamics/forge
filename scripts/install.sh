@@ -1,6 +1,6 @@
 #!/bin/sh
 # Forge Installation Script
-# Usage: curl -fsSL https://get.forge.dev/install.sh | sh
+# Usage: curl -fsSL https://get.forge-deno.com/install.sh | sh
 #
 # Environment variables:
 #   FORGE_VERSION     - Version to install (default: latest)
