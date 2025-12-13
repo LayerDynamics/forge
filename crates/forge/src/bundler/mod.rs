@@ -14,8 +14,8 @@
 //! bundle(&app_dir, &dist_dir, &output_dir, &manifest)?;
 //! ```
 
-pub mod manifest;
 pub mod icons;
+pub mod manifest;
 
 #[cfg(target_os = "windows")]
 pub mod msix;
@@ -29,12 +29,12 @@ pub mod linux;
 pub mod codesign;
 
 // Re-export commonly used types
-pub use manifest::{AppManifest, sanitize_name};
-#[cfg(target_os = "windows")]
-pub use manifest::{sanitize_msix_name, normalize_version};
 pub use icons::{IconProcessor, MIN_ICON_SIZE, RECOMMENDED_ICON_SIZE};
+#[cfg(target_os = "windows")]
+pub use manifest::{normalize_version, sanitize_msix_name};
+pub use manifest::{sanitize_name, AppManifest};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;

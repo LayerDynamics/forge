@@ -260,9 +260,7 @@ fn check_ui_menus(state: &OpState) -> Result<(), UiError> {
 /// Helper to check ui tray capability
 fn check_ui_tray(state: &OpState) -> Result<(), UiError> {
     if let Some(caps) = state.try_borrow::<UiCapabilities>() {
-        caps.checker
-            .check_tray()
-            .map_err(UiError::PermissionDenied)
+        caps.checker.check_tray().map_err(UiError::PermissionDenied)
     } else {
         Ok(())
     }
@@ -413,7 +411,7 @@ async fn op_ui_window_recv(
                     json["type"] = serde_json::json!(event_type);
                 }
                 Ok(Some(json))
-            },
+            }
             None => Ok(None),
         }
     } else {
@@ -488,7 +486,9 @@ async fn op_ui_dialog_save(
         .await
         .map_err(|e| UiError::ChannelRecv(e.to_string()))?;
 
-    Ok(result.map(|s| serde_json::json!(s)).unwrap_or(serde_json::Value::Null))
+    Ok(result
+        .map(|s| serde_json::json!(s))
+        .unwrap_or(serde_json::Value::Null))
 }
 
 /// Show message dialog
@@ -719,9 +719,7 @@ async fn op_ui_destroy_tray(
 /// Returns null when no more events are available
 #[op2(async)]
 #[serde]
-async fn op_ui_menu_recv(
-    state: Rc<RefCell<OpState>>,
-) -> Result<Option<MenuEvent>, UiError> {
+async fn op_ui_menu_recv(state: Rc<RefCell<OpState>>) -> Result<Option<MenuEvent>, UiError> {
     // Check capability
     {
         let s = state.borrow();
@@ -798,7 +796,10 @@ pub fn init_ui_state(
 }
 
 /// Initialize UI capabilities in OpState
-pub fn init_ui_capabilities(op_state: &mut OpState, capabilities: Option<Arc<dyn UiCapabilityChecker>>) {
+pub fn init_ui_capabilities(
+    op_state: &mut OpState,
+    capabilities: Option<Arc<dyn UiCapabilityChecker>>,
+) {
     if let Some(caps) = capabilities {
         op_state.put(UiCapabilities { checker: caps });
     }

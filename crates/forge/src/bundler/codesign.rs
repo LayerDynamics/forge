@@ -7,7 +7,7 @@
 //! This module can be used standalone via `forge sign` command
 //! or integrated into the bundling pipeline.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -70,9 +70,7 @@ impl SigningConfig {
 
 /// Sign an artifact based on its type and current platform
 pub fn sign(path: &Path, config: &SigningConfig) -> Result<()> {
-    let extension = path.extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+    let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
     match extension.to_lowercase().as_str() {
         // macOS artifacts
@@ -110,7 +108,11 @@ pub fn sign_macos_bundle(bundle_path: &Path, config: &SigningConfig) -> Result<(
         for entry in fs::read_dir(&frameworks_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().map(|e| e == "framework" || e == "dylib").unwrap_or(false) {
+            if path
+                .extension()
+                .map(|e| e == "framework" || e == "dylib")
+                .unwrap_or(false)
+            {
                 sign_single_macos(&path, config, false)?;
             }
         }
@@ -143,10 +145,12 @@ fn sign_single_macos(path: &Path, config: &SigningConfig, deep: bool) -> Result<
     let mut cmd = Command::new("codesign");
 
     cmd.args([
-        "--sign", &config.identity,
+        "--sign",
+        &config.identity,
         "--force",
         "--timestamp",
-        "--options", "runtime",  // Hardened runtime, required for notarization
+        "--options",
+        "runtime", // Hardened runtime, required for notarization
     ]);
 
     if deep {
@@ -159,8 +163,7 @@ fn sign_single_macos(path: &Path, config: &SigningConfig, deep: bool) -> Result<
 
     cmd.arg(&path.display().to_string());
 
-    let output = cmd.output()
-        .context("Failed to run codesign")?;
+    let output = cmd.output().context("Failed to run codesign")?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -197,14 +200,14 @@ pub fn sign_macos_dmg(dmg_path: &Path, config: &SigningConfig) -> Result<()> {
 
     let mut cmd = Command::new("codesign");
     cmd.args([
-        "--sign", &config.identity,
+        "--sign",
+        &config.identity,
         "--force",
         "--timestamp",
         &dmg_path.display().to_string(),
     ]);
 
-    let output = cmd.output()
-        .context("Failed to sign DMG")?;
+    let output = cmd.output().context("Failed to sign DMG")?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -222,10 +225,14 @@ pub fn sign_macos_dmg(dmg_path: &Path, config: &SigningConfig) -> Result<()> {
 
 /// Notarize a macOS artifact with Apple
 pub fn notarize_macos(path: &Path, config: &SigningConfig) -> Result<()> {
-    let team_id = config.team_id.as_ref()
+    let team_id = config
+        .team_id
+        .as_ref()
         .context("Team ID required for notarization")?;
 
-    let keychain_profile = config.keychain_profile.as_deref()
+    let keychain_profile = config
+        .keychain_profile
+        .as_deref()
         .unwrap_or("forge-notarize");
 
     println!("  Submitting for notarization (this may take several minutes)...");
@@ -236,8 +243,10 @@ pub fn notarize_macos(path: &Path, config: &SigningConfig) -> Result<()> {
             "notarytool",
             "submit",
             &path.display().to_string(),
-            "--keychain-profile", keychain_profile,
-            "--team-id", team_id,
+            "--keychain-profile",
+            keychain_profile,
+            "--team-id",
+            team_id,
             "--wait",
         ])
         .output()
@@ -274,11 +283,7 @@ pub fn staple_notarization(path: &Path) -> Result<()> {
     println!("  Stapling notarization ticket...");
 
     let output = Command::new("xcrun")
-        .args([
-            "stapler",
-            "staple",
-            &path.display().to_string(),
-        ])
+        .args(["stapler", "staple", &path.display().to_string()])
         .output()
         .context("Failed to staple notarization ticket")?;
 
@@ -301,7 +306,8 @@ pub fn check_notarization_status(submission_id: &str, keychain_profile: &str) ->
             "notarytool",
             "info",
             submission_id,
-            "--keychain-profile", keychain_profile,
+            "--keychain-profile",
+            keychain_profile,
         ])
         .output()
         .context("Failed to check notarization status")?;
@@ -320,7 +326,13 @@ pub fn sign_windows(path: &Path, config: &SigningConfig) -> Result<()> {
     let signtool = find_signtool()?;
 
     let mut cmd = Command::new(&signtool);
-    cmd.args(["sign", "/fd", "SHA256", "/tr", "http://timestamp.digicert.com"]);
+    cmd.args([
+        "sign",
+        "/fd",
+        "SHA256",
+        "/tr",
+        "http://timestamp.digicert.com",
+    ]);
     cmd.args(["/td", "SHA256"]);
     cmd.args(["/f", &config.identity]);
 
@@ -330,8 +342,7 @@ pub fn sign_windows(path: &Path, config: &SigningConfig) -> Result<()> {
 
     cmd.arg(&path.display().to_string());
 
-    let output = cmd.output()
-        .context("Failed to run SignTool")?;
+    let output = cmd.output().context("Failed to run SignTool")?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -418,11 +429,7 @@ pub fn find_signtool() -> Result<PathBuf> {
 
 /// Create a self-signed certificate for testing (Windows)
 #[allow(dead_code)]
-pub fn create_test_certificate(
-    subject: &str,
-    output_path: &Path,
-    password: &str,
-) -> Result<()> {
+pub fn create_test_certificate(subject: &str, output_path: &Path, password: &str) -> Result<()> {
     println!("Creating self-signed certificate for testing...");
 
     // Use PowerShell to create a self-signed certificate
@@ -470,11 +477,7 @@ pub fn sign_linux_gpg(path: &Path, config: &SigningConfig) -> Result<()> {
     let sig_path = format!("{}.sig", path.display());
 
     let mut cmd = Command::new("gpg");
-    cmd.args([
-        "--detach-sign",
-        "--armor",
-        "--output", &sig_path,
-    ]);
+    cmd.args(["--detach-sign", "--armor", "--output", &sig_path]);
 
     // Use specific key if provided
     if !config.identity.is_empty() {
@@ -483,8 +486,7 @@ pub fn sign_linux_gpg(path: &Path, config: &SigningConfig) -> Result<()> {
 
     cmd.arg(&path.display().to_string());
 
-    let output = cmd.output()
-        .context("Failed to run GPG")?;
+    let output = cmd.output().context("Failed to run GPG")?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -543,9 +545,21 @@ pub struct SigningCapabilities {
 impl std::fmt::Display for SigningCapabilities {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Signing capabilities:")?;
-        writeln!(f, "  macOS codesign: {}", if self.codesign { "✓" } else { "✗" })?;
-        writeln!(f, "  macOS notarytool: {}", if self.notarytool { "✓" } else { "✗" })?;
-        writeln!(f, "  Windows SignTool: {}", if self.signtool { "✓" } else { "✗" })?;
+        writeln!(
+            f,
+            "  macOS codesign: {}",
+            if self.codesign { "✓" } else { "✗" }
+        )?;
+        writeln!(
+            f,
+            "  macOS notarytool: {}",
+            if self.notarytool { "✓" } else { "✗" }
+        )?;
+        writeln!(
+            f,
+            "  Windows SignTool: {}",
+            if self.signtool { "✓" } else { "✗" }
+        )?;
         writeln!(f, "  GPG: {}", if self.gpg { "✓" } else { "✗" })?;
         Ok(())
     }

@@ -22,7 +22,10 @@ fn main() {
     for template in &templates {
         let template_path = templates_dir.join(template);
         if !template_path.exists() {
-            println!("cargo:warning=Template directory not found: {}", template_path.display());
+            println!(
+                "cargo:warning=Template directory not found: {}",
+                template_path.display()
+            );
             continue;
         }
 
@@ -71,9 +74,7 @@ fn embed_dir(dir: &Path, code: &mut String, indent: &str) {
 
         if path.is_file() {
             // Convert filename to valid Rust const name
-            let const_name = name
-                .replace(['.', '-'], "_")
-                .to_uppercase();
+            let const_name = name.replace(['.', '-'], "_").to_uppercase();
 
             let content = fs::read_to_string(&path).unwrap();
             code.push_str(&format!(

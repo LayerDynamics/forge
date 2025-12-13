@@ -28,7 +28,11 @@ fn main() {
             }
 
             writeln!(f).unwrap();
-            writeln!(f, "pub fn get_asset(path: &str) -> Option<&'static [u8]> {{").unwrap();
+            writeln!(
+                f,
+                "pub fn get_asset(path: &str) -> Option<&'static [u8]> {{"
+            )
+            .unwrap();
             writeln!(f, "    match path {{").unwrap();
             for (i, (path, _)) in entries.iter().enumerate() {
                 writeln!(f, "        {:?} => Some(ASSET_{}),", path, i).unwrap();
@@ -37,7 +41,11 @@ fn main() {
             writeln!(f, "    }}").unwrap();
             writeln!(f, "}}").unwrap();
 
-            println!("cargo:warning=Embedded {} assets from {}", entries.len(), embed_dir);
+            println!(
+                "cargo:warning=Embedded {} assets from {}",
+                entries.len(),
+                embed_dir
+            );
             return;
         }
     }
@@ -46,7 +54,11 @@ fn main() {
     writeln!(f, "pub const ASSET_EMBEDDED: bool = false;").unwrap();
     writeln!(f).unwrap();
     writeln!(f, "#[allow(unused_variables)]").unwrap();
-    writeln!(f, "pub fn get_asset(path: &str) -> Option<&'static [u8]> {{").unwrap();
+    writeln!(
+        f,
+        "pub fn get_asset(path: &str) -> Option<&'static [u8]> {{"
+    )
+    .unwrap();
     writeln!(f, "    None").unwrap();
     writeln!(f, "}}").unwrap();
 }

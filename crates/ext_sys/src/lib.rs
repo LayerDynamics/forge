@@ -465,8 +465,13 @@ async fn op_sys_notify_ext(
             if sound {
                 let mut notification = mac_notification_sys::Notification::new();
                 notification.sound("default");
-                mac_notification_sys::send_notification(&title, subtitle.as_deref(), &body, Some(&notification))
-                    .map_err(|e| SysError::notification(format!("{:?}", e)))
+                mac_notification_sys::send_notification(
+                    &title,
+                    subtitle.as_deref(),
+                    &body,
+                    Some(&notification),
+                )
+                .map_err(|e| SysError::notification(format!("{:?}", e)))
             } else {
                 mac_notification_sys::send_notification(&title, subtitle.as_deref(), &body, None)
                     .map_err(|e| SysError::notification(format!("{:?}", e)))
@@ -512,14 +517,16 @@ async fn op_sys_power_info(state: Rc<RefCell<OpState>>) -> Result<PowerInfo, Sys
         use battery::units::thermodynamic_temperature::degree_celsius;
         use battery::units::time::second;
 
-        let manager = battery::Manager::new()
-            .map_err(|e| SysError::power(e.to_string()))?;
+        let manager = battery::Manager::new().map_err(|e| SysError::power(e.to_string()))?;
 
         let mut batteries = Vec::new();
         let mut has_battery = false;
         let mut ac_connected = false;
 
-        for maybe_battery in manager.batteries().map_err(|e| SysError::power(e.to_string()))? {
+        for maybe_battery in manager
+            .batteries()
+            .map_err(|e| SysError::power(e.to_string()))?
+        {
             match maybe_battery {
                 Ok(batt) => {
                     has_battery = true;
@@ -585,10 +592,7 @@ async fn op_sys_power_info(state: Rc<RefCell<OpState>>) -> Result<PowerInfo, Sys
 // ============================================================================
 
 /// Initialize sys state in OpState
-pub fn init_sys_state(
-    op_state: &mut OpState,
-    capabilities: Option<Arc<dyn SysCapabilityChecker>>,
-) {
+pub fn init_sys_state(op_state: &mut OpState, capabilities: Option<Arc<dyn SysCapabilityChecker>>) {
     if let Some(caps) = capabilities {
         op_state.put(SysCapabilities { checker: caps });
     }

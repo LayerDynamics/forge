@@ -1,27 +1,33 @@
 use anyhow::{Context, Result};
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::rc::Rc;
-use std::env;
-use serde::Deserialize;
-use deno_core::{JsRuntime, RuntimeOptions, ModuleSpecifier, ModuleLoadResponse, ModuleSourceCode, ResolutionKind, ModuleLoadOptions, ModuleLoadReferrer};
-use deno_core::error::ModuleLoaderError;
 use deno_ast::{MediaType, ParseParams};
-use tao::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
-use tao::event::{Event, WindowEvent};
-use tao::window::{WindowBuilder, WindowId};
-use wry::WebViewBuilder;
-use wry::http::{Response, StatusCode};
+use deno_core::error::ModuleLoaderError;
+use deno_core::{
+    JsRuntime, ModuleLoadOptions, ModuleLoadReferrer, ModuleLoadResponse, ModuleSourceCode,
+    ModuleSpecifier, ResolutionKind, RuntimeOptions,
+};
 use futures_util::{SinkExt, StreamExt};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use serde::Deserialize;
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::env;
+use std::path::PathBuf;
+use std::rc::Rc;
+use tao::event::{Event, WindowEvent};
+use tao::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
+use tao::window::{WindowBuilder, WindowId};
 use tokio_tungstenite::tungstenite::Message;
+use wry::http::{Response, StatusCode};
+use wry::WebViewBuilder;
 
-use ext_ui::{ToRendererCmd, UiEvent, FromDenoCmd, OpenOpts, FileDialogOpts, MessageDialogOpts, MenuItem, TrayOpts, MenuEvent, init_ui_state, init_ui_capabilities};
+use ext_ui::{
+    init_ui_capabilities, init_ui_state, FileDialogOpts, FromDenoCmd, MenuEvent, MenuItem,
+    MessageDialogOpts, OpenOpts, ToRendererCmd, TrayOpts, UiEvent,
+};
 
 mod capabilities;
 mod crash;
-use capabilities::{Capabilities, Permissions, create_capability_adapters};
+use capabilities::{create_capability_adapters, Capabilities, Permissions};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Manifest {
@@ -49,7 +55,10 @@ fn preload_js() -> &'static str {
 }
 
 fn mime_for(path: &str) -> &'static str {
-    if let Some(ext) = std::path::Path::new(path).extension().and_then(|s| s.to_str()) {
+    if let Some(ext) = std::path::Path::new(path)
+        .extension()
+        .and_then(|s| s.to_str())
+    {
         match ext {
             "html" | "htm" => "text/html; charset=utf-8",
             "js" | "mjs" => "text/javascript; charset=utf-8",
@@ -118,18 +127,21 @@ impl deno_core::ModuleLoader for ForgeModuleLoader {
     ) -> ModuleLoadResponse {
         // Extension modules (ext:*) are handled by deno_core automatically
         if module_specifier.scheme() == "ext" {
-            return ModuleLoadResponse::Sync(Err(ModuleLoaderError::generic(
-                format!("Extension module should be handled by deno_core: {}", module_specifier)
-            )));
+            return ModuleLoadResponse::Sync(Err(ModuleLoaderError::generic(format!(
+                "Extension module should be handled by deno_core: {}",
+                module_specifier
+            ))));
         }
 
         let module_specifier = module_specifier.clone();
 
         ModuleLoadResponse::Sync((move || {
-            let path = module_specifier.to_file_path()
-                .map_err(|_| ModuleLoaderError::generic(format!(
-                    "Cannot convert to file path: {}", module_specifier
-                )))?;
+            let path = module_specifier.to_file_path().map_err(|_| {
+                ModuleLoaderError::generic(format!(
+                    "Cannot convert to file path: {}",
+                    module_specifier
+                ))
+            })?;
 
             let media_type = MediaType::from_path(&path);
             let (module_type, should_transpile) = match media_type {
@@ -147,15 +159,15 @@ impl deno_core::ModuleLoader for ForgeModuleLoader {
                 MediaType::Json => (deno_core::ModuleType::Json, false),
                 _ => {
                     return Err(ModuleLoaderError::generic(format!(
-                        "Unknown file extension: {:?}", path.extension()
+                        "Unknown file extension: {:?}",
+                        path.extension()
                     )));
                 }
             };
 
-            let code = std::fs::read_to_string(&path)
-                .map_err(|e| ModuleLoaderError::generic(format!(
-                    "Failed to read {}: {}", path.display(), e
-                )))?;
+            let code = std::fs::read_to_string(&path).map_err(|e| {
+                ModuleLoaderError::generic(format!("Failed to read {}: {}", path.display(), e))
+            })?;
 
             let code = if should_transpile {
                 let parsed = deno_ast::parse_module(ParseParams {
@@ -168,12 +180,13 @@ impl deno_core::ModuleLoader for ForgeModuleLoader {
                 })
                 .map_err(|e| ModuleLoaderError::generic(e.to_string()))?;
 
-                let transpiled = parsed.transpile(
-                    &deno_ast::TranspileOptions::default(),
-                    &deno_ast::TranspileModuleOptions::default(),
-                    &deno_ast::EmitOptions::default(),
-                )
-                .map_err(|e| ModuleLoaderError::generic(e.to_string()))?;
+                let transpiled = parsed
+                    .transpile(
+                        &deno_ast::TranspileOptions::default(),
+                        &deno_ast::TranspileModuleOptions::default(),
+                        &deno_ast::EmitOptions::default(),
+                    )
+                    .map_err(|e| ModuleLoaderError::generic(e.to_string()))?;
 
                 transpiled.into_source().text
             } else {
@@ -216,22 +229,23 @@ async fn run_hmr_server(port: u16, watch_dir: PathBuf) {
     std::thread::spawn(move || {
         let (notify_tx, notify_rx) = std::sync::mpsc::channel();
 
-        let mut watcher: RecommendedWatcher = match notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-            if let Ok(event) = res {
-                if event.kind.is_modify() || event.kind.is_create() {
-                    for path in event.paths {
-                        let path_str = path.display().to_string();
-                        let _ = notify_tx.send(path_str);
+        let mut watcher: RecommendedWatcher =
+            match notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+                if let Ok(event) = res {
+                    if event.kind.is_modify() || event.kind.is_create() {
+                        for path in event.paths {
+                            let path_str = path.display().to_string();
+                            let _ = notify_tx.send(path_str);
+                        }
                     }
                 }
-            }
-        }) {
-            Ok(w) => w,
-            Err(e) => {
-                tracing::error!("Failed to create file watcher: {}", e);
-                return;
-            }
-        };
+            }) {
+                Ok(w) => w,
+                Err(e) => {
+                    tracing::error!("Failed to create file watcher: {}", e);
+                    return;
+                }
+            };
 
         if let Err(e) = watcher.watch(&watch_dir_clone, RecursiveMode::Recursive) {
             tracing::error!("Failed to watch directory: {}", e);
@@ -322,8 +336,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     // Initialize tracing with env-filter support
     // Use FORGE_LOG env var for log level configuration, default to "info"
     use tracing_subscriber::EnvFilter;
-    let filter = EnvFilter::try_from_env("FORGE_LOG")
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_env("FORGE_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(true)
@@ -346,14 +359,21 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     }
 
     let manifest_path = app_dir.join("manifest.app.toml");
-    let manifest_txt = rt.block_on(tokio::fs::read_to_string(&manifest_path))
+    let manifest_txt = rt
+        .block_on(tokio::fs::read_to_string(&manifest_path))
         .with_context(|| format!("reading manifest at {}", manifest_path.display()))?;
     let manifest: Manifest = toml::from_str(&manifest_txt).context("parsing manifest")?;
 
-    tracing::info!("Starting app: {} v{}", manifest.app.name, manifest.app.version);
+    tracing::info!(
+        "Starting app: {} v{}",
+        manifest.app.name,
+        manifest.app.version
+    );
 
     // Initialize crash reporting
-    let crash_report_dir = manifest.app.crash_report_dir
+    let crash_report_dir = manifest
+        .app
+        .crash_report_dir
         .clone()
         .unwrap_or_else(|| app_dir.join("crashes").to_string_lossy().to_string());
     crash::init_crash_reporting(
@@ -365,7 +385,10 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     // Log crash reporting status
     if crash::is_enabled() {
         if let Some(dir) = crash::get_report_dir() {
-            tracing::info!("Crash reporting enabled, reports will be saved to: {}", dir.display());
+            tracing::info!(
+                "Crash reporting enabled, reports will be saved to: {}",
+                dir.display()
+            );
         }
     }
 
@@ -378,7 +401,8 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     }
 
     // Create capability adapters for each extension
-    let (fs_caps, net_caps, sys_caps, ui_caps, process_caps, wasm_caps) = create_capability_adapters(capabilities.clone());
+    let (fs_caps, net_caps, sys_caps, ui_caps, process_caps, wasm_caps) =
+        create_capability_adapters(capabilities.clone());
 
     // Create IPC channels for Deno <-> Host <-> Renderer communication
     let (to_deno_tx, to_deno_rx) = tokio::sync::mpsc::channel::<UiEvent>(256);
@@ -408,7 +432,13 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
         // Initialize UI state (including menu events channel)
         // Use to_deno_rx - the receiver side of the channel that IPC handler sends to
-        init_ui_state(&mut state, to_renderer_tx.clone(), to_deno_rx, from_deno_tx.clone(), menu_events_rx);
+        init_ui_state(
+            &mut state,
+            to_renderer_tx.clone(),
+            to_deno_rx,
+            from_deno_tx.clone(),
+            menu_events_rx,
+        );
 
         // Initialize FS state with capability checker
         ext_fs::init_fs_state(&mut state, Some(fs_caps));
@@ -432,9 +462,15 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     }
 
     // Load the app's main.ts as an ES module (but don't evaluate yet)
-    let main_ts_path = app_dir.join("src/main.ts")
+    let main_ts_path = app_dir
+        .join("src/main.ts")
         .canonicalize()
-        .with_context(|| format!("Cannot find main.ts at {}", app_dir.join("src/main.ts").display()))?;
+        .with_context(|| {
+            format!(
+                "Cannot find main.ts at {}",
+                app_dir.join("src/main.ts").display()
+            )
+        })?;
     let main_specifier = ModuleSpecifier::from_file_path(&main_ts_path)
         .map_err(|_| anyhow::anyhow!("Invalid path: {}", main_ts_path.display()))?;
 
@@ -452,12 +488,19 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         CreateWindow(OpenOpts, tokio::sync::oneshot::Sender<String>),
         CloseWindow(String, tokio::sync::oneshot::Sender<bool>),
         SetWindowTitle(String, String),
-        ShowOpenDialog(FileDialogOpts, tokio::sync::oneshot::Sender<Option<Vec<String>>>),
+        ShowOpenDialog(
+            FileDialogOpts,
+            tokio::sync::oneshot::Sender<Option<Vec<String>>>,
+        ),
         ShowSaveDialog(FileDialogOpts, tokio::sync::oneshot::Sender<Option<String>>),
         ShowMessageDialog(MessageDialogOpts, tokio::sync::oneshot::Sender<usize>),
         // Menu events
         SetAppMenu(Vec<MenuItem>, tokio::sync::oneshot::Sender<bool>),
-        ShowContextMenu(Option<String>, Vec<MenuItem>, tokio::sync::oneshot::Sender<Option<String>>),
+        ShowContextMenu(
+            Option<String>,
+            Vec<MenuItem>,
+            tokio::sync::oneshot::Sender<Option<String>>,
+        ),
         // Tray events
         CreateTray(TrayOpts, tokio::sync::oneshot::Sender<String>),
         UpdateTray(String, TrayOpts, tokio::sync::oneshot::Sender<bool>),
@@ -514,14 +557,23 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     FromDenoCmd::SetAppMenu { items, respond } => {
                         let _ = proxy.send_event(UserEvent::SetAppMenu(items, respond));
                     }
-                    FromDenoCmd::ShowContextMenu { window_id, items, respond } => {
-                        let _ = proxy.send_event(UserEvent::ShowContextMenu(window_id, items, respond));
+                    FromDenoCmd::ShowContextMenu {
+                        window_id,
+                        items,
+                        respond,
+                    } => {
+                        let _ =
+                            proxy.send_event(UserEvent::ShowContextMenu(window_id, items, respond));
                     }
                     // Tray commands
                     FromDenoCmd::CreateTray { opts, respond } => {
                         let _ = proxy.send_event(UserEvent::CreateTray(opts, respond));
                     }
-                    FromDenoCmd::UpdateTray { tray_id, opts, respond } => {
+                    FromDenoCmd::UpdateTray {
+                        tray_id,
+                        opts,
+                        respond,
+                    } => {
                         let _ = proxy.send_event(UserEvent::UpdateTray(tray_id, opts, respond));
                     }
                     FromDenoCmd::DestroyTray { tray_id, respond } => {
@@ -552,7 +604,8 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     // Menu ID mapping: muda's internal MenuId -> (user_id, label)
     // This is shared between the menu event thread and the main event loop
     use std::sync::{Arc, Mutex};
-    let menu_id_map: Arc<Mutex<HashMap<muda::MenuId, (String, String)>>> = Arc::new(Mutex::new(HashMap::new()));
+    let menu_id_map: Arc<Mutex<HashMap<muda::MenuId, (String, String)>>> =
+        Arc::new(Mutex::new(HashMap::new()));
 
     // Pending context menu response: (set of MenuIds for this context menu, response channel)
     // When a menu event matches one of these IDs, we respond and clear the pending state
@@ -586,7 +639,11 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                             // This is a context menu selection - respond and clear
                             let map = menu_id_map_for_thread.lock().unwrap();
                             if let Some((item_id, label)) = map.get(&event.id) {
-                                tracing::debug!("Context menu selection: item_id={}, label={}", item_id, label);
+                                tracing::debug!(
+                                    "Context menu selection: item_id={}, label={}",
+                                    item_id,
+                                    label
+                                );
                                 if let Some((_, sender)) = pending.take() {
                                     let _ = sender.send(Some(item_id.clone()));
                                 }
@@ -1081,11 +1138,13 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
                 #[cfg(target_os = "linux")]
                 {
+                    use gtk::prelude::*;
                     use tao::platform::unix::WindowExtUnix;
                     // For Linux, attach menu to each GTK window
                     for window in tao_windows.values() {
                         let gtk_win = window.gtk_window();
-                        let _ = menu.init_for_gtk_window(gtk_win, None::<&gtk::Box>);
+                        let gtk_win_ref: &gtk::Window = gtk_win.upcast_ref();
+                        let _ = menu.init_for_gtk_window(gtk_win_ref, None::<&gtk::Box>);
                     }
                 }
 
@@ -1232,9 +1291,11 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
                     #[cfg(target_os = "linux")]
                     {
+                        use gtk::prelude::*;
                         use tao::platform::unix::WindowExtUnix;
                         let gtk_win = tao_win.gtk_window();
-                        menu.show_context_menu_for_gtk_window(gtk_win, None::<muda::dpi::Position>);
+                        let gtk_win_ref: &gtk::Window = gtk_win.upcast_ref();
+                        menu.show_context_menu_for_gtk_window(gtk_win_ref, None::<muda::dpi::Position>);
                     }
 
                     tracing::info!("Showed context menu with {} items", items.len());

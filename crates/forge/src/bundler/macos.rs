@@ -6,13 +6,13 @@
 //! - Optional code signing via codesign
 //! - Optional notarization via xcrun notarytool
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::{AppManifest, IconProcessor, build_embedded_binary, copy_dir_recursive, sanitize_name};
+use super::{build_embedded_binary, copy_dir_recursive, sanitize_name, AppManifest, IconProcessor};
 
 /// macOS bundler
 pub struct MacosBundler<'a> {
@@ -52,7 +52,10 @@ impl<'a> MacosBundler<'a> {
         self.create_app_bundle(&bundle_path, &binary_path)?;
 
         // 3. Code sign if requested
-        if macos_config.map(|c| c.sign.unwrap_or(false)).unwrap_or(false) {
+        if macos_config
+            .map(|c| c.sign.unwrap_or(false))
+            .unwrap_or(false)
+        {
             println!("  Signing app bundle...");
             self.codesign_bundle(&bundle_path)?;
         }
@@ -62,7 +65,10 @@ impl<'a> MacosBundler<'a> {
         let dmg_path = self.create_dmg(&bundle_path)?;
 
         // 5. Notarize if requested
-        if macos_config.map(|c| c.notarize.unwrap_or(false)).unwrap_or(false) {
+        if macos_config
+            .map(|c| c.notarize.unwrap_or(false))
+            .unwrap_or(false)
+        {
             println!("  Submitting for notarization...");
             self.notarize_dmg(&dmg_path)?;
         }
@@ -152,11 +158,7 @@ impl<'a> MacosBundler<'a> {
             .map(|c| c.min_version_or_default())
             .unwrap_or_else(|| "12.0".to_string());
 
-        let copyright = format!(
-            "Copyright (c) {} {}",
-            Utc::now().format("%Y"),
-            &app.name
-        );
+        let copyright = format!("Copyright (c) {} {}", Utc::now().format("%Y"), &app.name);
 
         // Parse version for CFBundleShortVersionString
         let short_version = app.version.split('-').next().unwrap_or(&app.version);
@@ -215,25 +217,32 @@ impl<'a> MacosBundler<'a> {
 
     /// Code sign the app bundle
     fn codesign_bundle(&self, bundle_path: &Path) -> Result<()> {
-        let macos_config = self.manifest.bundle.macos.as_ref()
+        let macos_config = self
+            .manifest
+            .bundle
+            .macos
+            .as_ref()
             .context("macOS bundle config required for signing")?;
 
-        let identity = macos_config.signing_identity.as_ref()
-            .context(
-                "Code signing enabled but no signing_identity specified.\n\
-                Add [bundle.macos].signing_identity = \"Developer ID Application: ...\""
-            )?;
+        let identity = macos_config.signing_identity.as_ref().context(
+            "Code signing enabled but no signing_identity specified.\n\
+                Add [bundle.macos].signing_identity = \"Developer ID Application: ...\"",
+        )?;
 
-        let entitlements = macos_config.entitlements.as_ref()
+        let entitlements = macos_config
+            .entitlements
+            .as_ref()
             .map(|e| self.app_dir.join(e));
 
         // Sign the main bundle
         let mut cmd = Command::new("codesign");
         cmd.args([
-            "--sign", identity,
+            "--sign",
+            identity,
             "--force",
             "--timestamp",
-            "--options", "runtime",  // Required for notarization
+            "--options",
+            "runtime", // Required for notarization
         ]);
 
         if let Some(ref ent) = entitlements {
@@ -242,8 +251,7 @@ impl<'a> MacosBundler<'a> {
 
         cmd.arg(&bundle_path.display().to_string());
 
-        let status = cmd.status()
-            .context("Failed to run codesign")?;
+        let status = cmd.status().context("Failed to run codesign")?;
 
         if !status.success() {
             bail!("codesign failed with status: {}", status);
@@ -303,17 +311,25 @@ impl<'a> MacosBundler<'a> {
         }
 
         // Create read-write DMG first
-        let temp_dmg = self.output_dir.join(format!("{}.temp.dmg", sanitize_name(app_name)));
+        let temp_dmg = self
+            .output_dir
+            .join(format!("{}.temp.dmg", sanitize_name(app_name)));
 
         let create_status = Command::new("hdiutil")
             .args([
                 "create",
-                "-srcfolder", &staging_dir.display().to_string(),
-                "-volname", app_name,
-                "-fs", "HFS+",
-                "-fsargs", "-c c=64,a=16,e=16",
-                "-format", "UDRW",
-                "-size", "500m",  // Max size, will be smaller after conversion
+                "-srcfolder",
+                &staging_dir.display().to_string(),
+                "-volname",
+                app_name,
+                "-fs",
+                "HFS+",
+                "-fsargs",
+                "-c c=64,a=16,e=16",
+                "-format",
+                "UDRW",
+                "-size",
+                "500m", // Max size, will be smaller after conversion
                 &temp_dmg.display().to_string(),
             ])
             .status()
@@ -330,9 +346,12 @@ impl<'a> MacosBundler<'a> {
             .args([
                 "convert",
                 &temp_dmg.display().to_string(),
-                "-format", "UDZO",
-                "-imagekey", "zlib-level=9",
-                "-o", &dmg_path.display().to_string(),
+                "-format",
+                "UDZO",
+                "-imagekey",
+                "zlib-level=9",
+                "-o",
+                &dmg_path.display().to_string(),
             ])
             .status()
             .context("Failed to run hdiutil convert")?;
@@ -350,14 +369,17 @@ impl<'a> MacosBundler<'a> {
 
     /// Notarize the DMG with Apple
     fn notarize_dmg(&self, dmg_path: &Path) -> Result<()> {
-        let macos_config = self.manifest.bundle.macos.as_ref()
+        let macos_config = self
+            .manifest
+            .bundle
+            .macos
+            .as_ref()
             .context("macOS bundle config required for notarization")?;
 
-        let team_id = macos_config.team_id.as_ref()
-            .context(
-                "Notarization enabled but no team_id specified.\n\
-                Add [bundle.macos].team_id = \"YOUR_TEAM_ID\""
-            )?;
+        let team_id = macos_config.team_id.as_ref().context(
+            "Notarization enabled but no team_id specified.\n\
+                Add [bundle.macos].team_id = \"YOUR_TEAM_ID\"",
+        )?;
 
         println!("    Submitting to Apple (this may take several minutes)...");
 
@@ -369,8 +391,10 @@ impl<'a> MacosBundler<'a> {
                 "notarytool",
                 "submit",
                 &dmg_path.display().to_string(),
-                "--keychain-profile", "forge-notarize",
-                "--team-id", team_id,
+                "--keychain-profile",
+                "forge-notarize",
+                "--team-id",
+                team_id,
                 "--wait",
             ])
             .status();
@@ -381,11 +405,7 @@ impl<'a> MacosBundler<'a> {
 
                 // Staple the notarization ticket
                 let staple_status = Command::new("xcrun")
-                    .args([
-                        "stapler",
-                        "staple",
-                        &dmg_path.display().to_string(),
-                    ])
+                    .args(["stapler", "staple", &dmg_path.display().to_string()])
                     .status()
                     .context("Failed to staple notarization ticket")?;
 

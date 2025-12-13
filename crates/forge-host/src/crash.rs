@@ -31,7 +31,10 @@ pub fn init_crash_reporting(enabled: bool, report_dir: &str, app_name: &str) {
     if enabled {
         // Ensure the crash report directory exists
         if let Err(e) = fs::create_dir_all(report_dir) {
-            warn!("Failed to create crash report directory {}: {}", report_dir, e);
+            warn!(
+                "Failed to create crash report directory {}: {}",
+                report_dir, e
+            );
         }
 
         // Set up the panic hook
@@ -42,7 +45,10 @@ pub fn init_crash_reporting(enabled: bool, report_dir: &str, app_name: &str) {
             default_hook(panic_info);
         }));
 
-        info!("Crash reporting initialized, reports will be written to: {}", report_dir);
+        info!(
+            "Crash reporting initialized, reports will be written to: {}",
+            report_dir
+        );
     }
 }
 
@@ -83,9 +89,10 @@ fn write_crash_report(
     let filepath = dir.join(&filename);
 
     // Get panic location info
-    let location = panic_info.location().map(|l| {
-        format!("{}:{}:{}", l.file(), l.line(), l.column())
-    }).unwrap_or_else(|| "unknown location".to_string());
+    let location = panic_info
+        .location()
+        .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+        .unwrap_or_else(|| "unknown location".to_string());
 
     // Get panic message
     let message = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {

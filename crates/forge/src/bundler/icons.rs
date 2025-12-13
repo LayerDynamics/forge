@@ -17,8 +17,8 @@
 //! - `icon.png` (root of app directory)
 //! - Or specify path in manifest: `[bundle] icon = "path/to/icon"`
 
-use anyhow::{Context, Result, bail};
-use image::{DynamicImage, ImageFormat, RgbaImage, Rgba, imageops::FilterType};
+use anyhow::{bail, Context, Result};
+use image::{imageops::FilterType, DynamicImage, ImageFormat, Rgba, RgbaImage};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -51,7 +51,7 @@ pub struct IconProcessor {
 /// Required MSIX icon sizes (base size, scale factors)
 #[cfg(target_os = "windows")]
 pub struct MsixIconSet {
-    pub square44: Vec<(u32, u32, String)>,   // (width, height, filename)
+    pub square44: Vec<(u32, u32, String)>, // (width, height, filename)
     pub square150: Vec<(u32, u32, String)>,
     pub wide310x150: Vec<(u32, u32, String)>,
     pub store_logo: Vec<(u32, u32, String)>,
@@ -176,7 +176,11 @@ impl IconProcessor {
                         return Ok(processor);
                     }
                     Err(e) => {
-                        tried_paths.push(format!("  - {} (failed to load: {})", candidate.display(), e));
+                        tried_paths.push(format!(
+                            "  - {} (failed to load: {})",
+                            candidate.display(),
+                            e
+                        ));
                     }
                 }
             } else {
@@ -217,10 +221,10 @@ impl IconProcessor {
         // Check for alpha channel
         let has_transparency = matches!(
             self.source_image,
-            DynamicImage::ImageRgba8(_) |
-            DynamicImage::ImageRgba16(_) |
-            DynamicImage::ImageLumaA8(_) |
-            DynamicImage::ImageLumaA16(_)
+            DynamicImage::ImageRgba8(_)
+                | DynamicImage::ImageRgba16(_)
+                | DynamicImage::ImageLumaA8(_)
+                | DynamicImage::ImageLumaA16(_)
         );
 
         let mut warnings = Vec::new();
@@ -243,14 +247,17 @@ impl IconProcessor {
         if !is_square {
             errors.push(format!(
                 "Icon must be square. Current size: {}x{} (aspect ratio: {:.2}:1)",
-                width, height, width as f32 / height as f32
+                width,
+                height,
+                width as f32 / height as f32
             ));
         }
 
         // Check transparency
         if !has_transparency {
             warnings.push(
-                "Icon does not have an alpha channel. Consider using PNG with transparency.".to_string()
+                "Icon does not have an alpha channel. Consider using PNG with transparency."
+                    .to_string(),
             );
         }
 
@@ -322,19 +329,19 @@ impl IconProcessor {
             fs::create_dir_all(parent)?;
         }
 
-        self.source_image.save_with_format(path, ImageFormat::Png)
+        self.source_image
+            .save_with_format(path, ImageFormat::Png)
             .with_context(|| format!("Failed to save icon to {}", path.display()))?;
         Ok(())
     }
 
     /// Resize and save to a specific size
     pub fn save_resized(&self, path: &Path, width: u32, height: u32) -> Result<()> {
-        let resized = self.source_image.resize_exact(
-            width,
-            height,
-            FilterType::Lanczos3,
-        );
-        resized.save_with_format(path, ImageFormat::Png)
+        let resized = self
+            .source_image
+            .resize_exact(width, height, FilterType::Lanczos3);
+        resized
+            .save_with_format(path, ImageFormat::Png)
             .with_context(|| format!("Failed to save icon to {}", path.display()))?;
         Ok(())
     }
@@ -346,11 +353,9 @@ impl IconProcessor {
 
         // Resize source to fit within bounds
         let icon_size = height.min(width);
-        let resized = self.source_image.resize_exact(
-            icon_size,
-            icon_size,
-            FilterType::Lanczos3,
-        );
+        let resized = self
+            .source_image
+            .resize_exact(icon_size, icon_size, FilterType::Lanczos3);
 
         // Center the icon
         let x_offset = (width - icon_size) / 2;
@@ -439,8 +444,10 @@ impl IconProcessor {
         // Use iconutil to create .icns
         let status = Command::new("iconutil")
             .args([
-                "-c", "icns",
-                "-o", &dest.display().to_string(),
+                "-c",
+                "icns",
+                "-o",
+                &dest.display().to_string(),
                 &iconset_dir.display().to_string(),
             ])
             .status()
@@ -464,7 +471,9 @@ impl IconProcessor {
         self.save_resized(&root_icon, 256, 256)?;
 
         // Hicolor theme icons
-        let sizes = ["16x16", "32x32", "48x48", "64x64", "128x128", "256x256", "512x512"];
+        let sizes = [
+            "16x16", "32x32", "48x48", "64x64", "128x128", "256x256", "512x512",
+        ];
         for size_str in &sizes {
             let size: u32 = size_str.split('x').next().unwrap().parse().unwrap();
             let icon_dir = appdir

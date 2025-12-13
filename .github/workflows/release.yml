@@ -120,50 +120,6 @@ jobs:
             apps/example-deno-app/bundle/*.dmg
             apps/example-deno-app/bundle/*.app
 
-  build-macos-intel:
-    name: Build macOS (Intel)
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Deno
-        uses: denoland/setup-deno@v1
-        with:
-          deno-version: v1.x
-
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-intel-cargo-release-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build forge CLI and runtime
-        run: |
-          cargo build -p forge --release
-          cargo build -p forge-host --release
-
-      - name: Package forge binaries
-        run: |
-          mkdir -p forge-dist
-          cp target/release/forge forge-dist/
-          cp target/release/forge-host forge-dist/
-          cd forge-dist && tar -czvf ../forge-x86_64-apple-darwin.tar.gz *
-
-      - name: Upload macOS Intel artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-intel-artifacts
-          path: |
-            forge-x86_64-apple-darwin.tar.gz
-
   build-linux:
     name: Build Linux
     runs-on: ubuntu-latest
@@ -233,7 +189,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build-windows, build-macos-arm, build-macos-intel, build-linux]
+    needs: [build-windows, build-macos-arm, build-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -250,12 +206,6 @@ jobs:
           name: macos-arm-artifacts
           path: artifacts/macos-arm
 
-      - name: Download macOS Intel artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-intel-artifacts
-          path: artifacts/macos-intel
-
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
         with:
@@ -268,7 +218,6 @@ jobs:
           # Forge toolchain tarballs (forge + forge-host)
           cp artifacts/windows/forge-x86_64-pc-windows-msvc.tar.gz release/ || true
           cp artifacts/macos-arm/forge-aarch64-apple-darwin.tar.gz release/ || true
-          cp artifacts/macos-intel/forge-x86_64-apple-darwin.tar.gz release/ || true
           cp artifacts/linux/forge-x86_64-unknown-linux-gnu.tar.gz release/ || true
           # Example app bundles
           cp artifacts/windows/apps/example-deno-app/bundle/*.msix release/ || true
@@ -312,7 +261,6 @@ jobs:
             |----------|-----------|-------------|
             | Windows x64 | `forge-x86_64-pc-windows-msvc.tar.gz` | `.msix` |
             | macOS ARM (Apple Silicon) | `forge-aarch64-apple-darwin.tar.gz` | `.dmg` |
-            | macOS Intel | `forge-x86_64-apple-darwin.tar.gz` | - |
             | Linux x64 | `forge-x86_64-unknown-linux-gnu.tar.gz` | `.AppImage` |
 
             Each toolchain archive contains:

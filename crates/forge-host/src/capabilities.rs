@@ -112,7 +112,10 @@ pub struct Capabilities {
 #[derive(Debug, thiserror::Error)]
 pub enum CapabilityError {
     #[error("Permission denied: {capability} for {resource}")]
-    Denied { capability: String, resource: String },
+    Denied {
+        capability: String,
+        resource: String,
+    },
 
     #[error("Invalid glob pattern: {0}")]
     InvalidPattern(String),
@@ -120,16 +123,17 @@ pub enum CapabilityError {
 
 impl Capabilities {
     /// Create capabilities from manifest permissions
-    pub fn from_permissions(permissions: Option<&Permissions>, dev_mode: bool) -> Result<Self, CapabilityError> {
+    pub fn from_permissions(
+        permissions: Option<&Permissions>,
+        dev_mode: bool,
+    ) -> Result<Self, CapabilityError> {
         let permissions = permissions.cloned().unwrap_or_default();
 
-        let fs_read = Self::compile_patterns(
-            permissions.fs.as_ref().and_then(|f| f.read.as_ref())
-        )?;
+        let fs_read =
+            Self::compile_patterns(permissions.fs.as_ref().and_then(|f| f.read.as_ref()))?;
 
-        let fs_write = Self::compile_patterns(
-            permissions.fs.as_ref().and_then(|f| f.write.as_ref())
-        )?;
+        let fs_write =
+            Self::compile_patterns(permissions.fs.as_ref().and_then(|f| f.write.as_ref()))?;
 
         let net = permissions.net.unwrap_or_default();
         let ui = permissions.ui.unwrap_or_default();
@@ -142,12 +146,10 @@ impl Capabilities {
         let net_deny_patterns = Self::compile_host_patterns(net.deny.as_ref())?;
 
         // Compile env var patterns
-        let env_read_patterns = Self::compile_simple_patterns(
-            sys.env.as_ref().and_then(|e| e.read.as_ref())
-        )?;
-        let env_write_patterns = Self::compile_simple_patterns(
-            sys.env.as_ref().and_then(|e| e.write.as_ref())
-        )?;
+        let env_read_patterns =
+            Self::compile_simple_patterns(sys.env.as_ref().and_then(|e| e.read.as_ref()))?;
+        let env_write_patterns =
+            Self::compile_simple_patterns(sys.env.as_ref().and_then(|e| e.write.as_ref()))?;
 
         // Compile process patterns
         let process_allow_patterns = Self::compile_simple_patterns(process.allow.as_ref())?;
@@ -184,7 +186,9 @@ impl Capabilities {
     }
 
     /// Compile glob patterns for filesystem paths (uses literal_separator)
-    fn compile_patterns(patterns: Option<&Vec<String>>) -> Result<Option<GlobSet>, CapabilityError> {
+    fn compile_patterns(
+        patterns: Option<&Vec<String>>,
+    ) -> Result<Option<GlobSet>, CapabilityError> {
         match patterns {
             None => Ok(None),
             Some(pats) if pats.is_empty() => Ok(None),
@@ -199,13 +203,17 @@ impl Capabilities {
                         .map_err(|e| CapabilityError::InvalidPattern(e.to_string()))?;
                     builder.add(glob);
                 }
-                Ok(Some(builder.build().map_err(|e| CapabilityError::InvalidPattern(e.to_string()))?))
+                Ok(Some(builder.build().map_err(|e| {
+                    CapabilityError::InvalidPattern(e.to_string())
+                })?))
             }
         }
     }
 
     /// Compile glob patterns for hostnames (supports *.example.com style wildcards)
-    fn compile_host_patterns(patterns: Option<&Vec<String>>) -> Result<Option<GlobSet>, CapabilityError> {
+    fn compile_host_patterns(
+        patterns: Option<&Vec<String>>,
+    ) -> Result<Option<GlobSet>, CapabilityError> {
         match patterns {
             None => Ok(None),
             Some(pats) if pats.is_empty() => Ok(None),
@@ -220,13 +228,17 @@ impl Capabilities {
                         .map_err(|e| CapabilityError::InvalidPattern(e.to_string()))?;
                     builder.add(glob);
                 }
-                Ok(Some(builder.build().map_err(|e| CapabilityError::InvalidPattern(e.to_string()))?))
+                Ok(Some(builder.build().map_err(|e| {
+                    CapabilityError::InvalidPattern(e.to_string())
+                })?))
             }
         }
     }
 
     /// Compile simple patterns (env vars, binary names) without path separator handling
-    fn compile_simple_patterns(patterns: Option<&Vec<String>>) -> Result<Option<GlobSet>, CapabilityError> {
+    fn compile_simple_patterns(
+        patterns: Option<&Vec<String>>,
+    ) -> Result<Option<GlobSet>, CapabilityError> {
         match patterns {
             None => Ok(None),
             Some(pats) if pats.is_empty() => Ok(None),
@@ -239,7 +251,9 @@ impl Capabilities {
                         .map_err(|e| CapabilityError::InvalidPattern(e.to_string()))?;
                     builder.add(glob);
                 }
-                Ok(Some(builder.build().map_err(|e| CapabilityError::InvalidPattern(e.to_string()))?))
+                Ok(Some(builder.build().map_err(|e| {
+                    CapabilityError::InvalidPattern(e.to_string())
+                })?))
             }
         }
     }
@@ -536,7 +550,11 @@ impl Capabilities {
 
     /// Check if a channel is allowed for IPC communication
     /// Returns true if the channel is allowed, false otherwise
-    pub fn check_channel(&self, channel: &str, window_channels: Option<&[String]>) -> Result<(), CapabilityError> {
+    pub fn check_channel(
+        &self,
+        channel: &str,
+        window_channels: Option<&[String]>,
+    ) -> Result<(), CapabilityError> {
         // In dev mode, all channels are allowed
         if self.dev_mode {
             return Ok(());
@@ -682,9 +700,7 @@ impl NetCapabilityAdapter {
 
 impl ext_net::NetCapabilityChecker for NetCapabilityAdapter {
     fn check_connect(&self, host: &str) -> Result<(), String> {
-        self.capabilities
-            .check_net(host)
-            .map_err(|e| e.to_string())
+        self.capabilities.check_net(host).map_err(|e| e.to_string())
     }
 
     fn check_listen(&self, port: u16) -> Result<(), String> {
@@ -774,9 +790,7 @@ impl ext_ui::UiCapabilityChecker for UiCapabilityAdapter {
     }
 
     fn check_tray(&self) -> Result<(), String> {
-        self.capabilities
-            .check_ui_tray()
-            .map_err(|e| e.to_string())
+        self.capabilities.check_ui_tray().map_err(|e| e.to_string())
     }
 }
 
@@ -831,7 +845,9 @@ impl ext_wasm::WasmCapabilityChecker for WasmCapabilityAdapter {
 }
 
 /// Create all capability adapters from Capabilities
-pub fn create_capability_adapters(capabilities: Capabilities) -> (
+pub fn create_capability_adapters(
+    capabilities: Capabilities,
+) -> (
     Arc<dyn ext_fs::FsCapabilityChecker>,
     Arc<dyn ext_net::NetCapabilityChecker>,
     Arc<dyn ext_sys::SysCapabilityChecker>,
@@ -922,7 +938,10 @@ mod tests {
     fn test_net_allow_deny() {
         let perms = Permissions {
             net: Some(NetPermissions {
-                allow: Some(vec!["api.example.com".to_string(), "*.trusted.com".to_string()]),
+                allow: Some(vec![
+                    "api.example.com".to_string(),
+                    "*.trusted.com".to_string(),
+                ]),
                 deny: Some(vec!["evil.com".to_string()]),
                 listen: None,
             }),
@@ -975,7 +994,7 @@ mod tests {
     fn test_net_deny_takes_precedence() {
         let perms = Permissions {
             net: Some(NetPermissions {
-                allow: Some(vec!["*".to_string()]), // allow all
+                allow: Some(vec!["*".to_string()]),       // allow all
                 deny: Some(vec!["evil.com".to_string()]), // but deny evil.com
                 listen: None,
             }),
@@ -1013,7 +1032,11 @@ mod tests {
                 notify: None,
                 power: None,
                 env: Some(EnvPermissions {
-                    read: Some(vec!["HOME".to_string(), "PATH".to_string(), "MY_*".to_string()]),
+                    read: Some(vec![
+                        "HOME".to_string(),
+                        "PATH".to_string(),
+                        "MY_*".to_string(),
+                    ]),
                     write: Some(vec!["MY_*".to_string()]),
                 }),
             }),
@@ -1036,7 +1059,11 @@ mod tests {
     fn test_process_permissions() {
         let perms = Permissions {
             process: Some(ProcessPermissions {
-                allow: Some(vec!["ls".to_string(), "cat".to_string(), "/usr/bin/*".to_string()]),
+                allow: Some(vec![
+                    "ls".to_string(),
+                    "cat".to_string(),
+                    "/usr/bin/*".to_string(),
+                ]),
                 env: Some(vec!["PATH".to_string(), "HOME".to_string()]),
                 max_processes: Some(5),
             }),
@@ -1097,8 +1124,12 @@ mod tests {
 
         // Using window-specific channels (overrides manifest)
         let window_channels = vec!["private:*".to_string()];
-        assert!(caps.check_channel("private:*", Some(&window_channels)).is_ok());
-        assert!(caps.check_channel("app:config", Some(&window_channels)).is_err());
+        assert!(caps
+            .check_channel("private:*", Some(&window_channels))
+            .is_ok());
+        assert!(caps
+            .check_channel("app:config", Some(&window_channels))
+            .is_err());
     }
 
     #[test]
@@ -1132,7 +1163,8 @@ mod tests {
     #[test]
     fn test_adapters() {
         let caps = Capabilities::from_permissions(None, true).unwrap();
-        let (fs_caps, net_caps, sys_caps, ui_caps, process_caps, wasm_caps) = create_capability_adapters(caps);
+        let (fs_caps, net_caps, sys_caps, ui_caps, process_caps, wasm_caps) =
+            create_capability_adapters(caps);
 
         // Test FS adapter
         assert!(fs_caps.check_read("/any/path").is_ok());

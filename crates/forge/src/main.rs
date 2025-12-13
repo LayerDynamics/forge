@@ -87,14 +87,21 @@ fn find_forge_host() -> Result<PathBuf> {
 fn cmd_init(app_dir: &PathBuf, template: &str) -> Result<()> {
     use bundler::{IconProcessor, RECOMMENDED_ICON_SIZE};
 
-    if app_dir.exists() { return Err(anyhow!("path exists: {}", app_dir.display())); }
+    if app_dir.exists() {
+        return Err(anyhow!("path exists: {}", app_dir.display()));
+    }
 
     match template {
         "minimal" => init_minimal(app_dir)?,
         "react" => init_react(app_dir)?,
         "vue" => init_vue(app_dir)?,
         "svelte" => init_svelte(app_dir)?,
-        _ => return Err(anyhow!("Unknown template: {}. Use: minimal, react, vue, svelte", template)),
+        _ => {
+            return Err(anyhow!(
+                "Unknown template: {}. Use: minimal, react, vue, svelte",
+                template
+            ))
+        }
     }
 
     // Create assets directory and generate placeholder icon
@@ -168,9 +175,13 @@ fn cmd_dev(app_dir: &PathBuf) -> Result<()> {
     if forge_host.to_string_lossy() == "__cargo_run__" {
         let status = Command::new("cargo")
             .args([
-                "run", "-p", "forge-host", "--",
-                "--app-dir", &app_dir.display().to_string(),
-                "--dev"
+                "run",
+                "-p",
+                "forge-host",
+                "--",
+                "--app-dir",
+                &app_dir.display().to_string(),
+                "--dev",
             ])
             .status()
             .context("Failed to run cargo")?;
@@ -243,7 +254,14 @@ fn detect_framework(app_dir: &PathBuf) -> Result<Framework> {
 /// Find the entry point for web bundling
 fn find_entry_point(web_dir: &PathBuf) -> Option<PathBuf> {
     // Check in order of preference
-    let candidates = ["main.tsx", "main.ts", "main.js", "index.tsx", "index.ts", "index.js"];
+    let candidates = [
+        "main.tsx",
+        "main.ts",
+        "main.js",
+        "index.tsx",
+        "index.ts",
+        "index.js",
+    ];
     for candidate in &candidates {
         let path = web_dir.join(candidate);
         if path.exists() {
@@ -267,7 +285,10 @@ fn bundle_with_esbuild(app_dir: &PathBuf, dist_dir: &PathBuf, framework: &Framew
     let out_file = dist_dir.join("web/bundle.js");
     let deno_json = app_dir.join("deno.json");
 
-    println!("  Bundling {} with esbuild...", entry.file_name().unwrap().to_string_lossy());
+    println!(
+        "  Bundling {} with esbuild...",
+        entry.file_name().unwrap().to_string_lossy()
+    );
 
     // Build esbuild args
     let mut esbuild_args = vec![
@@ -288,7 +309,8 @@ fn bundle_with_esbuild(app_dir: &PathBuf, dist_dir: &PathBuf, framework: &Framew
     esbuild_args.push("--sourcemap".to_string());
 
     // Create a temporary script to run esbuild
-    let esbuild_script = format!(r#"
+    let esbuild_script = format!(
+        r#"
 import * as esbuild from "npm:esbuild@0.20";
 
 const result = await esbuild.build({{
@@ -380,7 +402,8 @@ fn transform_vue_files(app_dir: &PathBuf, dist_dir: &PathBuf) -> Result<()> {
     println!("  Transforming Vue SFC files...");
 
     // Create Vue transform script using @vue/compiler-sfc
-    let transform_script = format!(r#"
+    let transform_script = format!(
+        r#"
 import {{ parse, compileScript, compileTemplate, compileStyle }} from "npm:@vue/compiler-sfc@3";
 import {{ walk }} from "https://deno.land/std@0.208.0/fs/walk.ts";
 
@@ -474,7 +497,8 @@ fn transform_svelte_files(app_dir: &PathBuf, dist_dir: &PathBuf) -> Result<()> {
     println!("  Transforming Svelte files...");
 
     // Create Svelte transform script using svelte/compiler
-    let transform_script = format!(r#"
+    let transform_script = format!(
+        r#"
 import {{ compile }} from "npm:svelte@4/compiler";
 import {{ walk }} from "https://deno.land/std@0.208.0/fs/walk.ts";
 
@@ -557,14 +581,17 @@ fn update_html_for_bundle(dist_dir: &PathBuf) -> Result<()> {
 }
 
 fn cmd_build(app_dir: &PathBuf) -> Result<()> {
-    use bundler::{IconProcessor, AppManifest, RECOMMENDED_ICON_SIZE};
+    use bundler::{AppManifest, IconProcessor, RECOMMENDED_ICON_SIZE};
 
     println!("Building app at {}", app_dir.display());
 
     // Validate app structure
     let manifest_path = app_dir.join("manifest.app.toml");
     if !manifest_path.exists() {
-        return Err(anyhow!("Missing manifest.app.toml at {}", manifest_path.display()));
+        return Err(anyhow!(
+            "Missing manifest.app.toml at {}",
+            manifest_path.display()
+        ));
     }
 
     let web_dir = app_dir.join("web");
@@ -587,37 +614,50 @@ fn cmd_build(app_dir: &PathBuf) -> Result<()> {
     let found_icon = search_paths.iter().find(|p| p.exists() && p.is_file());
 
     match found_icon {
-        Some(path) => {
-            match IconProcessor::from_path(path) {
-                Ok(processor) => {
-                    let validation = processor.validate(path);
-                    if !validation.errors.is_empty() {
-                        eprintln!("\n  ⚠ Icon validation errors:");
-                        for error in &validation.errors {
-                            eprintln!("    ✗ {}", error);
-                        }
-                        eprintln!("    Run 'forge icon validate {}' for details.", app_dir.display());
-                        eprintln!("    Icon: {}\n", path.display());
-                    } else if !validation.warnings.is_empty() {
-                        for warning in &validation.warnings {
-                            eprintln!("  ⚠ Icon: {}", warning);
-                        }
-                    } else {
-                        println!("  Icon: {} ({}x{}) ✓", path.display(), validation.width, validation.height);
+        Some(path) => match IconProcessor::from_path(path) {
+            Ok(processor) => {
+                let validation = processor.validate(path);
+                if !validation.errors.is_empty() {
+                    eprintln!("\n  ⚠ Icon validation errors:");
+                    for error in &validation.errors {
+                        eprintln!("    ✗ {}", error);
                     }
-                }
-                Err(e) => {
-                    eprintln!("\n  ⚠ Failed to load icon: {}", e);
-                    eprintln!("    Path: {}\n", path.display());
+                    eprintln!(
+                        "    Run 'forge icon validate {}' for details.",
+                        app_dir.display()
+                    );
+                    eprintln!("    Icon: {}\n", path.display());
+                } else if !validation.warnings.is_empty() {
+                    for warning in &validation.warnings {
+                        eprintln!("  ⚠ Icon: {}", warning);
+                    }
+                } else {
+                    println!(
+                        "  Icon: {} ({}x{}) ✓",
+                        path.display(),
+                        validation.width,
+                        validation.height
+                    );
                 }
             }
-        }
+            Err(e) => {
+                eprintln!("\n  ⚠ Failed to load icon: {}", e);
+                eprintln!("    Path: {}\n", path.display());
+            }
+        },
         None => {
             eprintln!("\n  ⚠ No app icon found!");
             eprintln!("    Bundling will fail without an icon.");
-            eprintln!("    Run 'forge icon create {}/assets/icon.png' to create a placeholder.", app_dir.display());
-            eprintln!("    Or add your own {}x{} PNG to {}/assets/icon.png\n",
-                RECOMMENDED_ICON_SIZE, RECOMMENDED_ICON_SIZE, app_dir.display());
+            eprintln!(
+                "    Run 'forge icon create {}/assets/icon.png' to create a placeholder.",
+                app_dir.display()
+            );
+            eprintln!(
+                "    Or add your own {}x{} PNG to {}/assets/icon.png\n",
+                RECOMMENDED_ICON_SIZE,
+                RECOMMENDED_ICON_SIZE,
+                app_dir.display()
+            );
         }
     }
 
@@ -663,7 +703,10 @@ fn cmd_build(app_dir: &PathBuf) -> Result<()> {
 
     println!("\nBuild complete! Output in {}", dist_dir.display());
     println!("\nNext steps:");
-    println!("  forge bundle {}  # Create distributable package", app_dir.display());
+    println!(
+        "  forge bundle {}  # Create distributable package",
+        app_dir.display()
+    );
 
     Ok(())
 }
@@ -720,7 +763,7 @@ fn cmd_bundle(app_dir: &PathBuf) -> Result<()> {
 }
 
 fn cmd_sign(artifact_path: &PathBuf, identity: Option<&str>) -> Result<()> {
-    use bundler::codesign::{SigningConfig, sign, detect_signing_capabilities};
+    use bundler::codesign::{detect_signing_capabilities, sign, SigningConfig};
 
     println!("Signing artifact: {}", artifact_path.display());
 
@@ -818,7 +861,10 @@ fn cmd_icon_create(output_path: &PathBuf) -> Result<()> {
 
     println!("\nPlaceholder icon created!");
     println!("  Path: {}", output_path.display());
-    println!("  Size: {}x{} pixels", RECOMMENDED_ICON_SIZE, RECOMMENDED_ICON_SIZE);
+    println!(
+        "  Size: {}x{} pixels",
+        RECOMMENDED_ICON_SIZE, RECOMMENDED_ICON_SIZE
+    );
     println!("");
     println!("IMPORTANT: Replace this placeholder with your actual app icon before release.");
     println!("");
@@ -831,7 +877,7 @@ fn cmd_icon_create(output_path: &PathBuf) -> Result<()> {
 }
 
 fn cmd_icon_validate(app_dir: &PathBuf) -> Result<()> {
-    use bundler::{IconProcessor, AppManifest, MIN_ICON_SIZE, RECOMMENDED_ICON_SIZE};
+    use bundler::{AppManifest, IconProcessor, MIN_ICON_SIZE, RECOMMENDED_ICON_SIZE};
 
     println!("Validating icon for app at {}", app_dir.display());
 
@@ -854,7 +900,11 @@ fn cmd_icon_validate(app_dir: &PathBuf) -> Result<()> {
 
     println!("\nSearching for icon...");
     for path in &search_paths {
-        let status = if path.exists() { "✓ found" } else { "✗ not found" };
+        let status = if path.exists() {
+            "✓ found"
+        } else {
+            "✗ not found"
+        };
         println!("  {} {}", status, path.display());
     }
 
@@ -871,17 +921,41 @@ fn cmd_icon_validate(app_dir: &PathBuf) -> Result<()> {
             // Display results
             println!("\nIcon Properties:");
             println!("  Size: {}x{} pixels", validation.width, validation.height);
-            println!("  Square: {}", if validation.is_square { "Yes ✓" } else { "No ✗" });
-            println!("  Meets minimum ({}x{}): {}",
-                MIN_ICON_SIZE, MIN_ICON_SIZE,
-                if validation.meets_minimum { "Yes ✓" } else { "No ✗" }
+            println!(
+                "  Square: {}",
+                if validation.is_square {
+                    "Yes ✓"
+                } else {
+                    "No ✗"
+                }
             );
-            println!("  Meets recommended ({}x{}): {}",
-                RECOMMENDED_ICON_SIZE, RECOMMENDED_ICON_SIZE,
-                if validation.meets_recommended { "Yes ✓" } else { "No ✗" }
+            println!(
+                "  Meets minimum ({}x{}): {}",
+                MIN_ICON_SIZE,
+                MIN_ICON_SIZE,
+                if validation.meets_minimum {
+                    "Yes ✓"
+                } else {
+                    "No ✗"
+                }
             );
-            println!("  Has transparency: {}",
-                if validation.has_transparency { "Yes ✓" } else { "No (warning)" }
+            println!(
+                "  Meets recommended ({}x{}): {}",
+                RECOMMENDED_ICON_SIZE,
+                RECOMMENDED_ICON_SIZE,
+                if validation.meets_recommended {
+                    "Yes ✓"
+                } else {
+                    "No ✗"
+                }
+            );
+            println!(
+                "  Has transparency: {}",
+                if validation.has_transparency {
+                    "Yes ✓"
+                } else {
+                    "No (warning)"
+                }
             );
 
             // Display warnings
@@ -907,9 +981,8 @@ fn cmd_icon_validate(app_dir: &PathBuf) -> Result<()> {
             println!("\n✓ Icon validation passed!");
             Ok(())
         }
-        None => {
-            Err(anyhow!(
-                "No icon found!\n\n\
+        None => Err(anyhow!(
+            "No icon found!\n\n\
                 ICON REQUIREMENTS:\n\
                 • Format: PNG with transparency (RGBA)\n\
                 • Size: 1024x1024 pixels (minimum 512x512)\n\
@@ -921,10 +994,9 @@ fn cmd_icon_validate(app_dir: &PathBuf) -> Result<()> {
                 icon = \"path/to/icon\"\n\n\
                 CREATE A PLACEHOLDER:\n\
                 Run: forge icon create {}/assets/icon.png",
-                app_dir.display(),
-                app_dir.display()
-            ))
-        }
+            app_dir.display(),
+            app_dir.display()
+        )),
     }
 }
 
@@ -993,23 +1065,27 @@ fn main() -> Result<()> {
                 }
             }
 
-            let app_dir = app_dir.ok_or_else(|| anyhow!("Usage: forge init [--template <name>] <app-dir>"))?;
+            let app_dir = app_dir
+                .ok_or_else(|| anyhow!("Usage: forge init [--template <name>] <app-dir>"))?;
             cmd_init(&app_dir, &template)?;
         }
         "dev" => {
-            let app_dir = args.first()
+            let app_dir = args
+                .first()
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from("apps/example-deno-app"));
             cmd_dev(&app_dir)?;
         }
         "build" => {
-            let app_dir = args.first()
+            let app_dir = args
+                .first()
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from("apps/example-deno-app"));
             cmd_build(&app_dir)?;
         }
         "bundle" => {
-            let app_dir = args.first()
+            let app_dir = args
+                .first()
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from("apps/example-deno-app"));
             cmd_bundle(&app_dir)?;
@@ -1036,9 +1112,8 @@ fn main() -> Result<()> {
                 }
             }
 
-            let artifact_path = artifact_path.ok_or_else(|| {
-                anyhow!("Usage: forge sign [--identity <IDENTITY>] <artifact>")
-            })?;
+            let artifact_path = artifact_path
+                .ok_or_else(|| anyhow!("Usage: forge sign [--identity <IDENTITY>] <artifact>"))?;
             cmd_sign(&artifact_path, identity.as_deref())?;
         }
         "icon" => {

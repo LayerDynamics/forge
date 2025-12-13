@@ -3,15 +3,15 @@
 //! Creates MSIX packages for Windows 10+ distribution.
 //! MSIX is essentially a ZIP container with specific structure and manifest.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use walkdir::WalkDir;
-use zip::{ZipWriter, write::SimpleFileOptions, CompressionMethod};
+use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
-use super::{AppManifest, IconProcessor, build_embedded_binary, sanitize_name, sanitize_msix_name};
+use super::{build_embedded_binary, sanitize_msix_name, sanitize_name, AppManifest, IconProcessor};
 
 /// Windows MSIX bundler
 pub struct MsixBundler<'a> {
@@ -80,7 +80,10 @@ impl<'a> MsixBundler<'a> {
 
         // 7. Optional: Sign with SignTool
         let windows_config = self.manifest.bundle.windows.as_ref();
-        if windows_config.map(|c| c.sign.unwrap_or(false)).unwrap_or(false) {
+        if windows_config
+            .map(|c| c.sign.unwrap_or(false))
+            .unwrap_or(false)
+        {
             println!("  Signing package...");
             self.sign_package(&msix_path)?;
         }
@@ -221,10 +224,16 @@ impl<'a> MsixBundler<'a> {
 
     /// Sign MSIX with SignTool (Windows SDK required)
     fn sign_package(&self, msix_path: &Path) -> Result<()> {
-        let windows_config = self.manifest.bundle.windows.as_ref()
+        let windows_config = self
+            .manifest
+            .bundle
+            .windows
+            .as_ref()
             .context("Windows bundle config required for signing")?;
 
-        let cert_path = windows_config.certificate.as_ref()
+        let cert_path = windows_config
+            .certificate
+            .as_ref()
             .context("Certificate path required for signing (bundle.windows.certificate)")?;
 
         let password = windows_config.resolve_password();
@@ -242,8 +251,7 @@ impl<'a> MsixBundler<'a> {
 
         cmd.arg(msix_path);
 
-        let status = cmd.status()
-            .context("Failed to run SignTool")?;
+        let status = cmd.status().context("Failed to run SignTool")?;
 
         if !status.success() {
             bail!("SignTool failed with status: {}", status);

@@ -38,3 +38,6 @@ ext_sys = { path = "../ext_sys" }
 ext_ui = { path = "../ext_ui" }
 ext_process = { path = "../ext_process" }
 ext_wasm = { path = "../ext_wasm" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"

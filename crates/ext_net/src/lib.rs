@@ -228,7 +228,9 @@ impl Default for NetHttpClient {
 /// Extract host from URL for capability checking
 fn extract_host(url: &str) -> Result<String, NetError> {
     let parsed = Url::parse(url)?;
-    let host = parsed.host_str().ok_or_else(|| NetError::invalid_url("URL has no host"))?;
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| NetError::invalid_url("URL has no host"))?;
 
     // Include port if non-default
     let port = parsed.port();
@@ -307,7 +309,10 @@ async fn op_net_fetch(
         "PATCH" => client.patch(&url),
         "HEAD" => client.head(&url),
         _ => {
-            return Err(NetError::request_build_error(format!("Unsupported method: {}", method)));
+            return Err(NetError::request_build_error(format!(
+                "Unsupported method: {}",
+                method
+            )));
         }
     };
 
@@ -333,7 +338,11 @@ async fn op_net_fetch(
 
     // Extract response data
     let status = response.status().as_u16();
-    let status_text = response.status().canonical_reason().unwrap_or("").to_string();
+    let status_text = response
+        .status()
+        .canonical_reason()
+        .unwrap_or("")
+        .to_string();
     let ok = response.status().is_success();
     let final_url = response.url().to_string();
 
@@ -395,7 +404,10 @@ async fn op_net_fetch_bytes(
         "PATCH" => client.patch(&url),
         "HEAD" => client.head(&url),
         _ => {
-            return Err(NetError::request_build_error(format!("Unsupported method: {}", method)));
+            return Err(NetError::request_build_error(format!(
+                "Unsupported method: {}",
+                method
+            )));
         }
     };
 
@@ -421,7 +433,11 @@ async fn op_net_fetch_bytes(
 
     // Extract response data
     let status = response.status().as_u16();
-    let status_text = response.status().canonical_reason().unwrap_or("").to_string();
+    let status_text = response
+        .status()
+        .canonical_reason()
+        .unwrap_or("")
+        .to_string();
     let ok = response.status().is_success();
     let final_url = response.url().to_string();
 
@@ -436,7 +452,11 @@ async fn op_net_fetch_bytes(
     // Read body as bytes
     let body = response.bytes().await?.to_vec();
 
-    debug!(status = status, body_len = body.len(), "net.fetch_bytes complete");
+    debug!(
+        status = status,
+        body_len = body.len(),
+        "net.fetch_bytes complete"
+    );
 
     Ok(FetchBytesResponse {
         status,
@@ -480,10 +500,7 @@ pub fn init_net_state(op_state: &mut OpState, capabilities: Option<Arc<dyn NetCa
 
 deno_core::extension!(
     host_net,
-    ops = [
-        op_net_fetch,
-        op_net_fetch_bytes,
-    ],
+    ops = [op_net_fetch, op_net_fetch_bytes,],
     esm_entry_point = "ext:host_net/init.js",
     esm = ["ext:host_net/init.js" = "js/init.js"]
 );
@@ -502,10 +519,22 @@ mod tests {
 
     #[test]
     fn test_extract_host() {
-        assert_eq!(extract_host("https://example.com/path").unwrap(), "example.com");
-        assert_eq!(extract_host("https://example.com:8443/path").unwrap(), "example.com:8443");
-        assert_eq!(extract_host("http://localhost:3000").unwrap(), "localhost:3000");
-        assert_eq!(extract_host("https://api.example.com:443/v1").unwrap(), "api.example.com");
+        assert_eq!(
+            extract_host("https://example.com/path").unwrap(),
+            "example.com"
+        );
+        assert_eq!(
+            extract_host("https://example.com:8443/path").unwrap(),
+            "example.com:8443"
+        );
+        assert_eq!(
+            extract_host("http://localhost:3000").unwrap(),
+            "localhost:3000"
+        );
+        assert_eq!(
+            extract_host("https://api.example.com:443/v1").unwrap(),
+            "api.example.com"
+        );
     }
 
     #[test]

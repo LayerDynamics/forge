@@ -401,13 +401,19 @@ async fn op_process_spawn(
 
     // Extract I/O streams
     let stdout = if stdout_piped {
-        child.stdout.take().map(|s| Arc::new(Mutex::new(BufReader::new(s))))
+        child
+            .stdout
+            .take()
+            .map(|s| Arc::new(Mutex::new(BufReader::new(s))))
     } else {
         None
     };
 
     let stderr = if stderr_piped {
-        child.stderr.take().map(|s| Arc::new(Mutex::new(BufReader::new(s))))
+        child
+            .stderr
+            .take()
+            .map(|s| Arc::new(Mutex::new(BufReader::new(s))))
     } else {
         None
     };
@@ -467,10 +473,7 @@ async fn op_process_spawn(
 
     debug!(binary = %binary, pid = %pid, handle = %handle_id, "process.spawn complete");
 
-    Ok(SpawnResult {
-        id: handle_id,
-        pid,
-    })
+    Ok(SpawnResult { id: handle_id, pid })
 }
 
 /// Kill a process
@@ -512,8 +515,7 @@ async fn op_process_kill(
                 Some(s) => return Err(ProcessError::io(format!("Unknown signal: {}", s))),
             };
 
-            kill(Pid::from_raw(pid as i32), sig)
-                .map_err(|e| ProcessError::io(e.to_string()))?;
+            kill(Pid::from_raw(pid as i32), sig).map_err(|e| ProcessError::io(e.to_string()))?;
         }
     }
 
@@ -596,7 +598,11 @@ async fn op_process_status(
             .get(&handle)
             .ok_or_else(|| ProcessError::invalid_handle(&handle))?;
 
-        (process.exited, process.exit_code, Arc::clone(&process.child))
+        (
+            process.exited,
+            process.exit_code,
+            Arc::clone(&process.child),
+        )
     };
 
     if already_exited {
@@ -714,7 +720,10 @@ async fn op_process_read_stdout(
 
     let mut stdout = stdout_arc.lock().await;
     let mut line = String::new();
-    let bytes_read = stdout.read_line(&mut line).await.map_err(ProcessError::from)?;
+    let bytes_read = stdout
+        .read_line(&mut line)
+        .await
+        .map_err(ProcessError::from)?;
 
     if bytes_read == 0 {
         Ok(ProcessOutput {
@@ -764,7 +773,10 @@ async fn op_process_read_stderr(
 
     let mut stderr = stderr_arc.lock().await;
     let mut line = String::new();
-    let bytes_read = stderr.read_line(&mut line).await.map_err(ProcessError::from)?;
+    let bytes_read = stderr
+        .read_line(&mut line)
+        .await
+        .map_err(ProcessError::from)?;
 
     if bytes_read == 0 {
         Ok(ProcessOutput {

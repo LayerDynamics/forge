@@ -7,13 +7,13 @@
 //!
 //! Follows freedesktop.org standards for .desktop files and icon placement.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::{AppManifest, IconProcessor, build_embedded_binary, sanitize_name};
+use super::{build_embedded_binary, sanitize_name, AppManifest, IconProcessor};
 
 /// Linux bundler
 pub struct LinuxBundler<'a> {
@@ -129,7 +129,9 @@ impl<'a> LinuxBundler<'a> {
 
         // Also copy to usr/share/applications
         fs::write(
-            appdir_path.join("usr/share/applications").join(format!("{}.desktop", exec_name)),
+            appdir_path
+                .join("usr/share/applications")
+                .join(format!("{}.desktop", exec_name)),
             &desktop_content,
         )?;
 
@@ -186,9 +188,7 @@ exec "${{HERE}}/usr/bin/{exec_name}" "$@"
             .map(|c| c.comment_or_default(&app.name))
             .unwrap_or_else(|| format!("{} application", app.name));
 
-        let terminal = linux_config
-            .and_then(|c| c.terminal)
-            .unwrap_or(false);
+        let terminal = linux_config.and_then(|c| c.terminal).unwrap_or(false);
 
         let mime_types = linux_config
             .and_then(|c| c.mime_types.as_ref())
@@ -223,11 +223,7 @@ Terminal={terminal}
         let app_name = &self.manifest.app.name;
         let version = &self.manifest.app.version;
 
-        let appimage_name = format!(
-            "{}-{}-x86_64.AppImage",
-            app_name.replace(' ', ""),
-            version
-        );
+        let appimage_name = format!("{}-{}-x86_64.AppImage", app_name.replace(' ', ""), version);
         let appimage_path = self.output_dir.join(&appimage_name);
 
         // Try appimagetool first
@@ -298,9 +294,12 @@ Terminal={terminal}
                 &squashfs_path.display().to_string(),
                 "-root-owned",
                 "-noappend",
-                "-comp", "gzip",
-                "-b", "1M",
-                "-Xcompression-level", "9",
+                "-comp",
+                "gzip",
+                "-b",
+                "1M",
+                "-Xcompression-level",
+                "9",
             ])
             .status()
             .context("Failed to run mksquashfs")?;
@@ -428,21 +427,14 @@ fn ensure_appimage_runtime() -> Result<PathBuf> {
     let url = "https://github.com/AppImage/AppImageKit/releases/download/continuous/runtime-x86_64";
 
     let status = Command::new("curl")
-        .args([
-            "-L",
-            "-o", &runtime_path.display().to_string(),
-            url,
-        ])
+        .args(["-L", "-o", &runtime_path.display().to_string(), url])
         .status()
         .context("Failed to download AppImage runtime")?;
 
     if !status.success() {
         // Try wget as fallback
         let wget_status = Command::new("wget")
-            .args([
-                "-O", &runtime_path.display().to_string(),
-                url,
-            ])
+            .args(["-O", &runtime_path.display().to_string(), url])
             .status();
 
         if wget_status.is_err() || !wget_status.unwrap().success() {

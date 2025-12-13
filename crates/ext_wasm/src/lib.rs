@@ -298,15 +298,10 @@ pub struct WasmModule {
 }
 
 /// Store context for WASM instances with optional WASI support
+#[derive(Default)]
 pub struct WasmStoreData {
     /// WASI Preview1 context, if WASI is enabled for this instance
     pub wasi: Option<WasiP1Ctx>,
-}
-
-impl Default for WasmStoreData {
-    fn default() -> Self {
-        Self { wasi: None }
-    }
 }
 
 /// Stored instance with its store
@@ -468,13 +463,8 @@ async fn op_wasm_compile(
         let ws = s
             .try_borrow_mut::<WasmState>()
             .ok_or_else(|| WasmError::compile_error("WASM state not initialized"))?;
-        ws.modules.insert(
-            module_id.clone(),
-            WasmModule {
-                module,
-                name: None,
-            },
-        );
+        ws.modules
+            .insert(module_id.clone(), WasmModule { module, name: None });
     }
 
     debug!(module_id = %module_id, "wasm.compile complete");
@@ -636,8 +626,11 @@ async fn op_wasm_instantiate(
         // Add preopened directories
         if let Some(preopens) = config.preopens {
             for (guest_path, host_path) in preopens {
-                builder.preopened_dir(&host_path, &guest_path, DirPerms::all(), FilePerms::all())
-                    .map_err(|e| WasmError::wasi_error(format!("Failed to preopen '{}': {}", host_path, e)))?;
+                builder
+                    .preopened_dir(&host_path, &guest_path, DirPerms::all(), FilePerms::all())
+                    .map_err(|e| {
+                        WasmError::wasi_error(format!("Failed to preopen '{}': {}", host_path, e))
+                    })?;
             }
         }
 
@@ -655,7 +648,8 @@ async fn op_wasm_instantiate(
     if store.data().wasi.is_some() {
         preview1::add_to_linker_sync(&mut linker, |data: &mut WasmStoreData| {
             data.wasi.as_mut().expect("WASI context not initialized")
-        }).map_err(|e| WasmError::wasi_error(format!("Failed to add WASI to linker: {}", e)))?;
+        })
+        .map_err(|e| WasmError::wasi_error(format!("Failed to add WASI to linker: {}", e)))?;
     }
 
     // Instantiate the module
@@ -721,22 +715,22 @@ async fn op_wasm_get_exports(
         let ws = s
             .try_borrow::<WasmState>()
             .ok_or_else(|| WasmError::invalid_instance_handle("WASM state not initialized"))?;
-        ws.instances
-            .get(&instance_id)
-            .cloned()
-            .ok_or_else(|| {
-                WasmError::invalid_instance_handle(format!("Instance '{}' not found", instance_id))
-            })?
+        ws.instances.get(&instance_id).cloned().ok_or_else(|| {
+            WasmError::invalid_instance_handle(format!("Instance '{}' not found", instance_id))
+        })?
     };
 
     let mut inst = instance_arc.lock().await;
     let mut exports = Vec::new();
 
     // Destructure to get separate mutable borrows
-    let WasmInstance { store, instance, .. } = &mut *inst;
+    let WasmInstance {
+        store, instance, ..
+    } = &mut *inst;
 
     // Collect export names first to avoid borrow issues
-    let export_names: Vec<String> = instance.exports(&mut *store)
+    let export_names: Vec<String> = instance
+        .exports(&mut *store)
         .map(|e| e.name().to_string())
         .collect();
 
@@ -787,28 +781,25 @@ async fn op_wasm_call(
         let ws = s
             .try_borrow::<WasmState>()
             .ok_or_else(|| WasmError::call_error("WASM state not initialized"))?;
-        ws.instances
-            .get(&instance_id)
-            .cloned()
-            .ok_or_else(|| {
-                WasmError::invalid_instance_handle(format!("Instance '{}' not found", instance_id))
-            })?
+        ws.instances.get(&instance_id).cloned().ok_or_else(|| {
+            WasmError::invalid_instance_handle(format!("Instance '{}' not found", instance_id))
+        })?
     };
 
     let mut inst = instance_arc.lock().await;
 
     // Destructure to get separate mutable borrows
-    let WasmInstance { store, instance, .. } = &mut *inst;
+    let WasmInstance {
+        store, instance, ..
+    } = &mut *inst;
 
     // Get the function
-    let func: Func = instance
-        .get_func(&mut *store, &func_name)
-        .ok_or_else(|| {
-            WasmError::export_not_found(format!(
-                "Function '{}' not found in instance '{}'",
-                func_name, instance_id
-            ))
-        })?;
+    let func: Func = instance.get_func(&mut *store, &func_name).ok_or_else(|| {
+        WasmError::export_not_found(format!(
+            "Function '{}' not found in instance '{}'",
+            func_name, instance_id
+        ))
+    })?;
 
     // Verify argument types
     let func_ty = func.ty(&*store);
@@ -829,9 +820,7 @@ async fn op_wasm_call(
         if arg_type_str != expected_type_str {
             return Err(WasmError::type_error(format!(
                 "Argument {} type mismatch: expected {}, got {}",
-                i,
-                expected_type_str,
-                arg_type_str
+                i, expected_type_str, arg_type_str
             )));
         }
     }
@@ -870,19 +859,18 @@ async fn get_instance_memory(
         let ws = s
             .try_borrow::<WasmState>()
             .ok_or_else(|| WasmError::memory_error("WASM state not initialized"))?;
-        ws.instances
-            .get(instance_id)
-            .cloned()
-            .ok_or_else(|| {
-                WasmError::invalid_instance_handle(format!("Instance '{}' not found", instance_id))
-            })?
+        ws.instances.get(instance_id).cloned().ok_or_else(|| {
+            WasmError::invalid_instance_handle(format!("Instance '{}' not found", instance_id))
+        })?
     };
 
     // Find the memory export
     let mut inst = instance_arc.lock().await;
     let memory_name = {
         // Destructure to get separate mutable borrows
-        let WasmInstance { store, instance, .. } = &mut *inst;
+        let WasmInstance {
+            store, instance, ..
+        } = &mut *inst;
         let mut found_name = None;
         for export in instance.exports(&mut *store) {
             let name = export.name().to_string();
@@ -896,8 +884,8 @@ async fn get_instance_memory(
     };
     drop(inst);
 
-    let memory_name = memory_name
-        .ok_or_else(|| WasmError::memory_error("No memory export found in instance"))?;
+    let memory_name =
+        memory_name.ok_or_else(|| WasmError::memory_error("No memory export found in instance"))?;
 
     Ok((instance_arc, memory_name))
 }
@@ -917,7 +905,9 @@ async fn op_wasm_memory_read(
     let mut inst = instance_arc.lock().await;
 
     // Get memory by destructuring to avoid borrow issues
-    let WasmInstance { store, instance, .. } = &mut *inst;
+    let WasmInstance {
+        store, instance, ..
+    } = &mut *inst;
     let memory: Memory = instance
         .get_memory(&mut *store, &memory_name)
         .ok_or_else(|| WasmError::memory_error("Memory export not found"))?;
@@ -954,7 +944,9 @@ async fn op_wasm_memory_write(
     let mut inst = instance_arc.lock().await;
 
     // Get memory by destructuring to avoid borrow issues
-    let WasmInstance { store, instance, .. } = &mut *inst;
+    let WasmInstance {
+        store, instance, ..
+    } = &mut *inst;
     let memory: Memory = instance
         .get_memory(&mut *store, &memory_name)
         .ok_or_else(|| WasmError::memory_error("Memory export not found"))?;
@@ -989,7 +981,9 @@ async fn op_wasm_memory_size(
     let mut inst = instance_arc.lock().await;
 
     // Get memory by destructuring to avoid borrow issues
-    let WasmInstance { store, instance, .. } = &mut *inst;
+    let WasmInstance {
+        store, instance, ..
+    } = &mut *inst;
     let memory: Memory = instance
         .get_memory(&mut *store, &memory_name)
         .ok_or_else(|| WasmError::memory_error("Memory export not found"))?;
@@ -1012,7 +1006,9 @@ async fn op_wasm_memory_grow(
     let mut inst = instance_arc.lock().await;
 
     // Get memory by destructuring to avoid borrow issues
-    let WasmInstance { store, instance, .. } = &mut *inst;
+    let WasmInstance {
+        store, instance, ..
+    } = &mut *inst;
     let memory: Memory = instance
         .get_memory(&mut *store, &memory_name)
         .ok_or_else(|| WasmError::memory_error("Memory export not found"))?;
@@ -1108,10 +1104,10 @@ mod tests {
         let wt_val64 = val64.to_wasmtime();
         assert_eq!(wt_val64.i64(), Some(1234567890123));
 
-        let valf32 = WasmValue::F32(3.14);
+        let valf32 = WasmValue::F32(std::f32::consts::PI);
         let wt_valf32 = valf32.to_wasmtime();
         let back_f32 = WasmValue::from_wasmtime(&wt_valf32);
-        assert!(matches!(back_f32, Some(WasmValue::F32(f)) if (f - 3.14).abs() < 0.001));
+        assert!(matches!(back_f32, Some(WasmValue::F32(f)) if (f - std::f32::consts::PI).abs() < 0.001));
     }
 
     #[test]
