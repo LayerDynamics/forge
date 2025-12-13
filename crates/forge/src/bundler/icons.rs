@@ -407,6 +407,7 @@ impl IconProcessor {
     /// Convert icon to macOS .icns format using system tools
     ///
     /// Requires: sips, iconutil (built-in on macOS)
+    #[allow(dead_code)]
     pub fn convert_to_icns(&self, dest: &Path) -> Result<()> {
         // Create temporary iconset directory
         let iconset_dir = dest.with_extension("iconset");

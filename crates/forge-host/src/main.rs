@@ -1068,11 +1068,24 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     menu.init_for_nsapp();
                 }
 
-                #[cfg(not(target_os = "macos"))]
+                #[cfg(target_os = "windows")]
                 {
-                    // For non-macOS, we need to attach to each window
+                    use tao::platform::windows::WindowExtWindows;
+                    // For Windows, attach menu to each window
                     for window in tao_windows.values() {
-                        let _ = menu.init_for_hwnd(window.hwnd() as _);
+                        unsafe {
+                            let _ = menu.init_for_hwnd(window.hwnd() as isize);
+                        }
+                    }
+                }
+
+                #[cfg(target_os = "linux")]
+                {
+                    use tao::platform::unix::WindowExtUnix;
+                    // For Linux, attach menu to each GTK window
+                    for window in tao_windows.values() {
+                        let gtk_win = window.gtk_window();
+                        let _ = menu.init_for_gtk_window(gtk_win, None::<&gtk::Box>);
                     }
                 }
 
@@ -1220,9 +1233,8 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     #[cfg(target_os = "linux")]
                     {
                         use tao::platform::unix::WindowExtUnix;
-                        if let Some(gtk_win) = tao_win.gtk_window() {
-                            menu.show_context_menu_for_gtk_window(gtk_win, None::<muda::dpi::Position>);
-                        }
+                        let gtk_win = tao_win.gtk_window();
+                        menu.show_context_menu_for_gtk_window(gtk_win, None::<muda::dpi::Position>);
                     }
 
                     tracing::info!("Showed context menu with {} items", items.len());

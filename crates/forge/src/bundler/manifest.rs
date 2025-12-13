@@ -40,24 +40,22 @@ pub struct WindowConfig {
 
 /// Bundle configuration for all platforms
 #[derive(Debug, Deserialize, Clone, Default)]
+#[allow(dead_code)]
 pub struct BundleConfig {
     /// Path to icon (without extension), e.g., "assets/icon"
     /// Will look for .png, .icns, .ico variants
     pub icon: Option<String>,
     /// Windows-specific bundle settings
-    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub windows: Option<WindowsBundleConfig>,
     /// macOS-specific bundle settings
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub macos: Option<MacosBundleConfig>,
     /// Linux-specific bundle settings
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     pub linux: Option<LinuxBundleConfig>,
 }
 
 /// Windows MSIX bundle configuration
 #[derive(Debug, Deserialize, Clone, Default)]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+#[allow(dead_code)]
 pub struct WindowsBundleConfig {
     /// Package format: "msix" (default)
     pub format: Option<String>,
@@ -77,6 +75,7 @@ pub struct WindowsBundleConfig {
 
 /// macOS bundle configuration
 #[derive(Debug, Deserialize, Clone, Default)]
+#[allow(dead_code)]
 pub struct MacosBundleConfig {
     /// Enable code signing
     pub sign: Option<bool>,
@@ -96,7 +95,7 @@ pub struct MacosBundleConfig {
 
 /// Linux AppImage bundle configuration
 #[derive(Debug, Deserialize, Clone, Default)]
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[allow(dead_code)]
 pub struct LinuxBundleConfig {
     /// Package format: "appimage" (default) or "tarball"
     pub format: Option<String>,

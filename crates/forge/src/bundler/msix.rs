@@ -11,7 +11,7 @@ use std::process::Command;
 use walkdir::WalkDir;
 use zip::{ZipWriter, write::SimpleFileOptions, CompressionMethod};
 
-use super::{AppManifest, IconProcessor, build_embedded_binary, sanitize_name, sanitize_msix_name, normalize_version};
+use super::{AppManifest, IconProcessor, build_embedded_binary, sanitize_name, sanitize_msix_name};
 
 /// Windows MSIX bundler
 pub struct MsixBundler<'a> {
@@ -98,7 +98,7 @@ impl<'a> MsixBundler<'a> {
         let windows_config = self.manifest.bundle.windows.as_ref();
 
         let msix_name = sanitize_msix_name(&app.identifier);
-        let version = normalize_version(&app.version);
+        let version = self.manifest.version_quad();
         let publisher = windows_config
             .map(|c| c.publisher_or_default(&app.name))
             .unwrap_or_else(|| format!("CN={}", app.name));

@@ -82,6 +82,7 @@ pub fn build_embedded_binary(dist_dir: &Path) -> Result<PathBuf> {
 }
 
 /// Copy directory recursively
+#[allow(dead_code)]
 pub fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {

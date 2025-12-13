@@ -473,6 +473,7 @@ pub fn bundle(
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
@@ -485,5 +486,18 @@ mod tests {
             exec_name
         );
         assert!(desktop.contains(expected_contains));
+    }
+
+    #[test]
+    fn test_sanitize_name_for_linux() {
+        // Use sanitize_name from super::* to ensure proper name handling
+        let name = sanitize_name("My App Name");
+        assert_eq!(name, "my-app-name");
+
+        let special = sanitize_name("App@#$%Special");
+        assert_eq!(special, "app-special");
+
+        let spaces = sanitize_name("  Multiple   Spaces  ");
+        assert_eq!(spaces, "multiple-spaces");
     }
 }
