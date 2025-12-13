@@ -15,6 +15,7 @@ pub struct Permissions {
     pub ui: Option<UiPermissions>,
     pub sys: Option<SysPermissions>,
     pub process: Option<ProcessPermissions>,
+    pub wasm: Option<WasmPermissions>,
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
@@ -69,6 +70,17 @@ pub struct ProcessPermissions {
     pub max_processes: Option<usize>,
 }
 
+/// WebAssembly permissions
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct WasmPermissions {
+    /// Glob patterns for allowed WASM file paths
+    pub load: Option<Vec<String>>,
+    /// Glob patterns for allowed WASI preopened directories
+    pub preopens: Option<Vec<String>>,
+    /// Maximum concurrent WASM instances (default: 10)
+    pub max_instances: Option<usize>,
+}
+
 /// Runtime capabilities checker
 #[derive(Debug, Clone)]
 pub struct Capabilities {
@@ -92,6 +104,9 @@ pub struct Capabilities {
     process_allow_patterns: Option<GlobSet>,
     process_env_patterns: Option<GlobSet>,
     pub process_max_processes: usize,
+    wasm_load_patterns: Option<GlobSet>,
+    wasm_preopen_patterns: Option<GlobSet>,
+    pub wasm_max_instances: usize,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -120,6 +135,7 @@ impl Capabilities {
         let ui = permissions.ui.unwrap_or_default();
         let sys = permissions.sys.unwrap_or_default();
         let process = permissions.process.unwrap_or_default();
+        let wasm = permissions.wasm.unwrap_or_default();
 
         // Compile network host patterns (for wildcard matching like *.example.com)
         let net_allow_patterns = Self::compile_host_patterns(net.allow.as_ref())?;
@@ -136,6 +152,10 @@ impl Capabilities {
         // Compile process patterns
         let process_allow_patterns = Self::compile_simple_patterns(process.allow.as_ref())?;
         let process_env_patterns = Self::compile_simple_patterns(process.env.as_ref())?;
+
+        // Compile WASM patterns
+        let wasm_load_patterns = Self::compile_patterns(wasm.load.as_ref())?;
+        let wasm_preopen_patterns = Self::compile_patterns(wasm.preopens.as_ref())?;
 
         Ok(Self {
             dev_mode,
@@ -157,6 +177,9 @@ impl Capabilities {
             process_allow_patterns,
             process_env_patterns,
             process_max_processes: process.max_processes.unwrap_or(10),
+            wasm_load_patterns,
+            wasm_preopen_patterns,
+            wasm_max_instances: wasm.max_instances.unwrap_or(10),
         })
     }
 
@@ -558,6 +581,61 @@ impl Capabilities {
     pub fn get_max_processes(&self) -> usize {
         self.process_max_processes
     }
+
+    /// Check if loading WASM from a path is allowed
+    pub fn check_wasm_load(&self, path: &str) -> Result<(), CapabilityError> {
+        if self.dev_mode {
+            return Ok(());
+        }
+
+        match &self.wasm_load_patterns {
+            None => Err(CapabilityError::Denied {
+                capability: "wasm.load".to_string(),
+                resource: path.to_string(),
+            }),
+            Some(patterns) => {
+                let p = Path::new(path);
+                if patterns.is_match(p) {
+                    Ok(())
+                } else {
+                    Err(CapabilityError::Denied {
+                        capability: "wasm.load".to_string(),
+                        resource: path.to_string(),
+                    })
+                }
+            }
+        }
+    }
+
+    /// Check if preopening a directory for WASI is allowed
+    pub fn check_wasm_preopen(&self, host_path: &str) -> Result<(), CapabilityError> {
+        if self.dev_mode {
+            return Ok(());
+        }
+
+        match &self.wasm_preopen_patterns {
+            None => Err(CapabilityError::Denied {
+                capability: "wasm.preopen".to_string(),
+                resource: host_path.to_string(),
+            }),
+            Some(patterns) => {
+                let p = Path::new(host_path);
+                if patterns.is_match(p) {
+                    Ok(())
+                } else {
+                    Err(CapabilityError::Denied {
+                        capability: "wasm.preopen".to_string(),
+                        resource: host_path.to_string(),
+                    })
+                }
+            }
+        }
+    }
+
+    /// Get the maximum number of concurrent WASM instances
+    pub fn get_max_wasm_instances(&self) -> usize {
+        self.wasm_max_instances
+    }
 }
 
 // ============================================================================
@@ -727,6 +805,31 @@ impl ext_process::ProcessCapabilityChecker for ProcessCapabilityAdapter {
     }
 }
 
+/// Adapter that implements ext_wasm::WasmCapabilityChecker using Capabilities
+pub struct WasmCapabilityAdapter {
+    capabilities: Arc<Capabilities>,
+}
+
+impl WasmCapabilityAdapter {
+    pub fn new(capabilities: Arc<Capabilities>) -> Self {
+        Self { capabilities }
+    }
+}
+
+impl ext_wasm::WasmCapabilityChecker for WasmCapabilityAdapter {
+    fn check_load(&self, path: &str) -> Result<(), String> {
+        self.capabilities
+            .check_wasm_load(path)
+            .map_err(|e| e.to_string())
+    }
+
+    fn check_preopen(&self, host_path: &str) -> Result<(), String> {
+        self.capabilities
+            .check_wasm_preopen(host_path)
+            .map_err(|e| e.to_string())
+    }
+}
+
 /// Create all capability adapters from Capabilities
 pub fn create_capability_adapters(capabilities: Capabilities) -> (
     Arc<dyn ext_fs::FsCapabilityChecker>,
@@ -734,6 +837,7 @@ pub fn create_capability_adapters(capabilities: Capabilities) -> (
     Arc<dyn ext_sys::SysCapabilityChecker>,
     Arc<dyn ext_ui::UiCapabilityChecker>,
     Arc<dyn ext_process::ProcessCapabilityChecker>,
+    Arc<dyn ext_wasm::WasmCapabilityChecker>,
 ) {
     let caps = Arc::new(capabilities);
     (
@@ -741,7 +845,8 @@ pub fn create_capability_adapters(capabilities: Capabilities) -> (
         Arc::new(NetCapabilityAdapter::new(caps.clone())),
         Arc::new(SysCapabilityAdapter::new(caps.clone())),
         Arc::new(UiCapabilityAdapter::new(caps.clone())),
-        Arc::new(ProcessCapabilityAdapter::new(caps)),
+        Arc::new(ProcessCapabilityAdapter::new(caps.clone())),
+        Arc::new(WasmCapabilityAdapter::new(caps)),
     )
 }
 

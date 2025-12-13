@@ -818,7 +818,7 @@ deno_core::extension!(
         op_process_read_stderr,
     ],
     esm_entry_point = "ext:host_process/init.js",
-    esm = ["ext:host_process/init.js" = "../../sdk/host.process.ts"]
+    esm = ["ext:host_process/init.js" = "js/init.js"]
 );
 
 pub fn process_extension() -> Extension {

@@ -2,9 +2,12 @@ use anyhow::{Context, Result};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::env;
 use serde::Deserialize;
-use deno_core::{JsRuntime, RuntimeOptions};
+use deno_core::{JsRuntime, RuntimeOptions, ModuleSpecifier, ModuleLoadResponse, ModuleSourceCode, ResolutionKind, ModuleLoadOptions, ModuleLoadReferrer};
+use deno_core::error::ModuleLoaderError;
+use deno_ast::{MediaType, ParseParams};
 use tao::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
 use tao::event::{Event, WindowEvent};
 use tao::window::{WindowBuilder, WindowId};
@@ -42,7 +45,7 @@ pub struct Windows {
 }
 
 fn preload_js() -> &'static str {
-    include_str!("../../../sdk/preload.ts")
+    include_str!("../../../sdk/preload.js")
 }
 
 fn mime_for(path: &str) -> &'static str {
@@ -68,6 +71,125 @@ fn mime_for(path: &str) -> &'static str {
 
 // Include generated assets module (for release builds with embedded assets)
 include!(concat!(env!("OUT_DIR"), "/assets.rs"));
+
+// ============================================================================
+// Module Loader for ES Modules
+// ============================================================================
+
+/// Custom module loader that handles:
+/// - `host:*` specifiers → maps to extension modules (ext:host_*/init.js)
+/// - File paths with TypeScript transpilation
+struct ForgeModuleLoader {
+    #[allow(dead_code)]
+    app_dir: PathBuf,
+}
+
+impl ForgeModuleLoader {
+    fn new(app_dir: PathBuf) -> Self {
+        Self { app_dir }
+    }
+}
+
+impl deno_core::ModuleLoader for ForgeModuleLoader {
+    fn resolve(
+        &self,
+        specifier: &str,
+        referrer: &str,
+        _kind: ResolutionKind,
+    ) -> Result<ModuleSpecifier, ModuleLoaderError> {
+        // Handle host:* imports by mapping to ext:host_*/init.js
+        if specifier.starts_with("host:") {
+            let module_name = &specifier[5..]; // strip "host:"
+            let ext_specifier = format!("ext:host_{}/init.js", module_name);
+            return ModuleSpecifier::parse(&ext_specifier)
+                .map_err(|e| ModuleLoaderError::generic(format!("Invalid specifier: {}", e)));
+        }
+
+        // For relative imports, resolve against referrer
+        deno_core::resolve_import(specifier, referrer)
+            .map_err(|e| ModuleLoaderError::generic(e.to_string()))
+    }
+
+    fn load(
+        &self,
+        module_specifier: &ModuleSpecifier,
+        _maybe_referrer: Option<&ModuleLoadReferrer>,
+        _options: ModuleLoadOptions,
+    ) -> ModuleLoadResponse {
+        // Extension modules (ext:*) are handled by deno_core automatically
+        if module_specifier.scheme() == "ext" {
+            return ModuleLoadResponse::Sync(Err(ModuleLoaderError::generic(
+                format!("Extension module should be handled by deno_core: {}", module_specifier)
+            )));
+        }
+
+        let module_specifier = module_specifier.clone();
+
+        ModuleLoadResponse::Sync((move || {
+            let path = module_specifier.to_file_path()
+                .map_err(|_| ModuleLoaderError::generic(format!(
+                    "Cannot convert to file path: {}", module_specifier
+                )))?;
+
+            let media_type = MediaType::from_path(&path);
+            let (module_type, should_transpile) = match media_type {
+                MediaType::JavaScript | MediaType::Mjs | MediaType::Cjs => {
+                    (deno_core::ModuleType::JavaScript, false)
+                }
+                MediaType::Jsx => (deno_core::ModuleType::JavaScript, true),
+                MediaType::TypeScript
+                | MediaType::Mts
+                | MediaType::Cts
+                | MediaType::Dts
+                | MediaType::Dmts
+                | MediaType::Dcts
+                | MediaType::Tsx => (deno_core::ModuleType::JavaScript, true),
+                MediaType::Json => (deno_core::ModuleType::Json, false),
+                _ => {
+                    return Err(ModuleLoaderError::generic(format!(
+                        "Unknown file extension: {:?}", path.extension()
+                    )));
+                }
+            };
+
+            let code = std::fs::read_to_string(&path)
+                .map_err(|e| ModuleLoaderError::generic(format!(
+                    "Failed to read {}: {}", path.display(), e
+                )))?;
+
+            let code = if should_transpile {
+                let parsed = deno_ast::parse_module(ParseParams {
+                    specifier: module_specifier.clone(),
+                    text: code.into(),
+                    media_type,
+                    capture_tokens: false,
+                    scope_analysis: false,
+                    maybe_syntax: None,
+                })
+                .map_err(|e| ModuleLoaderError::generic(e.to_string()))?;
+
+                let transpiled = parsed.transpile(
+                    &deno_ast::TranspileOptions::default(),
+                    &deno_ast::TranspileModuleOptions::default(),
+                    &deno_ast::EmitOptions::default(),
+                )
+                .map_err(|e| ModuleLoaderError::generic(e.to_string()))?;
+
+                transpiled.into_source().text
+            } else {
+                code.into()
+            };
+
+            let module = deno_core::ModuleSource::new(
+                module_type,
+                ModuleSourceCode::String(code.into()),
+                &module_specifier,
+                None,
+            );
+            Ok(module)
+        })())
+    }
+}
 
 /// HMR (Hot Module Replacement) server for dev mode
 /// Watches web directory for changes and sends reload signals to connected clients
@@ -179,8 +301,24 @@ async fn run_hmr_server(port: u16, watch_dir: PathBuf) {
     }
 }
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
+    // Create tokio runtime manually (not using #[tokio::main])
+    // This allows us to call block_on from within the tao event loop
+    // without tokio detecting runtime nesting
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to create tokio runtime");
+
+    // Use enter() to set up the runtime context for spawning,
+    // but don't use block_on so we're not inside a blocking call
+    let _guard = rt.enter();
+
+    // Run the sync setup and event loop
+    sync_main(rt)
+}
+
+fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     // Initialize tracing with env-filter support
     // Use FORGE_LOG env var for log level configuration, default to "info"
     use tracing_subscriber::EnvFilter;
@@ -208,8 +346,7 @@ async fn main() -> Result<()> {
     }
 
     let manifest_path = app_dir.join("manifest.app.toml");
-    let manifest_txt = tokio::fs::read_to_string(&manifest_path)
-        .await
+    let manifest_txt = rt.block_on(tokio::fs::read_to_string(&manifest_path))
         .with_context(|| format!("reading manifest at {}", manifest_path.display()))?;
     let manifest: Manifest = toml::from_str(&manifest_txt).context("parsing manifest")?;
 
@@ -241,7 +378,7 @@ async fn main() -> Result<()> {
     }
 
     // Create capability adapters for each extension
-    let (fs_caps, net_caps, sys_caps, ui_caps, process_caps) = create_capability_adapters(capabilities.clone());
+    let (fs_caps, net_caps, sys_caps, ui_caps, process_caps, wasm_caps) = create_capability_adapters(capabilities.clone());
 
     // Create IPC channels for Deno <-> Host <-> Renderer communication
     let (to_deno_tx, to_deno_rx) = tokio::sync::mpsc::channel::<UiEvent>(256);
@@ -250,25 +387,28 @@ async fn main() -> Result<()> {
     let (menu_events_tx, menu_events_rx) = tokio::sync::mpsc::channel::<MenuEvent>(64);
 
     // Build Deno runtime with extensions (host:*)
+    let module_loader = Rc::new(ForgeModuleLoader::new(app_dir.clone()));
     let mut js = JsRuntime::new(RuntimeOptions {
+        module_loader: Some(module_loader),
         extensions: vec![
             ext_fs::fs_extension(),
             ext_net::net_extension(),
             ext_sys::sys_extension(),
-            ext_ui::ui_extension(to_renderer_tx.clone(), to_deno_rx, from_deno_tx.clone()),
+            ext_ui::ui_extension(),
             ext_process::process_extension(),
+            ext_wasm::wasm_extension(),
         ],
         ..Default::default()
     });
 
     // Initialize all extension state with capability adapters
     {
-        let (state_to_deno_tx, state_to_deno_rx) = tokio::sync::mpsc::channel::<UiEvent>(256);
         let op_state = js.op_state();
         let mut state = op_state.borrow_mut();
 
         // Initialize UI state (including menu events channel)
-        init_ui_state(&mut state, to_renderer_tx.clone(), state_to_deno_rx, from_deno_tx.clone(), menu_events_rx);
+        // Use to_deno_rx - the receiver side of the channel that IPC handler sends to
+        init_ui_state(&mut state, to_renderer_tx.clone(), to_deno_rx, from_deno_tx.clone(), menu_events_rx);
 
         // Initialize FS state with capability checker
         ext_fs::init_fs_state(&mut state, Some(fs_caps));
@@ -286,20 +426,25 @@ async fn main() -> Result<()> {
         let max_processes = capabilities.get_max_processes();
         ext_process::init_process_state(&mut state, Some(process_caps), Some(max_processes));
 
-        // We'll use to_deno_tx for sending from webview, not state_to_deno_tx
-        drop(state_to_deno_tx);
+        // Initialize WASM state with capability checker
+        let max_wasm_instances = capabilities.get_max_wasm_instances();
+        ext_wasm::init_wasm_state(&mut state, Some(wasm_caps), Some(max_wasm_instances));
     }
 
-    // Load and execute the app's main.ts
-    let main_ts_path = app_dir.join("src/main.ts");
-    let main_code = tokio::fs::read_to_string(&main_ts_path)
-        .await
-        .with_context(|| format!("reading main.ts at {}", main_ts_path.display()))?;
+    // Load the app's main.ts as an ES module (but don't evaluate yet)
+    let main_ts_path = app_dir.join("src/main.ts")
+        .canonicalize()
+        .with_context(|| format!("Cannot find main.ts at {}", app_dir.join("src/main.ts").display()))?;
+    let main_specifier = ModuleSpecifier::from_file_path(&main_ts_path)
+        .map_err(|_| anyhow::anyhow!("Invalid path: {}", main_ts_path.display()))?;
 
     tracing::info!("Executing {}", main_ts_path.display());
 
-    // Execute the main script
-    js.execute_script("<main>", main_code)?;
+    // Load the main module
+    let module_id = rt.block_on(js.load_main_es_module(&main_specifier))?;
+
+    // Start module evaluation (but don't wait - the tao event loop needs to run concurrently)
+    let _eval_receiver = js.mod_evaluate(module_id);
 
     // Custom user events for the tao event loop
     enum UserEvent {
@@ -419,6 +564,12 @@ async fn main() -> Result<()> {
     // Get default channels from capabilities for new windows
     let default_channels = capabilities.get_default_channels();
 
+    // We'll use the runtime directly in the event loop for polling
+    // The spawned tasks use the runtime context from rt.enter() in main()
+
+    // Track if module evaluation has completed
+    let mut module_eval_done = false;
+
     // Set up menu event receiver from muda and forward to Deno
     let menu_id_map_for_thread = menu_id_map.clone();
     let pending_ctx_menu_for_thread = pending_ctx_menu.clone();
@@ -462,9 +613,42 @@ async fn main() -> Result<()> {
     });
 
     event_loop.run(move |event, event_loop_target, control| {
-        *control = ControlFlow::Wait;
+        // Use Poll mode so we can continuously poll the JsRuntime
+        *control = ControlFlow::Poll;
 
         match event {
+            // Poll the JsRuntime on each iteration when idle
+            Event::MainEventsCleared => {
+                if !module_eval_done {
+                    // Use rt.block_on() directly since we're not inside an async context
+                    // (we only used rt.enter() in main(), not block_on())
+                    let result = rt.block_on(async {
+                        // Use a short timeout so we don't block the UI event loop too long
+                        tokio::time::timeout(
+                            std::time::Duration::from_millis(10),
+                            js.run_event_loop(deno_core::PollEventLoopOptions {
+                                wait_for_inspector: false,
+                                pump_v8_message_loop: true,
+                            })
+                        ).await
+                    });
+
+                    match result {
+                        Ok(Ok(_)) => {
+                            // Event loop completed (no more pending ops)
+                            module_eval_done = true;
+                            tracing::debug!("Module evaluation completed");
+                        }
+                        Ok(Err(e)) => {
+                            tracing::error!("JsRuntime event loop error: {:?}", e);
+                            module_eval_done = true;
+                        }
+                        Err(_timeout) => {
+                            // Timeout - still processing, continue polling
+                        }
+                    }
+                }
+            }
             Event::UserEvent(UserEvent::CreateWindow(opts, respond)) => {
                 let width = opts.width.unwrap_or(1024);
                 let height = opts.height.unwrap_or(768);
@@ -531,20 +715,31 @@ async fn main() -> Result<()> {
                 let is_dev_mode = dev_mode;
                 builder = builder.with_custom_protocol("app".into(), move |_ctx, request| {
                     let uri = request.uri().to_string();
-                    let path = uri
+                    let mut path = uri
                         .strip_prefix("app://")
                         .unwrap_or("")
-                        .trim_start_matches('/');
+                        .trim_start_matches('/')
+                        .trim_end_matches('/');
+
+                    // Handle relative URL resolution: if path looks like "file.html/resource",
+                    // extract just the resource part (browser resolved relative to document URL)
+                    if let Some(slash_pos) = path.find('/') {
+                        let first_part = &path[..slash_pos];
+                        // If the first part looks like an HTML file, this is a relative resource
+                        if first_part.ends_with(".html") || first_part.ends_with(".htm") {
+                            path = &path[slash_pos + 1..];
+                        }
+                    }
 
                     // Content-Security-Policy: strict in production, relaxed in dev
                     let csp = if is_dev_mode {
-                        // Dev mode: allow ws:// for HMR, localhost for dev server
+                        // Dev mode: allow ws:// for HMR, localhost for dev server, CDNs for libs
                         "default-src 'self' app:; \
-                         script-src 'self' app: 'unsafe-inline' 'unsafe-eval'; \
-                         style-src 'self' app: 'unsafe-inline'; \
-                         connect-src 'self' app: ws://localhost:* http://localhost:*; \
-                         img-src 'self' app: data: blob:; \
-                         font-src 'self' app: data:;"
+                         script-src 'self' app: 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; \
+                         style-src 'self' app: 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; \
+                         connect-src 'self' app: ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:* https://*; \
+                         img-src 'self' app: data: blob: https:; \
+                         font-src 'self' app: data: https:;"
                     } else {
                         // Production: strict CSP
                         "default-src 'self' app:; \
@@ -570,6 +765,8 @@ async fn main() -> Result<()> {
 
                     // Fallback to filesystem (dev mode)
                     let file_path = app_dir_for_protocol.join("web").join(path);
+                    tracing::debug!("Protocol: uri={} path={} file={} exists={}",
+                        uri, path, file_path.display(), file_path.exists());
                     if file_path.exists() {
                         match std::fs::read(&file_path) {
                             Ok(bytes) => {
@@ -1044,38 +1241,174 @@ async fn main() -> Result<()> {
 
             Event::UserEvent(UserEvent::CreateTray(opts, respond)) => {
                 use tray_icon::{TrayIconBuilder, Icon};
+                use image::GenericImageView;
+
+                // Helper function to create a default tray icon (simple gray square)
+                fn create_default_tray_icon() -> Icon {
+                    let size = 22u32;
+                    let mut rgba_data = Vec::with_capacity((size * size * 4) as usize);
+                    for _ in 0..(size * size) {
+                        // Medium gray with full opacity
+                        rgba_data.extend_from_slice(&[128, 128, 128, 255]);
+                    }
+                    Icon::from_rgba(rgba_data, size, size).expect("Failed to create default icon")
+                }
+
+                // Helper function to add menu items to tray menu
+                fn add_tray_menu_items(
+                    menu: &muda::Menu,
+                    items: &[MenuItem],
+                    id_map: &mut HashMap<muda::MenuId, (String, String)>,
+                    tray_id: &str,
+                ) {
+                    fn add_items_recursive(
+                        menu: &muda::Menu,
+                        items: &[MenuItem],
+                        id_map: &mut HashMap<muda::MenuId, (String, String)>,
+                        tray_id: &str,
+                    ) {
+                        for item in items {
+                            if item.item_type.as_deref() == Some("separator") {
+                                let _ = menu.append(&muda::PredefinedMenuItem::separator());
+                            } else if let Some(ref submenu_items) = item.submenu {
+                                let submenu = muda::Submenu::new(&item.label, item.enabled.unwrap_or(true));
+                                add_submenu_recursive(&submenu, submenu_items, id_map, tray_id);
+                                let _ = menu.append(&submenu);
+                            } else if item.item_type.as_deref() == Some("checkbox") {
+                                let check_item = muda::CheckMenuItem::new(
+                                    &item.label,
+                                    item.enabled.unwrap_or(true),
+                                    item.checked.unwrap_or(false),
+                                    item.accelerator.as_ref().and_then(|a| a.parse().ok()),
+                                );
+                                // Track menu ID with tray prefix for event routing
+                                let user_id = item.id.clone().unwrap_or_else(|| item.label.clone());
+                                let menu_id = format!("{}:{}", tray_id, user_id);
+                                id_map.insert(check_item.id().clone(), (menu_id, item.label.clone()));
+                                let _ = menu.append(&check_item);
+                            } else {
+                                let menu_item = muda::MenuItem::new(
+                                    &item.label,
+                                    item.enabled.unwrap_or(true),
+                                    item.accelerator.as_ref().and_then(|a| a.parse().ok()),
+                                );
+                                // Track menu ID with tray prefix for event routing
+                                let user_id = item.id.clone().unwrap_or_else(|| item.label.clone());
+                                let menu_id = format!("{}:{}", tray_id, user_id);
+                                id_map.insert(menu_item.id().clone(), (menu_id, item.label.clone()));
+                                let _ = menu.append(&menu_item);
+                            }
+                        }
+                    }
+
+                    fn add_submenu_recursive(
+                        submenu: &muda::Submenu,
+                        items: &[MenuItem],
+                        id_map: &mut HashMap<muda::MenuId, (String, String)>,
+                        tray_id: &str,
+                    ) {
+                        for item in items {
+                            if item.item_type.as_deref() == Some("separator") {
+                                let _ = submenu.append(&muda::PredefinedMenuItem::separator());
+                            } else if let Some(ref nested_items) = item.submenu {
+                                let nested_submenu = muda::Submenu::new(&item.label, item.enabled.unwrap_or(true));
+                                add_submenu_recursive(&nested_submenu, nested_items, id_map, tray_id);
+                                let _ = submenu.append(&nested_submenu);
+                            } else if item.item_type.as_deref() == Some("checkbox") {
+                                let check_item = muda::CheckMenuItem::new(
+                                    &item.label,
+                                    item.enabled.unwrap_or(true),
+                                    item.checked.unwrap_or(false),
+                                    item.accelerator.as_ref().and_then(|a| a.parse().ok()),
+                                );
+                                let user_id = item.id.clone().unwrap_or_else(|| item.label.clone());
+                                let menu_id = format!("{}:{}", tray_id, user_id);
+                                id_map.insert(check_item.id().clone(), (menu_id, item.label.clone()));
+                                let _ = submenu.append(&check_item);
+                            } else {
+                                let menu_item = muda::MenuItem::new(
+                                    &item.label,
+                                    item.enabled.unwrap_or(true),
+                                    item.accelerator.as_ref().and_then(|a| a.parse().ok()),
+                                );
+                                let user_id = item.id.clone().unwrap_or_else(|| item.label.clone());
+                                let menu_id = format!("{}:{}", tray_id, user_id);
+                                id_map.insert(menu_item.id().clone(), (menu_id, item.label.clone()));
+                                let _ = submenu.append(&menu_item);
+                            }
+                        }
+                    }
+
+                    add_items_recursive(menu, items, id_map, tray_id);
+                }
 
                 tray_counter += 1;
                 let tray_id_str = format!("tray-{}", tray_counter);
 
-                // Create a default icon (16x16 gray square) if none provided
+                // Load icon from file or use default
                 let icon = if let Some(ref icon_path) = opts.icon {
-                    // Try to load icon from file
-                    match std::fs::read(icon_path) {
+                    // Resolve icon path relative to app directory
+                    let full_path = if std::path::Path::new(icon_path).is_absolute() {
+                        std::path::PathBuf::from(icon_path)
+                    } else {
+                        app_dir.join(icon_path)
+                    };
+
+                    match std::fs::read(&full_path) {
                         Ok(bytes) => {
-                            // Try to decode as PNG/ICO
-                            Icon::from_rgba(bytes.clone(), 32, 32)
-                                .unwrap_or_else(|_| {
-                                    // Fallback: 16x16 gray icon
-                                    let rgba: Vec<u8> = (0..16*16*4).map(|i| if i % 4 == 3 { 255 } else { 128 }).collect();
-                                    Icon::from_rgba(rgba, 16, 16).unwrap()
-                                })
+                            // Decode image using image crate
+                            match image::load_from_memory(&bytes) {
+                                Ok(img) => {
+                                    // Resize for tray icon (22x22 is standard for macOS menu bar)
+                                    let resized = img.resize_exact(22, 22, image::imageops::FilterType::Lanczos3);
+                                    let rgba = resized.to_rgba8();
+                                    let (width, height) = rgba.dimensions();
+                                    match Icon::from_rgba(rgba.into_raw(), width, height) {
+                                        Ok(icon) => {
+                                            tracing::debug!("Loaded tray icon from: {:?}", full_path);
+                                            icon
+                                        }
+                                        Err(e) => {
+                                            tracing::warn!("Failed to create icon from decoded image: {}", e);
+                                            create_default_tray_icon()
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Failed to decode image {:?}: {}", full_path, e);
+                                    create_default_tray_icon()
+                                }
+                            }
                         }
-                        Err(_) => {
-                            let rgba: Vec<u8> = (0..16*16*4).map(|i| if i % 4 == 3 { 255 } else { 128 }).collect();
-                            Icon::from_rgba(rgba, 16, 16).unwrap()
+                        Err(e) => {
+                            tracing::warn!("Failed to read icon file {:?}: {}", full_path, e);
+                            create_default_tray_icon()
                         }
                     }
                 } else {
-                    // Default icon: 16x16 gray square
-                    let rgba: Vec<u8> = (0..16*16*4).map(|i| if i % 4 == 3 { 255 } else { 128 }).collect();
-                    Icon::from_rgba(rgba, 16, 16).unwrap()
+                    create_default_tray_icon()
                 };
 
                 let mut builder = TrayIconBuilder::new().with_icon(icon);
 
                 if let Some(ref tooltip) = opts.tooltip {
                     builder = builder.with_tooltip(tooltip);
+                }
+
+                // Build tray menu if provided
+                if let Some(ref menu_items) = opts.menu {
+                    if !menu_items.is_empty() {
+                        let menu = muda::Menu::new();
+
+                        // Add menu items and track IDs for event mapping
+                        {
+                            let mut map = menu_id_map.lock().unwrap();
+                            add_tray_menu_items(&menu, menu_items, &mut map, &tray_id_str);
+                        }
+
+                        builder = builder.with_menu(Box::new(menu));
+                        tracing::debug!("Added menu with {} items to tray", menu_items.len());
+                    }
                 }
 
                 match builder.build() {

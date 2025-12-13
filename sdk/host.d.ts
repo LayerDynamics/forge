@@ -380,3 +380,104 @@ declare module "host:process" {
   /** Read a line from a process's stderr */
   export function readStderr(handle: string): Promise<ProcessOutput>;
 }
+
+declare module "host:wasm" {
+  /** WASM value type */
+  export type WasmValueType = "i32" | "i64" | "f32" | "f64";
+
+  /** WASM value with explicit type */
+  export interface WasmValue {
+    type: WasmValueType;
+    value: number;
+  }
+
+  /** Export information from a WASM module */
+  export interface ExportInfo {
+    name: string;
+    kind: "function" | "memory" | "table" | "global";
+    params?: WasmValueType[];
+    results?: WasmValueType[];
+  }
+
+  /** WASI configuration for instantiating WASM modules */
+  export interface WasiConfig {
+    /** Guest path to host path mappings for filesystem access */
+    preopens?: Record<string, string>;
+    /** Environment variables to expose to the WASM module */
+    env?: Record<string, string>;
+    /** Command-line arguments for the WASM module */
+    args?: string[];
+    /** Whether to inherit stdin from the host process */
+    inheritStdin?: boolean;
+    /** Whether to inherit stdout from the host process */
+    inheritStdout?: boolean;
+    /** Whether to inherit stderr from the host process */
+    inheritStderr?: boolean;
+  }
+
+  /** Memory access interface for a WASM instance */
+  export interface WasmMemory {
+    /** Read bytes from WASM memory */
+    read(offset: number, length: number): Promise<Uint8Array>;
+    /** Write bytes to WASM memory */
+    write(offset: number, data: Uint8Array): Promise<void>;
+    /** Get the current memory size in pages (1 page = 64KB) */
+    size(): Promise<number>;
+    /** Grow memory by the specified number of pages */
+    grow(pages: number): Promise<number>;
+  }
+
+  /** WASM instance handle with methods for calling functions and accessing memory */
+  export interface WasmInstance {
+    /** The unique instance ID */
+    readonly id: string;
+    /** The module ID this instance was created from */
+    readonly moduleId: string;
+    /** Call an exported WASM function */
+    call(name: string, ...args: (number | bigint | WasmValue)[]): Promise<number[]>;
+    /** Get list of all exports from this instance */
+    getExports(): Promise<ExportInfo[]>;
+    /** Memory access interface */
+    memory: WasmMemory;
+    /** Drop this instance and free resources */
+    drop(): Promise<void>;
+  }
+
+  /** Compile WASM bytes to a module */
+  export function compile(bytes: Uint8Array): Promise<string>;
+
+  /** Compile WASM from a file path */
+  export function compileFile(path: string): Promise<string>;
+
+  /** Drop a compiled module and free its resources */
+  export function dropModule(moduleId: string): Promise<void>;
+
+  /** Instantiate a compiled WASM module */
+  export function instantiate(moduleId: string, wasiConfig?: WasiConfig): Promise<WasmInstance>;
+
+  /** Low-level function call without instance wrapper */
+  export function call(instanceId: string, funcName: string, args: WasmValue[]): Promise<WasmValue[]>;
+
+  /** Low-level exports query */
+  export function getExports(instanceId: string): Promise<ExportInfo[]>;
+
+  /** Helper functions to create typed WASM values */
+  export const types: {
+    /** Create an i32 (32-bit integer) value */
+    i32(value: number): WasmValue;
+    /** Create an i64 (64-bit integer) value */
+    i64(value: number | bigint): WasmValue;
+    /** Create an f32 (32-bit float) value */
+    f32(value: number): WasmValue;
+    /** Create an f64 (64-bit float) value */
+    f64(value: number): WasmValue;
+  };
+
+  /** Low-level memory operations namespace */
+  export const memory: {
+    read(instanceId: string, offset: number, length: number): Promise<Uint8Array>;
+    write(instanceId: string, offset: number, data: Uint8Array): Promise<void>;
+    size(instanceId: string): Promise<number>;
+    grow(instanceId: string, pages: number): Promise<number>;
+  };
+}

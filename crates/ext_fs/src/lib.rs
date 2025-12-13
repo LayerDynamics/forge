@@ -656,7 +656,7 @@ deno_core::extension!(
         op_fs_watch_close,
     ],
     esm_entry_point = "ext:host_fs/init.js",
-    esm = ["ext:host_fs/init.js" = "../../sdk/host.fs.ts"]
+    esm = ["ext:host_fs/init.js" = "js/init.js"]
 );
 
 pub fn fs_extension() -> Extension {

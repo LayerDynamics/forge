@@ -772,18 +772,12 @@ deno_core::extension!(
         op_ui_destroy_tray,
     ],
     esm_entry_point = "ext:host_ui/init.js",
-    esm = [
-        "ext:host_ui/init.js" = "../../sdk/host.ui.ts",
-        "ext:host_ui/preload.js" = "../../sdk/preload.ts"
-    ]
+    esm = ["ext:host_ui/init.js" = "js/init.js"]
 );
 
-/// Build the UI extension with IPC channels
-pub fn ui_extension(
-    _to_renderer_tx: mpsc::Sender<ToRendererCmd>,
-    _to_deno_rx: mpsc::Receiver<UiEvent>,
-    _from_deno_tx: mpsc::Sender<FromDenoCmd>,
-) -> Extension {
+/// Build the UI extension
+/// Note: IPC channels are initialized via init_ui_state() after JsRuntime creation
+pub fn ui_extension() -> Extension {
     host_ui::ext()
 }
 

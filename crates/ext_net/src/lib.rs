@@ -485,7 +485,7 @@ deno_core::extension!(
         op_net_fetch_bytes,
     ],
     esm_entry_point = "ext:host_net/init.js",
-    esm = ["ext:host_net/init.js" = "../../sdk/host.net.ts"]
+    esm = ["ext:host_net/init.js" = "js/init.js"]
 );
 
 pub fn net_extension() -> Extension {

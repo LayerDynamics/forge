@@ -614,7 +614,7 @@ deno_core::extension!(
         op_sys_power_info,
     ],
     esm_entry_point = "ext:host_sys/init.js",
-    esm = ["ext:host_sys/init.js" = "../../sdk/host.sys.ts"]
+    esm = ["ext:host_sys/init.js" = "js/init.js"]
 );
 
 pub fn sys_extension() -> Extension {
