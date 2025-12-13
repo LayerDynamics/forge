@@ -1,0 +1,17 @@
+[app]
+name = "WASM Forge Example"
+identifier = "com.forge.wasm-example"
+version = "0.1.0"
+
+[windows]
+width = 800
+height = 600
+resizable = true
+title = "WASM Forge Example"
+
+# Capability declarations
+[capabilities.channels]
+allowed = ["*"]  # Allow all IPC channels
+
+[capabilities.wasm]
+enabled = true

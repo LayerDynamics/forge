@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WASM Forge Example</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e8e8e8;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      background: linear-gradient(90deg, #00d9ff, #9d4edd);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #888;
+      font-size: 1.1rem;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .card h2 {
+      font-size: 1.2rem;
+      margin-bottom: 15px;
+      color: #00d9ff;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 15px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+
+    .status.loading .spinner {
+      display: inline-block;
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(0, 217, 255, 0.3);
+      border-top-color: #00d9ff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .results-table th,
+    .results-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .results-table th {
+      color: #888;
+      font-weight: 500;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .results-table td.operation {
+      font-family: 'Fira Code', 'Monaco', monospace;
+      color: #9d4edd;
+    }
+
+    .results-table td.result {
+      font-family: 'Fira Code', 'Monaco', monospace;
+      color: #00d9ff;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge.success {
+      background: rgba(0, 255, 136, 0.2);
+      color: #00ff88;
+    }
+
+    .badge.error {
+      background: rgba(255, 68, 68, 0.2);
+      color: #ff4444;
+    }
+
+    button {
+      background: linear-gradient(90deg, #00d9ff, #9d4edd);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0, 217, 255, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .actions {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    .code-block {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      padding: 15px;
+      font-family: 'Fira Code', 'Monaco', monospace;
+      font-size: 0.9rem;
+      overflow-x: auto;
+      margin-top: 10px;
+    }
+
+    .code-block .comment {
+      color: #666;
+    }
+
+    .code-block .keyword {
+      color: #9d4edd;
+    }
+
+    .code-block .function {
+      color: #00d9ff;
+    }
+
+    .code-block .string {
+      color: #00ff88;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>WASM Forge</h1>
+      <p class="subtitle">WebAssembly Runtime Demo for Forge Apps</p>
+    </header>
+
+    <div class="card">
+      <h2>Demo Status</h2>
+      <div class="status loading" id="status">
+        <div class="spinner"></div>
+        <span id="status-text">Running WASM operations...</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Results</h2>
+      <div id="results">
+        <div class="empty-state">Waiting for WASM demo to complete...</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Sample Code</h2>
+      <div class="code-block">
+        <span class="keyword">import</span> { compile, instantiate } <span class="keyword">from</span> <span class="string">"host:wasm"</span>;<br><br>
+        <span class="comment">// Compile WASM bytes to a module</span><br>
+        <span class="keyword">const</span> moduleId = <span class="keyword">await</span> <span class="function">compile</span>(wasmBytes);<br><br>
+        <span class="comment">// Instantiate with optional WASI config</span><br>
+        <span class="keyword">const</span> instance = <span class="keyword">await</span> <span class="function">instantiate</span>(moduleId, {<br>
+        &nbsp;&nbsp;preopens: { <span class="string">"/"</span>: <span class="string">"/host/path"</span> },<br>
+        &nbsp;&nbsp;env: { <span class="string">"MY_VAR"</span>: <span class="string">"value"</span> },<br>
+        &nbsp;&nbsp;inheritStdout: <span class="keyword">true</span><br>
+        });<br><br>
+        <span class="comment">// Call exported function</span><br>
+        <span class="keyword">const</span> result = <span class="keyword">await</span> instance.<span class="function">call</span>(<span class="string">"add"</span>, 7, 5);<br>
+        console.<span class="function">log</span>(result); <span class="comment">// [12]</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="run-btn">Run Demo Again</button>
+    </div>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const statusTextEl = document.getElementById('status-text');
+    const resultsEl = document.getElementById('results');
+    const runBtn = document.getElementById('run-btn');
+
+    function renderResults(results) {
+      if (!results || results.length === 0) {
+        resultsEl.innerHTML = '<div class="empty-state">No results yet</div>';
+        return;
+      }
+
+      const allSuccess = results.every(r => r.success);
+      statusEl.classList.remove('loading');
+      statusTextEl.textContent = allSuccess
+        ? 'All operations completed successfully!'
+        : 'Some operations failed';
+
+      let html = `
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th>Operation</th>
+              <th>Result</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      for (const r of results) {
+        html += `
+          <tr>
+            <td class="operation">${escapeHtml(r.operation)}</td>
+            <td class="result">${escapeHtml(r.result)}</td>
+            <td>
+              <span class="badge ${r.success ? 'success' : 'error'}">
+                ${r.success ? 'OK' : 'FAIL'}
+              </span>
+            </td>
+          </tr>
+        `;
+      }
+
+      html += '</tbody></table>';
+      resultsEl.innerHTML = html;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // Listen for results from the host
+    if (window.host && window.host.on) {
+      window.host.on('wasm-results', (results) => {
+        console.log('Received WASM results:', results);
+        renderResults(results);
+      });
+    }
+
+    // Run button
+    runBtn.addEventListener('click', () => {
+      statusEl.classList.add('loading');
+      statusTextEl.textContent = 'Running WASM operations...';
+      resultsEl.innerHTML = '<div class="empty-state">Running...</div>';
+
+      if (window.host && window.host.emit) {
+        window.host.emit('run-demo');
+      }
+    });
+
+    // Signal ready
+    if (window.host && window.host.emit) {
+      window.host.emit('ready');
+    }
+  </script>
+</body>
+</html>

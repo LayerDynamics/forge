@@ -12,6 +12,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::debug;
 use wasmtime::{Engine, Extern, Func, Linker, Memory, Module, Store, Val, ValType};
+use wasmtime_wasi::preview1::{self, WasiP1Ctx};
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
 
 // ============================================================================
 // Error Types with Structured Codes
@@ -295,11 +297,16 @@ pub struct WasmModule {
     pub name: Option<String>,
 }
 
-/// Store context for WASM instances (WASI support planned for future milestone)
-#[derive(Default)]
+/// Store context for WASM instances with optional WASI support
 pub struct WasmStoreData {
-    // WASI support will be added in a future milestone
-    _placeholder: (),
+    /// WASI Preview1 context, if WASI is enabled for this instance
+    pub wasi: Option<WasiP1Ctx>,
+}
+
+impl Default for WasmStoreData {
+    fn default() -> Self {
+        Self { wasi: None }
+    }
 }
 
 /// Stored instance with its store
@@ -598,17 +605,58 @@ async fn op_wasm_instantiate(
         (engine, module, instance_id)
     };
 
-    // WASI support is planned for a future milestone
-    // For now, log if WASI config was provided but ignore it
-    if wasi_config.is_some() {
-        debug!("WASI config provided but WASI support is not yet implemented - instantiating without WASI");
+    // Build WASI context if configured
+    let wasi_ctx = if let Some(config) = wasi_config {
+        debug!("Building WASI context with config");
+        let mut builder = WasiCtxBuilder::new();
+
+        // Configure stdin/stdout/stderr
+        if config.inherit_stdin.unwrap_or(false) {
+            builder.inherit_stdin();
+        }
+        if config.inherit_stdout.unwrap_or(false) {
+            builder.inherit_stdout();
+        }
+        if config.inherit_stderr.unwrap_or(false) {
+            builder.inherit_stderr();
+        }
+
+        // Add environment variables
+        if let Some(env) = config.env {
+            for (key, value) in env {
+                builder.env(&key, &value);
+            }
+        }
+
+        // Add arguments
+        if let Some(args) = config.args {
+            builder.args(&args);
+        }
+
+        // Add preopened directories
+        if let Some(preopens) = config.preopens {
+            for (guest_path, host_path) in preopens {
+                builder.preopened_dir(&host_path, &guest_path, DirPerms::all(), FilePerms::all())
+                    .map_err(|e| WasmError::wasi_error(format!("Failed to preopen '{}': {}", host_path, e)))?;
+            }
+        }
+
+        Some(builder.build_p1())
+    } else {
+        None
+    };
+
+    // Create store with WASI context
+    let mut store = Store::new(&engine, WasmStoreData { wasi: wasi_ctx });
+
+    // Create linker and add WASI if needed
+    let mut linker: Linker<WasmStoreData> = Linker::new(&engine);
+
+    if store.data().wasi.is_some() {
+        preview1::add_to_linker_sync(&mut linker, |data: &mut WasmStoreData| {
+            data.wasi.as_mut().expect("WASI context not initialized")
+        }).map_err(|e| WasmError::wasi_error(format!("Failed to add WASI to linker: {}", e)))?;
     }
-
-    // Create store (without WASI for now)
-    let mut store = Store::new(&engine, WasmStoreData::default());
-
-    // Create linker
-    let linker: Linker<WasmStoreData> = Linker::new(&engine);
 
     // Instantiate the module
     let instance = linker

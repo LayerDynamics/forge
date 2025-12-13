@@ -80,9 +80,7 @@ fn find_forge_host() -> Result<PathBuf> {
     bail!(
         "forge-host not found!\n\n\
         Install Forge with:\n  \
-        curl -fsSL https://forge-deno.com/install.sh | sh\n\n\
-        Or for development:\n  \
-        cargo build -p forge-host"
+        curl -fsSL https://forge-deno.com/install.sh | sh"
     )
 }
 
@@ -664,8 +662,8 @@ fn cmd_build(app_dir: &PathBuf) -> Result<()> {
     }
 
     println!("\nBuild complete! Output in {}", dist_dir.display());
-    println!("\nTo create a release build with embedded assets:");
-    println!("  FORGE_EMBED_DIR={} cargo build -p forge-host --release", dist_dir.join("web").display());
+    println!("\nNext steps:");
+    println!("  forge bundle {}  # Create distributable package", app_dir.display());
 
     Ok(())
 }

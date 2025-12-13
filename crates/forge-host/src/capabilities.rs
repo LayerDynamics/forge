@@ -1132,7 +1132,7 @@ mod tests {
     #[test]
     fn test_adapters() {
         let caps = Capabilities::from_permissions(None, true).unwrap();
-        let (fs_caps, net_caps, sys_caps, ui_caps, process_caps) = create_capability_adapters(caps);
+        let (fs_caps, net_caps, sys_caps, ui_caps, process_caps, wasm_caps) = create_capability_adapters(caps);
 
         // Test FS adapter
         assert!(fs_caps.check_read("/any/path").is_ok());
@@ -1159,5 +1159,9 @@ mod tests {
         // Test Process adapter
         assert!(process_caps.check_spawn("ls").is_ok());
         assert!(process_caps.check_env("PATH").is_ok());
+
+        // Test WASM adapter
+        assert!(wasm_caps.check_load("/any/path.wasm").is_ok());
+        assert!(wasm_caps.check_preopen("/any/dir").is_ok());
     }
 }

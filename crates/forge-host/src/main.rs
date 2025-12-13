@@ -545,7 +545,8 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     let mut trays: HashMap<String, tray_icon::TrayIcon> = HashMap::new();
     let mut tray_counter: u64 = 0;
 
-    // App menu storage (using muda)
+    // App menu storage (using muda) - kept alive to prevent menu from being dropped
+    #[allow(unused_assignments)]
     let mut _app_menu: Option<muda::Menu> = None;
 
     // Menu ID mapping: muda's internal MenuId -> (user_id, label)
@@ -1241,7 +1242,6 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
             Event::UserEvent(UserEvent::CreateTray(opts, respond)) => {
                 use tray_icon::{TrayIconBuilder, Icon};
-                use image::GenericImageView;
 
                 // Helper function to create a default tray icon (simple gray square)
                 fn create_default_tray_icon() -> Icon {

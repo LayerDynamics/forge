@@ -6,23 +6,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Forge is an Electron-like desktop application framework using Rust + Deno. It embeds Deno for app logic (TypeScript/JavaScript) and uses system WebViews (via wry/tao) for UI rendering. Apps are 100% Deno—no per-app Rust required.
 
-## Build & Run Commands
+## User Commands (after installation)
 
 ```bash
-# Build the host runtime
+# Scaffold a new app
+forge init my-new-app
+
+# Run app in dev mode
+forge dev my-app
+
+# Build web assets for production
+forge build my-app
+
+# Create distributable package (.app/.dmg on macOS, .msix on Windows, AppImage on Linux)
+forge bundle my-app
+
+# Code sign a bundled artifact
+forge sign my-app/bundle/MyApp.dmg
+
+# Manage app icons
+forge icon create my-app/assets/icon.png
+forge icon validate my-app
+```
+
+## Development Commands (for Forge contributors)
+
+```bash
+# Build the CLI and host runtime
+cargo build -p forge
 cargo build -p forge-host
 
-# Run sample app in dev mode
+# Run sample app via cargo (development)
 cargo run -p forge -- dev apps/example-deno-app
 
-# Build app (placeholder - bundles assets)
-cargo run -p forge -- build apps/example-deno-app
-
-# Bundle app into platform artifact (placeholder)
-cargo run -p forge -- bundle apps/example-deno-app
-
-# Scaffold a new app
-cargo run -p forge -- init my-new-app
+# Run tests
+cargo test
 ```
 
 ## Architecture
@@ -84,11 +102,18 @@ apps/example-deno-app/
 - `crates/ext_ui/js/preload.js`: Injected into WebView, provides `window.host` API
 - `crates/ext_fs/src/lib.rs`: File ops (`op_fs_read_text`)
 
-## Current State (M0)
+## Current State
 
-Window creation and `app://` loading are implemented. Stubbed features for future milestones include:
+Implemented features:
+- Window creation and `app://` loading
+- `forge init` with templates (minimal, react, vue, svelte)
+- `forge dev` for development mode
+- `forge build` for web asset bundling (esbuild via Deno)
+- `forge bundle` for platform packaging (macOS .app/.dmg, Windows .msix, Linux AppImage)
+- `forge sign` for code signing
+- `forge icon` for icon management
 
-- `forge build/bundle` commands (asset bundling, platform packaging)
+Planned features:
 - Permissions/capabilities system
 - Additional host modules (host:net, host:sys, host:process)
 - Hot reload during dev
