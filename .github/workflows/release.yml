@@ -249,7 +249,7 @@ jobs:
 
             ```bash
             # macOS/Linux
-            curl -fsSL https://get.forge-deno.com/install.sh | sh
+            curl -fsSL https://forge-deno.com/install.sh | sh
 
             # Or download manually and extract
             tar -xzf forge-x86_64-unknown-linux-gnu.tar.gz -C ~/.forge/bin

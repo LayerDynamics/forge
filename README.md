@@ -20,7 +20,7 @@ Forge is an Electron-like desktop application framework using **Rust** and **Den
 ### Quick Install (macOS/Linux)
 
 ```bash
-curl -fsSL https://get.forge-deno.com/install.sh | sh
+curl -fsSL https://forge-deno.com/install.sh | sh
 ```
 
 ### Manual Download

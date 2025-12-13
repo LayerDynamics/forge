@@ -17,7 +17,7 @@ Before getting started, ensure you have:
 Install Forge with a single command:
 
 ```bash
-curl -fsSL https://get.forge-deno.com/install.sh | sh
+curl -fsSL https://forge-deno.com/install.sh | sh
 ```
 
 Or download manually from [GitHub Releases](https://github.com/LayerDynamics/forge/releases).

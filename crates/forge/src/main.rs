@@ -80,7 +80,7 @@ fn find_forge_host() -> Result<PathBuf> {
     bail!(
         "forge-host not found!\n\n\
         Install Forge with:\n  \
-        curl -fsSL https://get.forge-deno.com/install.sh | sh\n\n\
+        curl -fsSL https://forge-deno.com/install.sh | sh\n\n\
         Or for development:\n  \
         cargo build -p forge-host"
     )
