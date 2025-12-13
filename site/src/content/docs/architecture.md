@@ -13,30 +13,30 @@ Forge is a desktop application framework that combines:
 - **Deno** - JavaScript/TypeScript runtime for app logic
 - **WebView** - System web renderer (wry/tao) for UI
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Forge Application                        │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐         ┌─────────────────────────┐   │
-│  │   Deno Runtime  │   IPC   │   WebView (Renderer)    │   │
-│  │   (src/main.ts) │ ◄─────► │   (web/index.html)      │   │
-│  └────────┬────────┘         └─────────────────────────┘   │
-│           │                                                  │
-│           │ host:* modules                                   │
-│           ▼                                                  │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │              Forge Host Runtime (Rust)               │   │
-│  │  ┌─────────┬─────────┬─────────┬─────────┬───────┐  │   │
-│  │  │ ext_ui  │ ext_fs  │ ext_net │ ext_sys │ext_proc│ │   │
-│  │  └─────────┴─────────┴─────────┴─────────┴───────┘  │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                    ┌─────────────────┐
-                    │  Operating      │
-                    │  System         │
-                    └─────────────────┘
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                        Forge Application                        │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌───────────────────┐             ┌─────────────────────────┐  │
+│  │    Deno Runtime   │     IPC     │    WebView (Renderer)   │  │
+│  │   (src/main.ts)   │   ◄─────►   │    (web/index.html)     │  │
+│  └─────────┬─────────┘             └─────────────────────────┘  │
+│            │                                                    │
+│            │ host:* modules                                     │
+│            ▼                                                    │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │               Forge Host Runtime (Rust)                 │   │
+│  │  ┌─────────┬─────────┬─────────┬─────────┬──────────┐   │   │
+│  │  │ ext_ui  │ ext_fs  │ ext_net │ ext_sys │ ext_proc │   │   │
+│  │  └─────────┴─────────┴─────────┴─────────┴──────────┘   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+                      ┌─────────────────┐
+                      │    Operating    │
+                      │      System     │
+                      └─────────────────┘
 ```
 
 ## Runtime Components
@@ -87,10 +87,10 @@ import { fetch } from "host:net";
 4. Shim calls `Deno.core.ops.*`
 5. Op calls Rust extension function
 
-```
-TypeScript          ESM Shim              Rust Op
-─────────────────────────────────────────────────────────
-readTextFile() ──► op_fs_read_text() ──► ext_fs::read_text()
+```text
+TypeScript            ESM Shim                Rust Op
+────────────────────────────────────────────────────────────
+readTextFile()  ──►  op_fs_read_text()  ──►  ext_fs::read_text()
 ```
 
 ### Extensions
@@ -116,10 +116,10 @@ Each `host:*` module has a Rust extension:
 3. Rust pushes to Deno's message queue
 4. Deno receives via `windowEvents()` generator
 
-```
-Renderer                    Rust                    Deno
-────────────────────────────────────────────────────────────
-window.host.send() ──► WebView IPC ──► mpsc channel ──► windowEvents()
+```text
+Renderer                     Rust                      Deno
+─────────────────────────────────────────────────────────────────
+window.host.send()  ──►  WebView IPC  ──►  mpsc channel  ──►  windowEvents()
 ```
 
 ### Deno → Renderer
@@ -129,10 +129,10 @@ window.host.send() ──► WebView IPC ──► mpsc channel ──► window
 3. WebView executes `window.__host_dispatch()`
 4. Preload script calls registered callbacks
 
-```
-Deno                        Rust                    Renderer
-────────────────────────────────────────────────────────────
-sendToWindow() ──► evaluate_script() ──► __host_dispatch() ──► callbacks
+```text
+Deno                        Rust                         Renderer
+──────────────────────────────────────────────────────────────────────
+sendToWindow()  ──►  evaluate_script()  ──►  __host_dispatch()  ──►  callbacks
 ```
 
 ### Channel Allowlists
@@ -154,27 +154,27 @@ Forge uses capability-based security to restrict app permissions.
 
 ### Capability Flow
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                    manifest.app.toml                      │
-│  [capabilities.fs]                                        │
-│  read = ["~/.myapp/*"]                                   │
-└──────────────────────────────────────────────────────────┘
-                              │
-                              ▼ parsed at startup
-┌──────────────────────────────────────────────────────────┐
-│                   Capabilities Struct                     │
-│  FsCapabilities { read_patterns: [...], write_patterns }  │
-└──────────────────────────────────────────────────────────┘
-                              │
-                              ▼ checked on each op call
-┌──────────────────────────────────────────────────────────┐
-│                 op_fs_read_text(path)                     │
-│  1. Resolve path (expand ~, normalize)                   │
-│  2. Check against read_patterns                          │
-│  3. Return error if denied                               │
-│  4. Perform operation if allowed                         │
-└──────────────────────────────────────────────────────────┘
+```text
+┌────────────────────────────────────────────────────────────┐
+│                     manifest.app.toml                      │
+│  [capabilities.fs]                                         │
+│  read = ["~/.myapp/*"]                                     │
+└────────────────────────────────────────────────────────────┘
+                               │
+                               ▼ parsed at startup
+┌────────────────────────────────────────────────────────────┐
+│                    Capabilities Struct                     │
+│  FsCapabilities { read_patterns: [...], write_patterns }   │
+└────────────────────────────────────────────────────────────┘
+                               │
+                               ▼ checked on each op call
+┌────────────────────────────────────────────────────────────┐
+│                    op_fs_read_text(path)                   │
+│  1. Resolve path (expand ~, normalize)                     │
+│  2. Check against read_patterns                            │
+│  3. Return error if denied                                 │
+│  4. Perform operation if allowed                           │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ### Pattern Matching
@@ -198,41 +198,41 @@ check_read("~/.other/file.txt")      // ✗ Denied
 
 ### Development Mode
 
-```
+```text
 Request: app://index.html
-    │
-    ▼
-┌───────────────────┐
-│ Custom Protocol   │
-│ Handler (Rust)    │
-└────────┬──────────┘
          │
          ▼
-┌───────────────────┐
-│ Read from disk:   │
-│ {app_dir}/web/... │
-└───────────────────┘
+┌─────────────────────┐
+│  Custom Protocol    │
+│  Handler (Rust)     │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Read from disk:    │
+│  {app_dir}/web/...  │
+└─────────────────────┘
 ```
 
 ### Production Mode
 
-```
+```text
 FORGE_EMBED_DIR=./web cargo build
-    │
-    ▼
-┌───────────────────┐
-│ build.rs embeds   │
-│ files into binary │
-└───────────────────┘
-    │
-    ▼
+         │
+         ▼
+┌─────────────────────┐
+│  build.rs embeds    │
+│  files into binary  │
+└─────────────────────┘
+         │
+         ▼
 Request: app://index.html
-    │
-    ▼
-┌───────────────────┐
-│ Serve from        │
-│ embedded assets   │
-└───────────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│  Serve from         │
+│  embedded assets    │
+└─────────────────────┘
 ```
 
 ---
@@ -241,7 +241,7 @@ Request: app://index.html
 
 ### Window Lifecycle
 
-```
+```text
 openWindow(opts)
     │
     ├── Create tao::Window
@@ -256,9 +256,9 @@ openWindow(opts)
     │
     └── Return WindowHandle
             │
-            ├── send()/emit() ──► WebView
-            ├── setTitle() ──► Window
-            └── close() ──► Destroy both
+            ├── send()/emit()  ──►  WebView
+            ├── setTitle()     ──►  Window
+            └── close()        ──►  Destroy both
 ```
 
 ### Event Loop
@@ -330,14 +330,16 @@ forge bundle my-app
 ### CSP Configuration
 
 Development (relaxed for HMR):
-```
+
+```text
 default-src 'self' app:;
 script-src 'self' 'unsafe-inline' 'unsafe-eval' app:;
 connect-src 'self' ws://localhost:35729;
 ```
 
 Production (strict):
-```
+
+```text
 default-src 'self' app:;
 script-src 'self' app:;
 style-src 'self' 'unsafe-inline' app:;
@@ -347,7 +349,7 @@ style-src 'self' 'unsafe-inline' app:;
 
 ## Crate Dependencies
 
-```
+```text
 forge-host
 ├── deno_core      # Deno runtime
 ├── tao            # Window management
@@ -363,39 +365,39 @@ forge-host
 
 ## File Structure
 
-```
+```text
 forge/
 ├── crates/
-│   ├── forge-host/        # Main runtime binary
+│   ├── forge-host/          # Main runtime binary
 │   │   ├── src/
-│   │   │   ├── main.rs    # Entry point, event loop
+│   │   │   ├── main.rs      # Entry point, event loop
 │   │   │   └── capabilities.rs  # Permission system
-│   │   └── build.rs       # Asset embedding
+│   │   └── build.rs         # Asset embedding
 │   │
-│   ├── forge/             # CLI tool
+│   ├── forge/               # CLI tool
 │   │   └── src/
-│   │       ├── main.rs    # CLI commands
-│   │       └── tpl/       # App templates
+│   │       ├── main.rs      # CLI commands
+│   │       └── tpl/         # App templates
 │   │
-│   ├── ext_ui/           # host:ui extension
-│   ├── ext_fs/           # host:fs extension
-│   ├── ext_net/          # host:net extension
-│   ├── ext_sys/          # host:sys extension
-│   └── ext_process/      # host:process extension
+│   ├── ext_ui/              # host:ui extension
+│   ├── ext_fs/              # host:fs extension
+│   ├── ext_net/             # host:net extension
+│   ├── ext_sys/             # host:sys extension
+│   └── ext_process/         # host:process extension
 │
-├── sdk/                   # TypeScript SDK
-│   ├── host.d.ts         # Type definitions
-│   ├── host.ui.ts        # UI module
-│   ├── host.fs.ts        # FS module
-│   └── preload.ts        # Renderer bridge
+├── sdk/                     # TypeScript SDK
+│   ├── host.d.ts            # Type definitions
+│   ├── host.ui.ts           # UI module
+│   ├── host.fs.ts           # FS module
+│   └── preload.ts           # Renderer bridge
 │
-├── apps/                  # Example apps
+├── apps/                    # Example apps
 │   ├── todo-app/
 │   ├── weather-app/
 │   ├── text-editor/
 │   └── system-monitor/
 │
-└── docs/                  # Documentation
+└── docs/                    # Documentation
     ├── getting-started.md
     ├── architecture.md
     └── api/
