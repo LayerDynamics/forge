@@ -30,6 +30,8 @@ pub mod codesign;
 
 // Re-export commonly used types
 pub use manifest::{AppManifest, sanitize_name};
+#[cfg(target_os = "windows")]
+pub use manifest::{sanitize_msix_name, normalize_version};
 pub use icons::{IconProcessor, MIN_ICON_SIZE, RECOMMENDED_ICON_SIZE};
 
 use anyhow::{Context, Result, bail};
