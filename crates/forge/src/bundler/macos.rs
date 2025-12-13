@@ -249,7 +249,7 @@ impl<'a> MacosBundler<'a> {
             cmd.args(["--entitlements", &ent.display().to_string()]);
         }
 
-        cmd.arg(&bundle_path.display().to_string());
+        cmd.arg(bundle_path.display().to_string());
 
         let status = cmd.status().context("Failed to run codesign")?;
 

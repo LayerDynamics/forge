@@ -1,5 +1,5 @@
 use anyhow::{anyhow, bail, Context, Result};
-use std::{env, fs, path::PathBuf, process::Command};
+use std::{env, fs, path::{Path, PathBuf}, process::Command};
 
 mod bundler;
 
@@ -8,7 +8,7 @@ include!(concat!(env!("OUT_DIR"), "/templates.rs"));
 
 fn usage() {
     eprintln!("forge <init|dev|build|bundle|sign|icon> [options] <app-dir>");
-    eprintln!("");
+    eprintln!();
     eprintln!("Commands:");
     eprintln!("  init [--template <name>] <app-dir>  Create a new Forge app");
     eprintln!("  dev <app-dir>                       Run in development mode");
@@ -16,17 +16,17 @@ fn usage() {
     eprintln!("  bundle <app-dir>                    Package into distributable");
     eprintln!("  sign <artifact>                     Sign a package artifact");
     eprintln!("  icon <subcommand>                   Manage app icons");
-    eprintln!("");
+    eprintln!();
     eprintln!("Icon subcommands:");
     eprintln!("  icon create <path>                  Create a placeholder icon");
     eprintln!("  icon validate <app-dir>             Validate app icon requirements");
-    eprintln!("");
+    eprintln!();
     eprintln!("Templates for init:");
     eprintln!("  minimal (default)  Basic HTML + Deno app");
     eprintln!("  react              React with TypeScript");
     eprintln!("  vue                Vue.js with JavaScript");
     eprintln!("  svelte             Svelte with TypeScript");
-    eprintln!("");
+    eprintln!();
     eprintln!("Bundle output formats:");
     eprintln!("  Windows: .msix package");
     eprintln!("  macOS:   .app bundle + .dmg disk image");
@@ -84,7 +84,7 @@ fn find_forge_host() -> Result<PathBuf> {
     )
 }
 
-fn cmd_init(app_dir: &PathBuf, template: &str) -> Result<()> {
+fn cmd_init(app_dir: &Path, template: &str) -> Result<()> {
     use bundler::{IconProcessor, RECOMMENDED_ICON_SIZE};
 
     if app_dir.exists() {
@@ -115,7 +115,7 @@ fn cmd_init(app_dir: &PathBuf, template: &str) -> Result<()> {
     println!("\nCreated:");
     println!("  - App template files");
     println!("  - Placeholder icon at assets/icon.png");
-    println!("");
+    println!();
     println!("IMPORTANT: Replace assets/icon.png with your actual app icon before bundling.");
     println!("Icon requirements: 1024x1024 PNG with transparency");
     println!("\nNext steps:");
@@ -124,7 +124,7 @@ fn cmd_init(app_dir: &PathBuf, template: &str) -> Result<()> {
     Ok(())
 }
 
-fn init_minimal(app_dir: &PathBuf) -> Result<()> {
+fn init_minimal(app_dir: &Path) -> Result<()> {
     fs::create_dir_all(app_dir.join("web"))?;
     fs::create_dir_all(app_dir.join("src"))?;
     fs::write(app_dir.join("manifest.app.toml"), minimal::MANIFEST)?;
@@ -134,7 +134,7 @@ fn init_minimal(app_dir: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn init_react(app_dir: &PathBuf) -> Result<()> {
+fn init_react(app_dir: &Path) -> Result<()> {
     fs::create_dir_all(app_dir.join("web"))?;
     fs::create_dir_all(app_dir.join("src"))?;
     fs::write(app_dir.join("manifest.app.toml"), react::MANIFEST)?;
@@ -145,7 +145,7 @@ fn init_react(app_dir: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn init_vue(app_dir: &PathBuf) -> Result<()> {
+fn init_vue(app_dir: &Path) -> Result<()> {
     fs::create_dir_all(app_dir.join("web"))?;
     fs::create_dir_all(app_dir.join("src"))?;
     fs::write(app_dir.join("manifest.app.toml"), vue::MANIFEST)?;
@@ -156,7 +156,7 @@ fn init_vue(app_dir: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn init_svelte(app_dir: &PathBuf) -> Result<()> {
+fn init_svelte(app_dir: &Path) -> Result<()> {
     fs::create_dir_all(app_dir.join("web"))?;
     fs::create_dir_all(app_dir.join("src"))?;
     fs::write(app_dir.join("manifest.app.toml"), svelte::MANIFEST)?;
@@ -168,7 +168,7 @@ fn init_svelte(app_dir: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn cmd_dev(app_dir: &PathBuf) -> Result<()> {
+fn cmd_dev(app_dir: &Path) -> Result<()> {
     let forge_host = find_forge_host()?;
 
     // If we're in development mode (sentinel value), use cargo run
@@ -213,7 +213,7 @@ enum Framework {
 }
 
 /// Detect the framework used in the app
-fn detect_framework(app_dir: &PathBuf) -> Result<Framework> {
+fn detect_framework(app_dir: &Path) -> Result<Framework> {
     let deno_json = app_dir.join("deno.json");
     if deno_json.exists() {
         let content = fs::read_to_string(&deno_json)?;
@@ -252,7 +252,7 @@ fn detect_framework(app_dir: &PathBuf) -> Result<Framework> {
 }
 
 /// Find the entry point for web bundling
-fn find_entry_point(web_dir: &PathBuf) -> Option<PathBuf> {
+fn find_entry_point(web_dir: &Path) -> Option<PathBuf> {
     // Check in order of preference
     let candidates = [
         "main.tsx",
@@ -272,7 +272,7 @@ fn find_entry_point(web_dir: &PathBuf) -> Option<PathBuf> {
 }
 
 /// Bundle web assets using esbuild via Deno
-fn bundle_with_esbuild(app_dir: &PathBuf, dist_dir: &PathBuf, framework: &Framework) -> Result<()> {
+fn bundle_with_esbuild(app_dir: &Path, dist_dir: &Path, framework: &Framework) -> Result<()> {
     let web_dir = app_dir.join("web");
     let entry = match find_entry_point(&web_dir) {
         Some(e) => e,
@@ -353,7 +353,7 @@ console.log("Bundle complete:", result);
         cmd.args(["--config", &deno_json.display().to_string()]);
     }
 
-    cmd.arg(&script_path.display().to_string());
+    cmd.arg(script_path.display().to_string());
 
     let status = cmd.status();
 
@@ -380,7 +380,7 @@ console.log("Bundle complete:", result);
 }
 
 /// Transform Vue SFC files to JavaScript
-fn transform_vue_files(app_dir: &PathBuf, dist_dir: &PathBuf) -> Result<()> {
+fn transform_vue_files(app_dir: &Path, dist_dir: &Path) -> Result<()> {
     let web_dir = app_dir.join("web");
     let dist_web = dist_dir.join("web");
 
@@ -475,7 +475,7 @@ for await (const entry of walk(webDir, {{ exts: [".vue"] }})) {{
 }
 
 /// Transform Svelte files to JavaScript
-fn transform_svelte_files(app_dir: &PathBuf, dist_dir: &PathBuf) -> Result<()> {
+fn transform_svelte_files(app_dir: &Path, dist_dir: &Path) -> Result<()> {
     let web_dir = app_dir.join("web");
     let dist_web = dist_dir.join("web");
 
@@ -556,7 +556,7 @@ for await (const entry of walk(webDir, {{ exts: [".svelte"] }})) {{
 }
 
 /// Update index.html to reference bundle.js instead of the original entry
-fn update_html_for_bundle(dist_dir: &PathBuf) -> Result<()> {
+fn update_html_for_bundle(dist_dir: &Path) -> Result<()> {
     let html_path = dist_dir.join("web/index.html");
     if html_path.exists() {
         let content = fs::read_to_string(&html_path)?;
@@ -580,7 +580,7 @@ fn update_html_for_bundle(dist_dir: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn cmd_build(app_dir: &PathBuf) -> Result<()> {
+fn cmd_build(app_dir: &Path) -> Result<()> {
     use bundler::{AppManifest, IconProcessor, RECOMMENDED_ICON_SIZE};
 
     println!("Building app at {}", app_dir.display());
@@ -711,7 +711,7 @@ fn cmd_build(app_dir: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<()> {
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     if !dst.exists() {
         fs::create_dir_all(dst)?;
     }
@@ -727,7 +727,7 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<()> {
     }
     Ok(())
 }
-fn cmd_bundle(app_dir: &PathBuf) -> Result<()> {
+fn cmd_bundle(app_dir: &Path) -> Result<()> {
     println!("Bundling app at {}", app_dir.display());
 
     // 1. Verify dist/ exists, or run build first
@@ -762,7 +762,7 @@ fn cmd_bundle(app_dir: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn cmd_sign(artifact_path: &PathBuf, identity: Option<&str>) -> Result<()> {
+fn cmd_sign(artifact_path: &Path, identity: Option<&str>) -> Result<()> {
     use bundler::codesign::{detect_signing_capabilities, sign, SigningConfig};
 
     println!("Signing artifact: {}", artifact_path.display());
@@ -826,22 +826,22 @@ fn cmd_sign(artifact_path: &PathBuf, identity: Option<&str>) -> Result<()> {
 
 fn icon_usage() {
     eprintln!("forge icon <create|validate> [options]");
-    eprintln!("");
+    eprintln!();
     eprintln!("Subcommands:");
     eprintln!("  create <path>       Create a placeholder icon at the specified path");
     eprintln!("  validate <app-dir>  Validate icon for the specified app directory");
-    eprintln!("");
+    eprintln!();
     eprintln!("Icon Requirements:");
     eprintln!("  • Format: PNG with transparency (RGBA)");
     eprintln!("  • Size: 1024x1024 pixels (minimum 512x512)");
     eprintln!("  • Shape: Square (1:1 aspect ratio)");
-    eprintln!("");
+    eprintln!();
     eprintln!("Examples:");
     eprintln!("  forge icon create my-app/assets/icon.png");
     eprintln!("  forge icon validate my-app");
 }
 
-fn cmd_icon_create(output_path: &PathBuf) -> Result<()> {
+fn cmd_icon_create(output_path: &Path) -> Result<()> {
     use bundler::{IconProcessor, RECOMMENDED_ICON_SIZE};
 
     println!("Creating placeholder icon at {}", output_path.display());
@@ -865,9 +865,9 @@ fn cmd_icon_create(output_path: &PathBuf) -> Result<()> {
         "  Size: {}x{} pixels",
         RECOMMENDED_ICON_SIZE, RECOMMENDED_ICON_SIZE
     );
-    println!("");
+    println!();
     println!("IMPORTANT: Replace this placeholder with your actual app icon before release.");
-    println!("");
+    println!();
     println!("Icon Requirements:");
     println!("  • Format: PNG with transparency (RGBA)");
     println!("  • Size: 1024x1024 pixels (minimum 512x512)");
@@ -876,7 +876,7 @@ fn cmd_icon_create(output_path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn cmd_icon_validate(app_dir: &PathBuf) -> Result<()> {
+fn cmd_icon_validate(app_dir: &Path) -> Result<()> {
     use bundler::{AppManifest, IconProcessor, MIN_ICON_SIZE, RECOMMENDED_ICON_SIZE};
 
     println!("Validating icon for app at {}", app_dir.display());

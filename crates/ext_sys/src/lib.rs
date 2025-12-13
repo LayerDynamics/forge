@@ -329,7 +329,9 @@ fn op_sys_env_set(
 ) -> Result<(), SysError> {
     check_env_write(state, key)?;
     debug!(key = %key, "sys.env_set");
-    std::env::set_var(key, value);
+    // SAFETY: We have verified permission to write this env var.
+    // The caller is responsible for ensuring no concurrent reads.
+    unsafe { std::env::set_var(key, value) };
     Ok(())
 }
 

@@ -161,7 +161,7 @@ fn sign_single_macos(path: &Path, config: &SigningConfig, deep: bool) -> Result<
         cmd.args(["--entitlements", &entitlements.display().to_string()]);
     }
 
-    cmd.arg(&path.display().to_string());
+    cmd.arg(path.display().to_string());
 
     let output = cmd.output().context("Failed to run codesign")?;
 
@@ -340,7 +340,7 @@ pub fn sign_windows(path: &Path, config: &SigningConfig) -> Result<()> {
         cmd.args(["/p", password]);
     }
 
-    cmd.arg(&path.display().to_string());
+    cmd.arg(path.display().to_string());
 
     let output = cmd.output().context("Failed to run SignTool")?;
 
@@ -484,7 +484,7 @@ pub fn sign_linux_gpg(path: &Path, config: &SigningConfig) -> Result<()> {
         cmd.args(["--local-user", &config.identity]);
     }
 
-    cmd.arg(&path.display().to_string());
+    cmd.arg(path.display().to_string());
 
     let output = cmd.output().context("Failed to run GPG")?;
 

@@ -4,7 +4,7 @@
 
 use std::fs;
 use std::panic;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{error, info, warn};
 
@@ -75,7 +75,7 @@ fn handle_panic(panic_info: &panic::PanicHookInfo) {
 
 /// Write a crash report to a file
 fn write_crash_report(
-    dir: &PathBuf,
+    dir: &Path,
     panic_info: &panic::PanicHookInfo,
     backtrace: &backtrace::Backtrace,
 ) -> std::io::Result<PathBuf> {

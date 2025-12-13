@@ -44,6 +44,7 @@ Forge is a desktop application framework that combines:
 ### 1. Forge Host (forge-host)
 
 The main Rust binary that:
+
 - Embeds Deno runtime (JsRuntime)
 - Creates native windows (tao/wry)
 - Handles system events (window, menu, tray)
@@ -55,6 +56,7 @@ Location: `crates/forge-host/`
 ### 2. Deno Runtime
 
 JavaScript/TypeScript execution environment that:
+
 - Runs app's `src/main.ts`
 - Provides `host:*` module imports
 - Handles business logic
@@ -63,6 +65,7 @@ JavaScript/TypeScript execution environment that:
 ### 3. WebView Renderers
 
 System-native web views (WebKit/WebView2/WebKitGTK) that:
+
 - Render HTML/CSS/JS UI
 - Load content via `app://` protocol
 - Communicate with Deno via `window.host`
@@ -182,11 +185,13 @@ Forge uses capability-based security to restrict app permissions.
 ### Pattern Matching
 
 Capabilities use glob patterns:
+
 - `*` matches any non-path-separator characters
 - `**` matches any characters including `/`
 - `~` expands to home directory
 
 Example checks:
+
 ```rust
 // Capability: read = ["~/.myapp/*"]
 check_read("~/.myapp/config.json")  // ✓ Allowed
@@ -266,6 +271,7 @@ openWindow(opts)
 ### Event Loop
 
 The main event loop handles:
+
 1. Window events (close, resize, focus)
 2. Menu events (app menu, context menu, tray)
 3. IPC messages (renderer → Deno)

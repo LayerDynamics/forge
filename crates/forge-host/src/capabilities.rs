@@ -662,6 +662,16 @@ impl Capabilities {
 
 use std::sync::Arc;
 
+/// Type alias for the tuple of all capability adapter Arc pointers
+pub type CapabilityAdapters = (
+    Arc<dyn ext_fs::FsCapabilityChecker>,
+    Arc<dyn ext_net::NetCapabilityChecker>,
+    Arc<dyn ext_sys::SysCapabilityChecker>,
+    Arc<dyn ext_ui::UiCapabilityChecker>,
+    Arc<dyn ext_process::ProcessCapabilityChecker>,
+    Arc<dyn ext_wasm::WasmCapabilityChecker>,
+);
+
 /// Adapter that implements ext_fs::FsCapabilityChecker using Capabilities
 pub struct FsCapabilityAdapter {
     capabilities: Arc<Capabilities>,
@@ -845,16 +855,7 @@ impl ext_wasm::WasmCapabilityChecker for WasmCapabilityAdapter {
 }
 
 /// Create all capability adapters from Capabilities
-pub fn create_capability_adapters(
-    capabilities: Capabilities,
-) -> (
-    Arc<dyn ext_fs::FsCapabilityChecker>,
-    Arc<dyn ext_net::NetCapabilityChecker>,
-    Arc<dyn ext_sys::SysCapabilityChecker>,
-    Arc<dyn ext_ui::UiCapabilityChecker>,
-    Arc<dyn ext_process::ProcessCapabilityChecker>,
-    Arc<dyn ext_wasm::WasmCapabilityChecker>,
-) {
+pub fn create_capability_adapters(capabilities: Capabilities) -> CapabilityAdapters {
     let caps = Arc::new(capabilities);
     (
         Arc::new(FsCapabilityAdapter::new(caps.clone())),

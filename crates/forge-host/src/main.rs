@@ -107,8 +107,7 @@ impl deno_core::ModuleLoader for ForgeModuleLoader {
         _kind: ResolutionKind,
     ) -> Result<ModuleSpecifier, ModuleLoaderError> {
         // Handle host:* imports by mapping to ext:host_*/init.js
-        if specifier.starts_with("host:") {
-            let module_name = &specifier[5..]; // strip "host:"
+        if let Some(module_name) = specifier.strip_prefix("host:") {
             let ext_specifier = format!("ext:host_{}/init.js", module_name);
             return ModuleSpecifier::parse(&ext_specifier)
                 .map_err(|e| ModuleLoaderError::generic(format!("Invalid specifier: {}", e)));
@@ -190,7 +189,7 @@ impl deno_core::ModuleLoader for ForgeModuleLoader {
 
                 transpiled.into_source().text
             } else {
-                code.into()
+                code
             };
 
             let module = deno_core::ModuleSource::new(
@@ -1148,7 +1147,11 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     }
                 }
 
-                _app_menu = Some(menu);
+                // Keep menu alive to prevent it from being dropped
+                #[allow(unused_assignments)]
+                {
+                    _app_menu = Some(menu);
+                }
                 tracing::info!("Set app menu with {} items", items.len());
                 let _ = respond.send(true);
             }
