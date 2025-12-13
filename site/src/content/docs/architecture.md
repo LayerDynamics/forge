@@ -26,9 +26,9 @@ Forge is a desktop application framework that combines:
 │            ▼                                                    │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │               Forge Host Runtime (Rust)                 │   │
-│  │  ┌─────────┬─────────┬─────────┬─────────┬──────────┐   │   │
-│  │  │ ext_ui  │ ext_fs  │ ext_net │ ext_sys │ ext_proc │   │   │
-│  │  └─────────┴─────────┴─────────┴─────────┴──────────┘   │   │
+│  │  ┌────────┬────────┬────────┬────────┬────────┬────────┐  │   │
+│  │  │ ext_ui │ ext_fs │ ext_net│ ext_sys│ext_proc│ext_wasm│  │   │
+│  │  └────────┴────────┴────────┴────────┴────────┴────────┘  │   │
 │  └─────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
                                 │
@@ -77,6 +77,7 @@ Apps access native capabilities through `host:*` module specifiers:
 import { openWindow } from "host:ui";
 import { readTextFile } from "host:fs";
 import { fetch } from "host:net";
+import { compileFile, instantiate } from "host:wasm";
 ```
 
 ### Module Resolution
@@ -104,6 +105,7 @@ Each `host:*` module has a Rust extension:
 | `host:net` | `ext_net` | `crates/ext_net/` |
 | `host:sys` | `ext_sys` | `crates/ext_sys/` |
 | `host:process` | `ext_process` | `crates/ext_process/` |
+| `host:wasm` | `ext_wasm` | `crates/ext_wasm/` |
 
 ---
 
@@ -358,6 +360,7 @@ forge-host
 ├── tray-icon      # System tray
 ├── rfd            # File dialogs
 ├── notify         # File watching
+├── wasmtime       # WebAssembly runtime
 └── ext_*          # Host modules
 ```
 
@@ -383,12 +386,14 @@ forge/
 │   ├── ext_fs/              # host:fs extension
 │   ├── ext_net/             # host:net extension
 │   ├── ext_sys/             # host:sys extension
-│   └── ext_process/         # host:process extension
+│   ├── ext_process/         # host:process extension
+│   └── ext_wasm/            # host:wasm extension
 │
 ├── sdk/                     # TypeScript SDK
 │   ├── host.d.ts            # Type definitions
 │   ├── host.ui.ts           # UI module
 │   ├── host.fs.ts           # FS module
+│   ├── host.wasm.ts         # WASM module
 │   └── preload.ts           # Renderer bridge
 │
 ├── apps/                    # Example apps
