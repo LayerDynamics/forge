@@ -68,8 +68,8 @@ jobs:
             forge-x86_64-pc-windows-msvc.tar.gz
             apps/example-deno-app/bundle/*.msix
 
-  build-macos:
-    name: Build macOS
+  build-macos-arm:
+    name: Build macOS (ARM)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -91,7 +91,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-arm-cargo-release-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build forge CLI and runtime
         run: |
@@ -111,14 +111,58 @@ jobs:
       - name: Bundle example app (DMG)
         run: cargo run -p forge -- bundle apps/example-deno-app
 
-      - name: Upload macOS artifacts
+      - name: Upload macOS ARM artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-artifacts
+          name: macos-arm-artifacts
           path: |
             forge-aarch64-apple-darwin.tar.gz
             apps/example-deno-app/bundle/*.dmg
             apps/example-deno-app/bundle/*.app
+
+  build-macos-intel:
+    name: Build macOS (Intel)
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-intel-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build forge CLI and runtime
+        run: |
+          cargo build -p forge --release
+          cargo build -p forge-host --release
+
+      - name: Package forge binaries
+        run: |
+          mkdir -p forge-dist
+          cp target/release/forge forge-dist/
+          cp target/release/forge-host forge-dist/
+          cd forge-dist && tar -czvf ../forge-x86_64-apple-darwin.tar.gz *
+
+      - name: Upload macOS Intel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-intel-artifacts
+          path: |
+            forge-x86_64-apple-darwin.tar.gz
 
   build-linux:
     name: Build Linux
@@ -189,7 +233,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build-windows, build-macos, build-linux]
+    needs: [build-windows, build-macos-arm, build-macos-intel, build-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -200,11 +244,17 @@ jobs:
           name: windows-artifacts
           path: artifacts/windows
 
-      - name: Download macOS artifacts
+      - name: Download macOS ARM artifacts
         uses: actions/download-artifact@v4
         with:
-          name: macos-artifacts
-          path: artifacts/macos
+          name: macos-arm-artifacts
+          path: artifacts/macos-arm
+
+      - name: Download macOS Intel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-intel-artifacts
+          path: artifacts/macos-intel
 
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
@@ -217,11 +267,12 @@ jobs:
           mkdir -p release
           # Forge toolchain tarballs (forge + forge-host)
           cp artifacts/windows/forge-x86_64-pc-windows-msvc.tar.gz release/ || true
-          cp artifacts/macos/forge-aarch64-apple-darwin.tar.gz release/ || true
+          cp artifacts/macos-arm/forge-aarch64-apple-darwin.tar.gz release/ || true
+          cp artifacts/macos-intel/forge-x86_64-apple-darwin.tar.gz release/ || true
           cp artifacts/linux/forge-x86_64-unknown-linux-gnu.tar.gz release/ || true
           # Example app bundles
           cp artifacts/windows/apps/example-deno-app/bundle/*.msix release/ || true
-          cp artifacts/macos/apps/example-deno-app/bundle/*.dmg release/ || true
+          cp artifacts/macos-arm/apps/example-deno-app/bundle/*.dmg release/ || true
           cp artifacts/linux/apps/example-deno-app/bundle/*.AppImage release/ || true
           cp artifacts/linux/apps/example-deno-app/bundle/*.tar.gz release/ || true
 
@@ -260,7 +311,8 @@ jobs:
             | Platform | Toolchain | Example App |
             |----------|-----------|-------------|
             | Windows x64 | `forge-x86_64-pc-windows-msvc.tar.gz` | `.msix` |
-            | macOS ARM | `forge-aarch64-apple-darwin.tar.gz` | `.dmg` |
+            | macOS ARM (Apple Silicon) | `forge-aarch64-apple-darwin.tar.gz` | `.dmg` |
+            | macOS Intel | `forge-x86_64-apple-darwin.tar.gz` | - |
             | Linux x64 | `forge-x86_64-unknown-linux-gnu.tar.gz` | `.AppImage` |
 
             Each toolchain archive contains:
