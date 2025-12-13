@@ -255,8 +255,34 @@ forge build my-app
 forge bundle my-app
 
 # Sign the bundle (macOS/Windows)
-forge sign my-app --identity "Developer ID"
+forge sign my-app/bundle/MyApp.dmg --identity "Developer ID"
 ```
+
+### App Icon
+
+Your app needs an icon for bundling. Forge creates a placeholder during `forge init`, but you should replace it before release:
+
+```bash
+# Validate your icon
+forge icon validate my-app
+
+# Or create a new placeholder
+forge icon create my-app/assets/icon.png
+```
+
+**Icon requirements:** 1024x1024 PNG with transparency. See the [Icons Guide](./guides/icons.md) for details.
+
+### Code Signing
+
+Code signing is required for macOS distribution and recommended for Windows. Configure signing in your manifest:
+
+```toml
+[bundle.macos]
+sign = true
+signing_identity = "Developer ID Application: Your Name (TEAMID)"
+```
+
+See the [Code Signing Guide](./guides/code-signing.md) for platform-specific instructions.
 
 ## Example Apps
 

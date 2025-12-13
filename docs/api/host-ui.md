@@ -247,6 +247,19 @@ interface MenuEvent {
 
 ## Tray Icons
 
+System tray icons allow your app to remain accessible when minimized or closed.
+
+### Capability Requirement
+
+Tray icons require explicit permission in your manifest:
+
+```toml
+[capabilities.ui]
+tray = true  # Default is false
+```
+
+Without this capability, `createTray()` will fail with a permission error.
+
 ### createTray(options?)
 
 Create a system tray icon:
@@ -256,7 +269,7 @@ import { createTray } from "host:ui";
 
 const tray = await createTray({
   tooltip: "My App",
-  icon: "app://icon.png",  // Optional
+  icon: "app://icon.png",
   menu: [
     { id: "show", label: "Show Window" },
     { id: "sep", label: "-", type: "separator" },
@@ -264,6 +277,23 @@ const tray = await createTray({
   ]
 });
 ```
+
+**Returns:** `Promise<TrayHandle>`
+
+### TrayOptions
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `icon` | `string` | System default | Path to icon file (PNG, JPEG, etc.) |
+| `tooltip` | `string` | - | Hover tooltip text |
+| `menu` | `MenuItem[]` | - | Context menu items |
+
+**Icon paths:**
+- `app://icon.png` - From app's web directory
+- `/absolute/path/icon.png` - Absolute file path
+- `./relative/icon.png` - Relative to app directory
+
+**Note:** Icons are automatically resized to 22x22 pixels for the system tray.
 
 ### TrayHandle
 
@@ -277,15 +307,171 @@ interface TrayHandle {
 
 ### Updating the Tray
 
+Update tooltip, icon, or menu dynamically:
+
 ```typescript
 await tray.update({
-  tooltip: "New Status",
+  tooltip: `CPU: ${cpuUsage}%`,
   menu: [
-    { id: "status", label: "Online", enabled: false },
+    { id: "status", label: `Status: ${status}`, enabled: false },
+    { id: "sep", label: "-", type: "separator" },
     { id: "quit", label: "Quit" }
   ]
 });
 ```
+
+### Destroying the Tray
+
+Remove the tray icon:
+
+```typescript
+await tray.destroy();
+```
+
+Or by ID:
+
+```typescript
+import { destroyTray } from "host:ui";
+await destroyTray(tray.id);
+```
+
+### Tray Menu Items
+
+Tray menus use the same `MenuItem` interface as app menus:
+
+```typescript
+interface MenuItem {
+  id?: string;              // Used in events
+  label: string;            // Display text (or "-" for separator)
+  accelerator?: string;     // Keyboard shortcut (e.g., "CmdOrCtrl+Q")
+  enabled?: boolean;        // Default: true
+  checked?: boolean;        // For checkbox items
+  submenu?: MenuItem[];     // Nested menus
+  type?: "normal" | "checkbox" | "separator";
+}
+```
+
+**Nested menus example:**
+
+```typescript
+const tray = await createTray({
+  tooltip: "My App",
+  menu: [
+    {
+      id: "file",
+      label: "File",
+      submenu: [
+        { id: "new", label: "New" },
+        { id: "open", label: "Open" }
+      ]
+    },
+    { id: "sep", label: "-", type: "separator" },
+    {
+      id: "theme",
+      label: "Theme",
+      submenu: [
+        { id: "light", label: "Light", type: "checkbox", checked: true },
+        { id: "dark", label: "Dark", type: "checkbox", checked: false }
+      ]
+    },
+    { id: "quit", label: "Quit" }
+  ]
+});
+```
+
+### Handling Tray Menu Events
+
+Use `onMenu()` to handle tray menu clicks. Tray events have `menuId: "tray"`:
+
+```typescript
+import { onMenu } from "host:ui";
+
+onMenu((event) => {
+  if (event.menuId === "tray") {
+    switch (event.itemId) {
+      case "show":
+        // Show main window
+        break;
+      case "quit":
+        Deno.exit(0);
+        break;
+    }
+  }
+});
+```
+
+### Complete Example
+
+A system monitor app with dynamic tray updates:
+
+```typescript
+import { openWindow, createTray, onMenu } from "host:ui";
+
+// Create main window
+const win = await openWindow({
+  url: "app://index.html",
+  title: "System Monitor"
+});
+
+// Create tray icon
+const tray = await createTray({
+  tooltip: "System Monitor",
+  icon: "app://tray-icon.png",
+  menu: [
+    { id: "status", label: "Loading...", enabled: false },
+    { id: "sep", label: "-", type: "separator" },
+    { id: "show", label: "Show Window" },
+    { id: "quit", label: "Quit" }
+  ]
+});
+
+// Update tray periodically
+setInterval(async () => {
+  const cpu = await getCpuUsage();
+  const memory = await getMemoryUsage();
+
+  await tray.update({
+    tooltip: `CPU: ${cpu}% | Memory: ${memory}%`,
+    menu: [
+      { id: "cpu", label: `CPU: ${cpu}%`, enabled: false },
+      { id: "mem", label: `Memory: ${memory}%`, enabled: false },
+      { id: "sep", label: "-", type: "separator" },
+      { id: "show", label: "Show Window" },
+      { id: "quit", label: "Quit" }
+    ]
+  });
+}, 5000);
+
+// Handle menu clicks
+onMenu((event) => {
+  if (event.menuId === "tray") {
+    if (event.itemId === "show") {
+      win.setVisible(true);
+      win.focus();
+    } else if (event.itemId === "quit") {
+      tray.destroy();
+      Deno.exit(0);
+    }
+  }
+});
+```
+
+### Platform Notes
+
+**macOS:**
+- Tray icons appear in the menu bar (top-right)
+- Icons should be simple, monochrome-friendly designs
+- System may apply template image styling
+
+**Windows:**
+- Tray icons appear in the system tray (bottom-right)
+- Icons support full color
+- Left-click typically shows menu, right-click for context
+
+**Linux:**
+- Behavior varies by desktop environment
+- Some environments (e.g., GNOME) require extensions for tray support
+- AppIndicator protocol used where available
 
 ---
 

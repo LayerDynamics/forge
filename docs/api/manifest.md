@@ -214,6 +214,34 @@ allowed = [
 - `exact:channel` allows specific channel
 - Empty `[]` denies all channels
 
+### UI Capabilities
+
+Control access to UI features. Most are enabled by default, but tray icons require explicit permission:
+
+```toml
+[capabilities.ui]
+windows = true      # Create and manage windows (default: true)
+menus = true        # Set app menu and context menus (default: true)
+dialogs = true      # Show file/message dialogs (default: true)
+tray = false        # Create system tray icons (default: false)
+```
+
+| Capability | Default | Description |
+|------------|---------|-------------|
+| `windows` | `true` | Create windows via `openWindow()` |
+| `menus` | `true` | Use `setAppMenu()` and `showContextMenu()` |
+| `dialogs` | `true` | Use `dialog.open()`, `dialog.save()`, `dialog.message()` |
+| `tray` | `false` | Use `createTray()` for system tray icons |
+
+**Example with tray enabled:**
+
+```toml
+[capabilities.ui]
+tray = true  # Enable tray icons (other UI capabilities default to true)
+```
+
+**Note:** In development mode (`forge dev`), all capabilities are enabled regardless of manifest settings.
+
 ---
 
 ## Complete Example
@@ -263,6 +291,10 @@ spawn = ["code", "vim", "nano"]
 # IPC channels
 [capabilities.channels]
 allowed = ["notes:*", "sync:*", "settings:*", "ui:*"]
+
+# UI capabilities (tray must be explicitly enabled)
+[capabilities.ui]
+tray = true
 ```
 
 ---
@@ -333,6 +365,10 @@ If a section is omitted, these defaults apply:
 | `windows.height` | 600 |
 | `windows.resizable` | true |
 | `windows.decorations` | true |
+| `capabilities.ui.windows` | true |
+| `capabilities.ui.menus` | true |
+| `capabilities.ui.dialogs` | true |
+| `capabilities.ui.tray` | false |
 | `capabilities.fs` | No access |
 | `capabilities.net` | No access |
 | `capabilities.sys.clipboard` | false |
