@@ -29,7 +29,11 @@ forge icon create my-app/assets/icon.png
 forge icon validate my-app
 ```
 
-## Development Commands (for Forge contributors)
+## Development Commands (for Forge contributors only)
+
+**Note:** End users building apps with Forge do NOT need Rust or cargo. They install Forge via the install script (`curl -fsSL https://forge-deno.com/install.sh | sh`) and use only the `forge` CLI commands above.
+
+These cargo commands are only for developers contributing to the Forge framework itself:
 
 ```bash
 # Build the CLI and host runtime

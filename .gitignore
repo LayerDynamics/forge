@@ -47,4 +47,7 @@ coverage/
 tmp/
 temp/
 *.tmp
+test-app-tmp/
+
+# Site build
 site/node_modules

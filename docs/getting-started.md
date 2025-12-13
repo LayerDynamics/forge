@@ -6,24 +6,44 @@ Forge is an Electron-like desktop application framework using Rust and Deno. Bui
 
 Before getting started, ensure you have:
 
-- **Rust** 1.70 or later ([rustup.rs](https://rustup.rs))
 - **Deno** 1.40 or later ([deno.land](https://deno.land))
 - A code editor (VS Code recommended)
 
 ## Installation
 
-Install the Forge CLI:
+### Quick Install (macOS/Linux)
 
 ```bash
-cargo install forge
+curl -fsSL https://forge-deno.com/install.sh | sh
 ```
 
-Or build from source:
+This installs both `forge` and `forge-host` to `~/.forge/bin/`.
+
+### Manual Download
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/LayerDynamics/forge/releases) and extract to `~/.forge/bin/`:
+
+```bash
+# Linux
+tar -xzf forge-x86_64-unknown-linux-gnu.tar.gz -C ~/.forge/bin/
+
+# macOS
+tar -xzf forge-aarch64-apple-darwin.tar.gz -C ~/.forge/bin/
+
+# Add to PATH (add to ~/.bashrc or ~/.zshrc)
+export PATH="$HOME/.forge/bin:$PATH"
+```
+
+### For Contributors (Building from Source)
+
+If you're contributing to Forge itself, you'll need Rust 1.70+:
 
 ```bash
 git clone https://github.com/LayerDynamics/forge.git
 cd forge
-cargo build --release
+cargo build --workspace --release
+cargo install --path crates/forge
+cargo install --path crates/forge-host
 ```
 
 ## Create Your First App

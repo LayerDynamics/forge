@@ -148,7 +148,10 @@ for await (const event of windowEvents()) {
 | `ext_sys` | System operations extension |
 | `ext_process` | Process management extension |
 
-## Development
+## Development (For Contributors)
+
+These commands are for developers contributing to the Forge framework itself.
+If you're building apps with Forge, you only need Deno - just use the `forge` CLI commands shown above.
 
 ```bash
 # Build everything
@@ -166,6 +169,10 @@ cargo build --workspace --release
 
 ## Requirements
 
+**For App Developers:**
+- Deno 1.40+
+
+**For Forge Contributors:**
 - Rust 1.70+
 - Deno 1.40+
 
