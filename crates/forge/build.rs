@@ -72,8 +72,7 @@ fn embed_dir(dir: &Path, code: &mut String, indent: &str) {
         if path.is_file() {
             // Convert filename to valid Rust const name
             let const_name = name
-                .replace('.', "_")
-                .replace('-', "_")
+                .replace(['.', '-'], "_")
                 .to_uppercase();
 
             let content = fs::read_to_string(&path).unwrap();
