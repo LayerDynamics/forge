@@ -386,7 +386,7 @@ forge/
 │   ├── host.fs.ts        # FS module
 │   └── preload.ts        # Renderer bridge
 │
-├── apps/                  # Example apps
+├── examples/              # Example apps
 │   ├── todo-app/
 │   ├── weather-app/
 │   ├── text-editor/

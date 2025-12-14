@@ -1041,24 +1041,8 @@ pub fn init_wasm_state(
 // Extension Registration
 // ============================================================================
 
-deno_core::extension!(
-    host_wasm,
-    ops = [
-        op_wasm_compile,
-        op_wasm_compile_file,
-        op_wasm_drop_module,
-        op_wasm_instantiate,
-        op_wasm_drop_instance,
-        op_wasm_get_exports,
-        op_wasm_call,
-        op_wasm_memory_read,
-        op_wasm_memory_write,
-        op_wasm_memory_size,
-        op_wasm_memory_grow,
-    ],
-    esm_entry_point = "ext:host_wasm/init.js",
-    esm = ["ext:host_wasm/init.js" = "js/init.js"]
-);
+// Include generated extension! macro from build.rs (contains transpiled TypeScript)
+include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 pub fn wasm_extension() -> Extension {
     host_wasm::ext()

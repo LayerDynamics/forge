@@ -59,7 +59,7 @@ pub struct Windows {
 }
 
 fn preload_js() -> &'static str {
-    // Generated from sdk/preload.ts at build time
+    // Generated from sdk/preload.ts at build time (transpiled to JS)
     include_str!(concat!(env!("OUT_DIR"), "/preload.js"))
 }
 
@@ -352,12 +352,14 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
     // Parse args: --app-dir <dir> --dev
     let mut args = env::args().skip(1);
-    let mut app_dir = PathBuf::from("apps/example-deno-app");
+    let mut app_dir: Option<PathBuf> = None;
     let mut dev_mode = false;
     while let Some(a) = args.next() {
         match a.as_str() {
             "--app-dir" => {
-                app_dir = PathBuf::from(args.next().expect("--app-dir requires a path"));
+                app_dir = Some(PathBuf::from(
+                    args.next().expect("--app-dir requires a path"),
+                ));
             }
             "--dev" => {
                 dev_mode = true;
@@ -365,6 +367,9 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
             _ => {}
         }
     }
+
+    let app_dir =
+        app_dir.ok_or_else(|| anyhow::anyhow!("Usage: forge-host --app-dir <path> [--dev]"))?;
 
     let manifest_path = app_dir.join("manifest.app.toml");
     let manifest_txt = rt
@@ -419,8 +424,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
     // Create channels for ext_window (native window operations)
     let (window_cmd_tx, mut window_cmd_rx) = tokio::sync::mpsc::channel::<WindowCmd>(64);
-    let (window_events_tx, window_events_rx) =
-        tokio::sync::mpsc::channel::<WindowSystemEvent>(64);
+    let (window_events_tx, window_events_rx) = tokio::sync::mpsc::channel::<WindowSystemEvent>(64);
     let (window_menu_events_tx, window_menu_events_rx) =
         tokio::sync::mpsc::channel::<WinMenuEvent>(64);
 
@@ -532,7 +536,10 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
         // === ext_window events ===
         // Window lifecycle (from host:window)
-        WinCreate(WindowOpts, tokio::sync::oneshot::Sender<Result<String, String>>),
+        WinCreate(
+            WindowOpts,
+            tokio::sync::oneshot::Sender<Result<String, String>>,
+        ),
         WinClose(String, tokio::sync::oneshot::Sender<bool>),
         WinMinimize(String),
         WinMaximize(String),
@@ -542,7 +549,10 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         WinFocus(String),
 
         // Window properties
-        WinGetPosition(String, tokio::sync::oneshot::Sender<Result<Position, String>>),
+        WinGetPosition(
+            String,
+            tokio::sync::oneshot::Sender<Result<Position, String>>,
+        ),
         WinSetPosition(String, i32, i32),
         WinGetSize(String, tokio::sync::oneshot::Sender<Result<Size, String>>),
         WinSetSize(String, u32, u32),
@@ -554,16 +564,29 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         WinSetVisible(String, bool),
 
         // State queries
-        WinGetState(String, tokio::sync::oneshot::Sender<Result<WinWindowState, String>>),
+        WinGetState(
+            String,
+            tokio::sync::oneshot::Sender<Result<WinWindowState, String>>,
+        ),
 
         // Dialogs (from host:window)
-        WinShowOpenDialog(WinFileDialogOpts, tokio::sync::oneshot::Sender<Option<Vec<String>>>),
-        WinShowSaveDialog(WinFileDialogOpts, tokio::sync::oneshot::Sender<Option<String>>),
+        WinShowOpenDialog(
+            WinFileDialogOpts,
+            tokio::sync::oneshot::Sender<Option<Vec<String>>>,
+        ),
+        WinShowSaveDialog(
+            WinFileDialogOpts,
+            tokio::sync::oneshot::Sender<Option<String>>,
+        ),
         WinShowMessageDialog(WinMessageDialogOpts, tokio::sync::oneshot::Sender<usize>),
 
         // Menus (from host:window)
         WinSetAppMenu(Vec<WinMenuItem>, tokio::sync::oneshot::Sender<bool>),
-        WinShowContextMenu(Option<String>, Vec<WinMenuItem>, tokio::sync::oneshot::Sender<Option<String>>),
+        WinShowContextMenu(
+            Option<String>,
+            Vec<WinMenuItem>,
+            tokio::sync::oneshot::Sender<Option<String>>,
+        ),
 
         // Tray (from host:window)
         WinCreateTray(WinTrayOpts, tokio::sync::oneshot::Sender<String>),
@@ -571,7 +594,10 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         WinDestroyTray(String, tokio::sync::oneshot::Sender<bool>),
 
         // Native handle
-        WinGetNativeHandle(String, tokio::sync::oneshot::Sender<Result<NativeHandle, String>>),
+        WinGetNativeHandle(
+            String,
+            tokio::sync::oneshot::Sender<Result<NativeHandle, String>>,
+        ),
     }
 
     let event_loop: EventLoop<UserEvent> = EventLoopBuilder::with_user_event().build();
@@ -676,8 +702,12 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     WindowCmd::Restore { window_id } => {
                         let _ = proxy.send_event(UserEvent::WinRestore(window_id));
                     }
-                    WindowCmd::SetFullscreen { window_id, fullscreen } => {
-                        let _ = proxy.send_event(UserEvent::WinSetFullscreen(window_id, fullscreen));
+                    WindowCmd::SetFullscreen {
+                        window_id,
+                        fullscreen,
+                    } => {
+                        let _ =
+                            proxy.send_event(UserEvent::WinSetFullscreen(window_id, fullscreen));
                     }
                     WindowCmd::Focus { window_id } => {
                         let _ = proxy.send_event(UserEvent::WinFocus(window_id));
@@ -693,7 +723,11 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     WindowCmd::GetSize { window_id, respond } => {
                         let _ = proxy.send_event(UserEvent::WinGetSize(window_id, respond));
                     }
-                    WindowCmd::SetSize { window_id, width, height } => {
+                    WindowCmd::SetSize {
+                        window_id,
+                        width,
+                        height,
+                    } => {
                         let _ = proxy.send_event(UserEvent::WinSetSize(window_id, width, height));
                     }
                     WindowCmd::GetTitle { window_id, respond } => {
@@ -702,14 +736,25 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     WindowCmd::SetTitle { window_id, title } => {
                         let _ = proxy.send_event(UserEvent::WinSetTitle(window_id, title));
                     }
-                    WindowCmd::SetResizable { window_id, resizable } => {
+                    WindowCmd::SetResizable {
+                        window_id,
+                        resizable,
+                    } => {
                         let _ = proxy.send_event(UserEvent::WinSetResizable(window_id, resizable));
                     }
-                    WindowCmd::SetDecorations { window_id, decorations } => {
-                        let _ = proxy.send_event(UserEvent::WinSetDecorations(window_id, decorations));
+                    WindowCmd::SetDecorations {
+                        window_id,
+                        decorations,
+                    } => {
+                        let _ =
+                            proxy.send_event(UserEvent::WinSetDecorations(window_id, decorations));
                     }
-                    WindowCmd::SetAlwaysOnTop { window_id, always_on_top } => {
-                        let _ = proxy.send_event(UserEvent::WinSetAlwaysOnTop(window_id, always_on_top));
+                    WindowCmd::SetAlwaysOnTop {
+                        window_id,
+                        always_on_top,
+                    } => {
+                        let _ = proxy
+                            .send_event(UserEvent::WinSetAlwaysOnTop(window_id, always_on_top));
                     }
                     WindowCmd::SetVisible { window_id, visible } => {
                         let _ = proxy.send_event(UserEvent::WinSetVisible(window_id, visible));
@@ -735,15 +780,24 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     WindowCmd::SetAppMenu { items, respond } => {
                         let _ = proxy.send_event(UserEvent::WinSetAppMenu(items, respond));
                     }
-                    WindowCmd::ShowContextMenu { window_id, items, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinShowContextMenu(window_id, items, respond));
+                    WindowCmd::ShowContextMenu {
+                        window_id,
+                        items,
+                        respond,
+                    } => {
+                        let _ = proxy
+                            .send_event(UserEvent::WinShowContextMenu(window_id, items, respond));
                     }
 
                     // Tray
                     WindowCmd::CreateTray { opts, respond } => {
                         let _ = proxy.send_event(UserEvent::WinCreateTray(opts, respond));
                     }
-                    WindowCmd::UpdateTray { tray_id, opts, respond } => {
+                    WindowCmd::UpdateTray {
+                        tray_id,
+                        opts,
+                        respond,
+                    } => {
                         let _ = proxy.send_event(UserEvent::WinUpdateTray(tray_id, opts, respond));
                     }
                     WindowCmd::DestroyTray { tray_id, respond } => {
@@ -773,7 +827,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     let mut tray_counter: u64 = 0;
 
     // App menu storage (using muda) - kept alive to prevent menu from being dropped
-    let mut _app_menu: Option<muda::Menu> = None;
+    let mut app_menu: Option<muda::Menu> = None;
 
     // Menu ID mapping: muda's internal MenuId -> (user_id, label)
     // This is shared between the menu event thread and the main event loop
@@ -1343,10 +1397,12 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 }
 
                 // Keep menu alive to prevent it from being dropped
-                _app_menu = Some(menu);
-                // Reference to suppress unused_assignments warning while keeping menu alive
-                let _ = _app_menu.is_some();
-                tracing::info!("Set app menu with {} items", items.len());
+                // Drop any previous menu first
+                if app_menu.is_some() {
+                    tracing::debug!("Replacing existing app menu");
+                }
+                app_menu = Some(menu);
+                tracing::info!("Set app menu with {} items (menu active: {})", items.len(), app_menu.is_some());
                 let _ = respond.send(true);
             }
 
@@ -2347,7 +2403,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                             use muda::ContextMenu;
                             use tao::platform::macos::WindowExtMacOS;
                             unsafe {
-                                let _ = menu.show_context_menu_for_nsview(
+                                menu.show_context_menu_for_nsview(
                                     window.ns_view() as _,
                                     None::<muda::dpi::Position>,
                                 );
@@ -2366,10 +2422,12 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                         }
                         #[cfg(target_os = "linux")]
                         {
+                            use gtk::prelude::*;
                             use muda::ContextMenu;
                             use tao::platform::unix::WindowExtUnix;
-                            let _ = menu.show_context_menu_for_gtk_window(
-                                window.gtk_window(),
+                            let gtk_win: &gtk::Window = window.gtk_window().upcast_ref();
+                            menu.show_context_menu_for_gtk_window(
+                                gtk_win,
                                 None::<muda::dpi::Position>,
                             );
                         }
@@ -2509,12 +2567,22 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     }
                     #[cfg(target_os = "linux")]
                     {
-                        // Native handle retrieval not yet implemented on Linux
-                        // Linux supports both X11 and Wayland, requiring different APIs
-                        let _ = respond.send(Err(
-                            "Native handle retrieval is not yet supported on Linux. \
-                            Consider using X11/Wayland-specific APIs directly if needed.".to_string()
-                        ));
+                        use tao::platform::unix::WindowExtUnix;
+                        use gtk::prelude::*;
+                        // Get the GTK window and use its pointer as a handle identifier
+                        let gtk_window = window.gtk_window();
+                        // Get GDK window if realized, otherwise use GTK window pointer
+                        let handle = if let Some(gdk_window) = gtk_window.window() {
+                            // Use GDK window pointer as handle (unique per window)
+                            gdk_window.as_ptr() as u64
+                        } else {
+                            // Fallback to GTK window pointer
+                            gtk_window.as_ptr() as u64
+                        };
+                        let _ = respond.send(Ok(NativeHandle {
+                            platform: "linux".to_string(),
+                            handle,
+                        }));
                     }
                 } else {
                     let _ = respond.send(Err(format!("Window not found: {}", window_id)));

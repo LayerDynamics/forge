@@ -113,7 +113,7 @@ pub fn create_component_pkg(
         cmd.args(["--scripts", &scripts_dir.display().to_string()]);
     }
 
-    cmd.arg(&pkg_path.display().to_string());
+    cmd.arg(pkg_path.display().to_string());
 
     // Generate component plist
     let bundle_name = bundle_path.file_name().unwrap().to_string_lossy();
@@ -230,7 +230,7 @@ pub fn create_installer_pkg(
         version,
     ]);
 
-    cmd.arg(&installer_path.display().to_string());
+    cmd.arg(installer_path.display().to_string());
 
     let status = cmd.status().context("Failed to run productbuild")?;
 
@@ -253,11 +253,7 @@ fn generate_distribution_xml(manifest: &AppManifest, config: &PkgConfig) -> Resu
     let version = &manifest.app.version;
     let pkg_ref = format!("{}-{}.pkg", sanitize_name(app_name), version);
 
-    let auth_level = if config.require_admin {
-        "root"
-    } else {
-        "none"
-    };
+    let auth_level = if config.require_admin { "root" } else { "none" };
 
     let background_element = if config.background.is_some() {
         r#"<background file="background.png" alignment="bottomleft" scaling="none"/>"#

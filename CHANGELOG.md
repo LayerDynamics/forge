@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### M0 - Bootstrap
+
 - Initial Forge CLI with `init`, `dev`, `build`, and `bundle` commands
 - Deno runtime embedding via `deno_core`
 - Basic window creation with tao/wry
@@ -17,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Static HTML serving in development mode
 
 #### M1 - UI & Bridge
+
 - `host:ui` module with window management (open, close, send, events)
 - Preload script for renderer-side `window.host` API
 - `app://` custom protocol handler for asset loading
@@ -28,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - React, Vue, Svelte, and Minimal templates
 
 #### M2 - Core Operations
+
 - `host:fs` module with 14 file system operations
   - Read/write text and binary files
   - Directory operations (readDir, mkdir, remove)
@@ -50,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Structured error codes (1000-4000 range)
 
 #### M3 - Packaging
+
 - `forge build` command for bundling Deno code
 - `forge bundle` command for platform-specific packages
   - macOS: .app bundle with DMG creation
@@ -59,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Build-time asset embedding
 
 #### M4 - Framework Transforms & HMR
+
 - Vue SFC transform support via `@vue/compiler-sfc`
 - Svelte component transform support
 - Development server with hot module replacement (HMR)
@@ -66,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - File watcher integration for automatic rebuilds
 
 #### M5 - Polishing & Documentation
+
 - Example applications demonstrating key features:
   - Todo App (React) - File persistence, menus, IPC
   - Weather App (Vue) - HTTP fetch, notifications, tray icons
@@ -96,6 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
+
 - CI/CD workflows for automated testing and releases
 - Additional platform-specific features
 - Plugin system for extensibility

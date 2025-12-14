@@ -160,7 +160,7 @@ impl WindowError {
 // ============================================================================
 
 /// Options for creating a window
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct WindowOpts {
     pub url: Option<String>,
     pub width: Option<u32>,
@@ -179,29 +179,6 @@ pub struct WindowOpts {
     pub max_height: Option<u32>,
     /// Channel allowlist for IPC
     pub channels: Option<Vec<String>>,
-}
-
-impl Default for WindowOpts {
-    fn default() -> Self {
-        Self {
-            url: None,
-            width: None,
-            height: None,
-            title: None,
-            resizable: None,
-            decorations: None,
-            visible: None,
-            transparent: None,
-            always_on_top: None,
-            x: None,
-            y: None,
-            min_width: None,
-            min_height: None,
-            max_width: None,
-            max_height: None,
-            channels: None,
-        }
-    }
 }
 
 /// Window position
@@ -1370,7 +1347,9 @@ async fn op_window_show_context_menu(
 /// Receive menu events
 #[op2(async)]
 #[serde]
-async fn op_window_menu_recv(state: Rc<RefCell<OpState>>) -> Result<Option<MenuEvent>, WindowError> {
+async fn op_window_menu_recv(
+    state: Rc<RefCell<OpState>>,
+) -> Result<Option<MenuEvent>, WindowError> {
     {
         let s = state.borrow();
         check_menu_capability(&s)?;

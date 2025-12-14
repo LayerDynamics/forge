@@ -1,0 +1,15 @@
+[package]
+name = "forge-weld-macro"
+version = "0.1.0"
+edition = "2021"
+description = "Proc macros for forge-weld - #[weld_op] and #[weld_struct] attributes"
+license = "MIT"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"
+forge-weld = { path = "../forge-weld" }

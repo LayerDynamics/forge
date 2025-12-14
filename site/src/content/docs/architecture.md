@@ -27,7 +27,7 @@ Forge is a desktop application framework that combines:
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │               Forge Host Runtime (Rust)                 │   │
 │  │  ┌────────┬────────┬────────┬────────┬────────┬────────┐  │   │
-│  │  │ ext_ui │ ext_fs │ ext_net│ ext_sys│ext_proc│ext_wasm│  │   │
+│  │  │ext_win │ext_ipc │ ext_ui │ ext_fs │ ext_net│ext_wasm│  │   │
 │  │  └────────┴────────┴────────┴────────┴────────┴────────┘  │   │
 │  └─────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
@@ -77,6 +77,8 @@ System-native web views (WebKit/WebView2/WebKitGTK) that:
 Apps access native capabilities through `host:*` module specifiers:
 
 ```typescript
+import { createWindow, dialog, menu, tray } from "host:window";
+import { sendToWindow, onChannel } from "host:ipc";
 import { openWindow } from "host:ui";
 import { readTextFile } from "host:fs";
 import { fetch } from "host:net";
@@ -87,7 +89,7 @@ import { compileFile, instantiate } from "host:wasm";
 
 1. Deno encounters `import from "host:*"`
 2. Custom module loader intercepts
-3. Returns ESM shim from `sdk/*.ts`
+3. Returns ESM shim from extension's `ts/init.ts`
 4. Shim calls `Deno.core.ops.*`
 5. Op calls Rust extension function
 
@@ -101,18 +103,22 @@ readTextFile()  ──►  op_fs_read_text()  ──►  ext_fs::read_text()
 
 Each `host:*` module has a Rust extension:
 
-| Module | Extension | Location |
-|--------|-----------|----------|
-| `host:ui` | `ext_ui` | `crates/ext_ui/` |
-| `host:fs` | `ext_fs` | `crates/ext_fs/` |
-| `host:net` | `ext_net` | `crates/ext_net/` |
-| `host:sys` | `ext_sys` | `crates/ext_sys/` |
-| `host:process` | `ext_process` | `crates/ext_process/` |
-| `host:wasm` | `ext_wasm` | `crates/ext_wasm/` |
+| Module | Extension | Description |
+|--------|-----------|-------------|
+| `host:window` | `ext_window` | Window management, dialogs, menus, tray |
+| `host:ipc` | `ext_ipc` | Inter-process communication |
+| `host:ui` | `ext_ui` | Basic window operations |
+| `host:fs` | `ext_fs` | File system operations |
+| `host:net` | `ext_net` | Networking |
+| `host:sys` | `ext_sys` | System info, clipboard, notifications |
+| `host:process` | `ext_process` | Process spawning |
+| `host:wasm` | `ext_wasm` | WebAssembly compilation and execution |
 
 ---
 
 ## IPC Communication
+
+IPC enables bidirectional messaging between Deno and WebView renderers.
 
 ### Renderer → Deno
 
@@ -129,7 +135,7 @@ window.host.send()  ──►  WebView IPC  ──►  mpsc channel  ──►  
 
 ### Deno → Renderer
 
-1. Deno calls `win.send("channel", data)` or `sendToWindow()`
+1. Deno calls `sendToWindow(windowId, channel, payload)`
 2. Rust serializes and routes to WebView
 3. WebView executes `window.__host_dispatch()`
 4. Preload script calls registered callbacks
@@ -249,7 +255,7 @@ Request: app://index.html
 ### Window Lifecycle
 
 ```text
-openWindow(opts)
+createWindow(opts)
     │
     ├── Create tao::Window
     │       │
@@ -258,14 +264,15 @@ openWindow(opts)
     ├── Create wry::WebView
     │       │
     │       ├── Load app:// URL
-    │       ├── Inject preload.js
+    │       ├── Inject preload script
     │       └── Set up IPC handlers
     │
-    └── Return WindowHandle
+    └── Return Window handle
             │
-            ├── send()/emit()  ──►  WebView
-            ├── setTitle()     ──►  Window
-            └── close()        ──►  Destroy both
+            ├── Methods: close(), minimize(), maximize()
+            ├── Position: getPosition(), setPosition()
+            ├── Size: getSize(), setSize()
+            └── State: isFullscreen(), isFocused()
 ```
 
 ### Event Loop
@@ -290,7 +297,48 @@ event_loop.run(move |event, target, control_flow| {
 
 ---
 
-## Build Pipeline
+## Build System
+
+### forge-weld
+
+The `forge-weld` crate provides code generation and binding utilities for Forge extensions. It generates TypeScript type definitions, init modules, and Rust extension macros.
+
+```rust
+// In your extension's build.rs
+use forge_weld::ExtensionBuilder;
+
+fn main() {
+    ExtensionBuilder::new("host_fs", "host:fs")
+        .ts_path("ts/init.ts")
+        .ops(&["op_fs_read_text", "op_fs_write_text"])
+        .generate_sdk_types("sdk")
+        .dts_generator(generate_types)
+        .build()
+        .expect("Failed to build extension");
+}
+```
+
+### Extension Build Output
+
+Each extension's build process generates:
+
+1. **TypeScript types** (`sdk/generated/host.*.d.ts`) - Type declarations for the module
+2. **Init module** (embedded in binary) - The transpiled TypeScript shim
+3. **Rust bindings** - Extension registration and op definitions
+
+```text
+Extension Build
+       │
+       ├── ts/init.ts (TypeScript source)
+       │       │
+       │       ▼
+       ├── Transpile to JavaScript (esbuild)
+       │       │
+       │       ▼
+       ├── Embed in binary (build.rs)
+       │
+       └── Generate .d.ts (sdk/generated/)
+```
 
 ### Development
 
@@ -368,7 +416,40 @@ forge-host
 ├── notify         # File watching
 ├── wasmtime       # WebAssembly runtime
 └── ext_*          # Host modules
+
+forge-weld
+├── swc_ecma_parser    # TypeScript parsing
+├── swc_ecma_codegen   # JavaScript generation
+└── linkme             # Build-time code collection
 ```
+
+---
+
+## Crate Structure
+
+Forge consists of 12 crates:
+
+### Core Crates
+
+| Crate | Purpose |
+|-------|---------|
+| `forge` | CLI tool (`forge dev/build/bundle`) |
+| `forge-host` | Main runtime binary |
+| `forge-weld` | Code generation and binding utilities |
+| `forge-weld-macro` | Procedural macros for forge-weld |
+
+### Extension Crates
+
+| Crate | Module | Purpose |
+|-------|--------|---------|
+| `ext_window` | `host:window` | Window management, dialogs, menus, tray |
+| `ext_ipc` | `host:ipc` | Inter-process communication |
+| `ext_ui` | `host:ui` | Basic window operations |
+| `ext_fs` | `host:fs` | File system operations |
+| `ext_net` | `host:net` | Networking |
+| `ext_sys` | `host:sys` | System info, clipboard, notifications |
+| `ext_process` | `host:process` | Process spawning |
+| `ext_wasm` | `host:wasm` | WebAssembly compilation and execution |
 
 ---
 
@@ -380,13 +461,31 @@ forge/
 │   ├── forge-host/          # Main runtime binary
 │   │   ├── src/
 │   │   │   ├── main.rs      # Entry point, event loop
-│   │   │   └── capabilities.rs  # Permission system
+│   │   │   └── capabilities.rs
 │   │   └── build.rs         # Asset embedding
 │   │
 │   ├── forge/               # CLI tool
 │   │   └── src/
-│   │       ├── main.rs      # CLI commands
-│   │       └── tpl/         # App templates
+│   │       └── main.rs      # CLI commands
+│   │
+│   ├── forge-weld/          # Code generation
+│   │   └── src/
+│   │       ├── lib.rs       # Main entry
+│   │       ├── ir.rs        # Intermediate representation
+│   │       ├── codegen.rs   # Code generators
+│   │       └── build.rs     # ExtensionBuilder
+│   │
+│   ├── forge-weld-macro/    # Procedural macros
+│   │
+│   ├── ext_window/          # host:window extension
+│   │   ├── src/lib.rs       # Window ops
+│   │   ├── ts/init.ts       # TypeScript shim
+│   │   └── build.rs         # Type generation
+│   │
+│   ├── ext_ipc/             # host:ipc extension
+│   │   ├── src/lib.rs       # IPC ops
+│   │   ├── ts/init.ts       # TypeScript shim
+│   │   └── build.rs         # Type generation
 │   │
 │   ├── ext_ui/              # host:ui extension
 │   ├── ext_fs/              # host:fs extension
@@ -396,20 +495,17 @@ forge/
 │   └── ext_wasm/            # host:wasm extension
 │
 ├── sdk/                     # TypeScript SDK
-│   ├── host.d.ts            # Type definitions
-│   ├── host.ui.ts           # UI module
-│   ├── host.fs.ts           # FS module
-│   ├── host.wasm.ts         # WASM module
+│   ├── generated/           # Auto-generated types
+│   │   ├── host.window.d.ts
+│   │   ├── host.ipc.d.ts
+│   │   ├── host.ui.d.ts
+│   │   ├── host.fs.d.ts
+│   │   └── ...
 │   └── preload.ts           # Renderer bridge
 │
-├── apps/                    # Example apps
-│   ├── todo-app/
-│   ├── weather-app/
-│   ├── text-editor/
-│   └── system-monitor/
+├── examples/                # Example apps
+│   └── example-deno-app/
 │
-└── docs/                    # Documentation
-    ├── getting-started.md
-    ├── architecture.md
-    └── api/
+└── site/                    # Documentation site
+    └── src/content/docs/
 ```

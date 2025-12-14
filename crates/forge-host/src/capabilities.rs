@@ -860,7 +860,11 @@ impl IpcCapabilityAdapter {
 }
 
 impl ext_ipc::IpcCapabilityChecker for IpcCapabilityAdapter {
-    fn check_channel(&self, channel: &str, window_channels: Option<&[String]>) -> Result<(), String> {
+    fn check_channel(
+        &self,
+        channel: &str,
+        window_channels: Option<&[String]>,
+    ) -> Result<(), String> {
         self.capabilities
             .check_channel(channel, window_channels)
             .map_err(|e| e.to_string())

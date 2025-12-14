@@ -14,4 +14,4 @@ serde_json = "1"
 tracing = "0.1"
 
 [build-dependencies]
-deno_ast = { version = "*", features = ["transpiling"] }
+forge-weld = { path = "../forge-weld" }

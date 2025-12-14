@@ -1,11 +1,16 @@
 [workspace]
 members = [
   "crates/forge-host",
+  "crates/forge-weld",
+  "crates/forge-weld-macro",
   "crates/ext_fs",
   "crates/ext_ui",
   "crates/ext_net",
   "crates/ext_sys",
   "crates/ext_process",
+  "crates/ext_wasm",
+  "crates/ext_ipc",
+  "crates/ext_window",
   "crates/forge"
 ]
 resolver = "2"

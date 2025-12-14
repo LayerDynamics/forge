@@ -114,14 +114,22 @@ pub struct IpcState {
 /// Capability checker trait for IPC operations
 pub trait IpcCapabilityChecker: Send + Sync {
     /// Check if a channel is allowed for IPC communication
-    fn check_channel(&self, channel: &str, window_channels: Option<&[String]>) -> Result<(), String>;
+    fn check_channel(
+        &self,
+        channel: &str,
+        window_channels: Option<&[String]>,
+    ) -> Result<(), String>;
 }
 
 /// Default permissive checker (for dev mode)
 pub struct PermissiveIpcChecker;
 
 impl IpcCapabilityChecker for PermissiveIpcChecker {
-    fn check_channel(&self, _channel: &str, _window_channels: Option<&[String]>) -> Result<(), String> {
+    fn check_channel(
+        &self,
+        _channel: &str,
+        _window_channels: Option<&[String]>,
+    ) -> Result<(), String> {
         Ok(())
     }
 }
@@ -201,9 +209,7 @@ async fn op_ipc_send(
 /// Receive the next event from any window (blocking)
 #[op2(async)]
 #[serde]
-async fn op_ipc_recv(
-    state: Rc<RefCell<OpState>>,
-) -> Result<Option<serde_json::Value>, IpcError> {
+async fn op_ipc_recv(state: Rc<RefCell<OpState>>) -> Result<Option<serde_json::Value>, IpcError> {
     let maybe_rx = {
         let s = state.borrow();
         let ipc_state = s.borrow::<IpcState>();

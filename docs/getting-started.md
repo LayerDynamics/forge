@@ -48,11 +48,17 @@ cargo install --path crates/forge-host
 
 ## Create Your First App
 
-Use the Forge CLI to scaffold a new project:
+Copy an example to start a new project:
 
 ```bash
-forge init my-app
+# Copy the minimal example
+cp -r examples/example-deno-app my-app
 cd my-app
+
+# Or use a framework example
+cp -r examples/react-app my-app      # React with TypeScript
+cp -r examples/nextjs-app my-app     # Next.js-style patterns
+cp -r examples/svelte-app my-app     # Svelte with TypeScript
 ```
 
 This creates a new Forge application with the following structure:
@@ -280,14 +286,14 @@ forge sign my-app/bundle/MyApp.dmg --identity "Developer ID"
 
 ### App Icon
 
-Your app needs an icon for bundling. Forge creates a placeholder during `forge init`, but you should replace it before release:
+Your app needs an icon for bundling. Create one before release:
 
 ```bash
+# Create a placeholder icon
+forge icon create my-app/assets/icon.png
+
 # Validate your icon
 forge icon validate my-app
-
-# Or create a new placeholder
-forge icon create my-app/assets/icon.png
 ```
 
 **Icon requirements:** 1024x1024 PNG with transparency. See the [Icons Guide](./guides/icons.md) for details.
@@ -306,18 +312,22 @@ See the [Code Signing Guide](./guides/code-signing.md) for platform-specific ins
 
 ## Example Apps
 
-Check out the example apps in the `apps/` directory:
+Check out the example apps in the `examples/` directory:
 
-- **todo-app** - File persistence, menus, IPC patterns (React)
-- **weather-app** - HTTP fetch, notifications, tray icons (Vue)
+- **example-deno-app** - Minimal starter app
+- **react-app** - React with TypeScript and IPC demo
+- **nextjs-app** - Next.js-style routing patterns
+- **svelte-app** - Svelte with TypeScript and todo list
+- **todo-app** - File persistence, menus, IPC patterns
 - **text-editor** - Full file operations, dialogs, context menus
+- **weather-app** - HTTP fetch, notifications, tray icons
 - **system-monitor** - System info, multi-window, process management
 
 ## Next Steps
 
 - Read the [Architecture Overview](./architecture.md)
 - Explore the [API Reference](./api/)
-- Check the [Example Apps](../apps/)
+- Check the [Example Apps](../examples/)
 
 ## Getting Help
 

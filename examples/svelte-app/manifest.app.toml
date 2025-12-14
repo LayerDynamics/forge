@@ -1,0 +1,13 @@
+[app]
+name = "SvelteApp"
+identifier = "com.example.svelte-app"
+version = "0.1.0"
+
+[windows]
+width = 1024
+height = 768
+resizable = true
+
+# Capability declarations
+[capabilities.channels]
+allowed = ["*"]  # Allow all IPC channels

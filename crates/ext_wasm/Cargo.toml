@@ -17,3 +17,6 @@ tracing = "0.1"
 # WebAssembly runtime
 wasmtime = "27"
 wasmtime-wasi = "27"
+
+[build-dependencies]
+forge-weld = { path = "../forge-weld" }

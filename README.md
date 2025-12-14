@@ -1,8 +1,8 @@
 # Forge
 
-> Build cross-platform desktop apps with TypeScript/JavaScript and native capabilities.
+> Build cross-platform desktop apps with TypeScript and native capabilities as well as wasm, bundle and weld support.
 
-Forge is an Electron-like desktop application framework using **Rust** and **Deno**. Apps are 100% TypeScript/JavaScript - no per-app Rust required. The runtime provides native system access through a secure, capability-based API.
+Forge is an Electron-like desktop application framework using **Rust** and **Deno**. Apps are 100% TypeScript - no per-app Rust required. The runtime provides native system access through a secure, capability-based API.
 
 **Status:** Alpha (0.1.0-alpha.1)
 
@@ -48,8 +48,8 @@ cargo install --path crates/forge-host
 ## Quick Start
 
 ```bash
-# Create a new app
-forge init my-app
+# Copy an example to start a new app
+cp -r examples/react-app my-app
 cd my-app
 
 # Run in development mode
@@ -96,6 +96,7 @@ my-app/
 ## Example
 
 **src/main.ts:**
+
 ```typescript
 import { openWindow, windowEvents } from "host:ui";
 
@@ -112,6 +113,7 @@ for await (const event of windowEvents()) {
 ```
 
 **web/index.html:**
+
 ```html
 <script>
   window.host.send("hello", { message: "Hi!" });
@@ -125,16 +127,20 @@ for await (const event of windowEvents()) {
 - [Getting Started](docs/getting-started.md)
 - [API Reference](docs/api/)
 - [Architecture](docs/architecture.md)
-- [Examples](apps/)
+- [Examples](examples/)
 
 ## Example Apps
 
 | App | Demonstrates |
 |-----|--------------|
-| [todo-app](apps/todo-app) | File persistence, menus, IPC (React) |
-| [weather-app](apps/weather-app) | HTTP fetch, notifications, tray (Vue) |
-| [text-editor](apps/text-editor) | Dialogs, context menus, file watching |
-| [system-monitor](apps/system-monitor) | System info, multi-window |
+| [example-deno-app](examples/example-deno-app) | Minimal starter app |
+| [react-app](examples/react-app) | React with TypeScript and IPC |
+| [nextjs-app](examples/nextjs-app) | Next.js-style routing patterns |
+| [svelte-app](examples/svelte-app) | Svelte with TypeScript |
+| [todo-app](examples/todo-app) | File persistence, menus, IPC |
+| [text-editor](examples/text-editor) | Dialogs, context menus, file watching |
+| [weather-app](examples/weather-app) | HTTP fetch, notifications, tray |
+| [system-monitor](examples/system-monitor) | System info, multi-window |
 
 ## Crate Structure
 
@@ -161,7 +167,7 @@ cargo build --workspace
 cargo test --workspace
 
 # Run the example app
-cargo run -p forge -- dev apps/example-deno-app
+cargo run -p forge -- dev examples/example-deno-app
 
 # Build with release optimizations
 cargo build --workspace --release
@@ -170,9 +176,11 @@ cargo build --workspace --release
 ## Requirements
 
 **For App Developers:**
+
 - Deno 1.40+
 
 **For Forge Contributors:**
+
 - Rust 1.70+
 - Deno 1.40+
 

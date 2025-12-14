@@ -19,9 +19,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::{
-    build_embedded_binary, copy_dir_recursive, sanitize_name, AppManifest, IconProcessor,
-};
+use super::{build_embedded_binary, copy_dir_recursive, sanitize_name, AppManifest, IconProcessor};
 
 /// Windows bundler supporting multiple output formats
 pub struct WindowsBundler<'a> {
@@ -526,7 +524,15 @@ SectionEnd
         let signtool = find_signtool()?;
 
         let mut cmd = Command::new(&signtool);
-        cmd.args(["sign", "/fd", "SHA256", "/tr", "http://timestamp.digicert.com", "/td", "SHA256"]);
+        cmd.args([
+            "sign",
+            "/fd",
+            "SHA256",
+            "/tr",
+            "http://timestamp.digicert.com",
+            "/td",
+            "SHA256",
+        ]);
         cmd.args(["/f", cert_path]);
 
         if let Some(pwd) = password {
@@ -668,10 +674,7 @@ mod tests {
             extract_cn_from_publisher("CN=My Company, O=Org, C=US"),
             "My Company"
         );
-        assert_eq!(
-            extract_cn_from_publisher("CN=Simple"),
-            "Simple"
-        );
+        assert_eq!(extract_cn_from_publisher("CN=Simple"), "Simple");
         assert_eq!(
             extract_cn_from_publisher("Something Else"),
             "Something Else"

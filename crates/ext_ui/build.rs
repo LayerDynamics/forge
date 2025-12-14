@@ -64,7 +64,8 @@ fn main() {
 );"#,
             js_code
         );
-        fs::write(out_path.join("extension.rs"), extension_rs).expect("Failed to write extension.rs");
+        fs::write(out_path.join("extension.rs"), extension_rs)
+            .expect("Failed to write extension.rs");
     }
 
     // Go up to workspace root and then to sdk directory

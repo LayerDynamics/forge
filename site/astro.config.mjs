@@ -31,6 +31,14 @@ export default defineConfig({
           label: 'API Reference',
           autogenerate: { directory: 'api' },
         },
+        {
+          label: 'Crates',
+          autogenerate: { directory: 'crates' },
+        },
+        {
+          label: 'Guides',
+          autogenerate: { directory: 'guides' },
+        },
       ],
       head: [
         {

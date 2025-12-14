@@ -55,10 +55,10 @@ jobs:
           cd forge-dist && tar -czvf ../forge-x86_64-pc-windows-msvc.tar.gz *
 
       - name: Build example app
-        run: cargo run -p forge -- build apps/example-deno-app
+        run: cargo run -p forge -- build examples/example-deno-app
 
       - name: Bundle example app (MSIX)
-        run: cargo run -p forge -- bundle apps/example-deno-app
+        run: cargo run -p forge -- bundle examples/example-deno-app
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -66,7 +66,7 @@ jobs:
           name: windows-artifacts
           path: |
             forge-x86_64-pc-windows-msvc.tar.gz
-            apps/example-deno-app/bundle/*.msix
+            examples/example-deno-app/bundle/*.msix
 
   build-macos-arm:
     name: Build macOS (ARM)
@@ -106,10 +106,10 @@ jobs:
           cd forge-dist && tar -czvf ../forge-aarch64-apple-darwin.tar.gz *
 
       - name: Build example app
-        run: cargo run -p forge -- build apps/example-deno-app
+        run: cargo run -p forge -- build examples/example-deno-app
 
       - name: Bundle example app (DMG)
-        run: cargo run -p forge -- bundle apps/example-deno-app
+        run: cargo run -p forge -- bundle examples/example-deno-app
 
       - name: Upload macOS ARM artifacts
         uses: actions/upload-artifact@v4
@@ -117,8 +117,8 @@ jobs:
           name: macos-arm-artifacts
           path: |
             forge-aarch64-apple-darwin.tar.gz
-            apps/example-deno-app/bundle/*.dmg
-            apps/example-deno-app/bundle/*.app
+            examples/example-deno-app/bundle/*.dmg
+            examples/example-deno-app/bundle/*.app
 
   build-linux:
     name: Build Linux
@@ -173,10 +173,10 @@ jobs:
           cd forge-dist && tar -czvf ../forge-x86_64-unknown-linux-gnu.tar.gz *
 
       - name: Build example app
-        run: cargo run -p forge -- build apps/example-deno-app
+        run: cargo run -p forge -- build examples/example-deno-app
 
       - name: Bundle example app (AppImage)
-        run: cargo run -p forge -- bundle apps/example-deno-app
+        run: cargo run -p forge -- bundle examples/example-deno-app
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -184,8 +184,8 @@ jobs:
           name: linux-artifacts
           path: |
             forge-x86_64-unknown-linux-gnu.tar.gz
-            apps/example-deno-app/bundle/*.AppImage
-            apps/example-deno-app/bundle/*.tar.gz
+            examples/example-deno-app/bundle/*.AppImage
+            examples/example-deno-app/bundle/*.tar.gz
 
   release:
     name: Create Release
@@ -220,10 +220,10 @@ jobs:
           cp artifacts/macos-arm/forge-aarch64-apple-darwin.tar.gz release/ || true
           cp artifacts/linux/forge-x86_64-unknown-linux-gnu.tar.gz release/ || true
           # Example app bundles
-          cp artifacts/windows/apps/example-deno-app/bundle/*.msix release/ || true
-          cp artifacts/macos-arm/apps/example-deno-app/bundle/*.dmg release/ || true
-          cp artifacts/linux/apps/example-deno-app/bundle/*.AppImage release/ || true
-          cp artifacts/linux/apps/example-deno-app/bundle/*.tar.gz release/ || true
+          cp artifacts/windows/examples/example-deno-app/bundle/*.msix release/ || true
+          cp artifacts/macos-arm/examples/example-deno-app/bundle/*.dmg release/ || true
+          cp artifacts/linux/examples/example-deno-app/bundle/*.AppImage release/ || true
+          cp artifacts/linux/examples/example-deno-app/bundle/*.tar.gz release/ || true
 
       - name: Get tag name
         id: tag

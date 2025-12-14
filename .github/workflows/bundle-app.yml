@@ -6,7 +6,7 @@ on:
       app_path:
         description: 'Path to app directory (relative to repo root)'
         required: true
-        default: 'apps/example-deno-app'
+        default: 'examples/example-deno-app'
       sign_windows:
         description: 'Sign Windows MSIX package'
         required: false
