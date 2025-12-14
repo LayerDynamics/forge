@@ -33,11 +33,16 @@ chrono = "0.4"
 hostname = "0.4"
 
 ext_fs = { path = "../ext_fs" }
+ext_ipc = { path = "../ext_ipc" }
 ext_net = { path = "../ext_net" }
 ext_sys = { path = "../ext_sys" }
 ext_ui = { path = "../ext_ui" }
+ext_window = { path = "../ext_window" }
 ext_process = { path = "../ext_process" }
 ext_wasm = { path = "../ext_wasm" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
+
+[build-dependencies]
+deno_ast = { version = "*", features = ["transpiling"] }
