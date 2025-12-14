@@ -662,15 +662,15 @@ impl Capabilities {
 
 use std::sync::Arc;
 
-/// Type alias for the tuple of all capability adapter Arc pointers
-pub type CapabilityAdapters = (
-    Arc<dyn ext_fs::FsCapabilityChecker>,
-    Arc<dyn ext_net::NetCapabilityChecker>,
-    Arc<dyn ext_sys::SysCapabilityChecker>,
-    Arc<dyn ext_ui::UiCapabilityChecker>,
-    Arc<dyn ext_process::ProcessCapabilityChecker>,
-    Arc<dyn ext_wasm::WasmCapabilityChecker>,
-);
+/// Struct containing all capability adapter Arc pointers
+pub struct CapabilityAdapters {
+    pub fs: Arc<dyn ext_fs::FsCapabilityChecker>,
+    pub net: Arc<dyn ext_net::NetCapabilityChecker>,
+    pub sys: Arc<dyn ext_sys::SysCapabilityChecker>,
+    pub ui: Arc<dyn ext_ui::UiCapabilityChecker>,
+    pub process: Arc<dyn ext_process::ProcessCapabilityChecker>,
+    pub wasm: Arc<dyn ext_wasm::WasmCapabilityChecker>,
+}
 
 /// Adapter that implements ext_fs::FsCapabilityChecker using Capabilities
 pub struct FsCapabilityAdapter {
@@ -857,14 +857,14 @@ impl ext_wasm::WasmCapabilityChecker for WasmCapabilityAdapter {
 /// Create all capability adapters from Capabilities
 pub fn create_capability_adapters(capabilities: Capabilities) -> CapabilityAdapters {
     let caps = Arc::new(capabilities);
-    (
-        Arc::new(FsCapabilityAdapter::new(caps.clone())),
-        Arc::new(NetCapabilityAdapter::new(caps.clone())),
-        Arc::new(SysCapabilityAdapter::new(caps.clone())),
-        Arc::new(UiCapabilityAdapter::new(caps.clone())),
-        Arc::new(ProcessCapabilityAdapter::new(caps.clone())),
-        Arc::new(WasmCapabilityAdapter::new(caps)),
-    )
+    CapabilityAdapters {
+        fs: Arc::new(FsCapabilityAdapter::new(caps.clone())),
+        net: Arc::new(NetCapabilityAdapter::new(caps.clone())),
+        sys: Arc::new(SysCapabilityAdapter::new(caps.clone())),
+        ui: Arc::new(UiCapabilityAdapter::new(caps.clone())),
+        process: Arc::new(ProcessCapabilityAdapter::new(caps.clone())),
+        wasm: Arc::new(WasmCapabilityAdapter::new(caps)),
+    }
 }
 
 #[cfg(test)]
@@ -1164,37 +1164,36 @@ mod tests {
     #[test]
     fn test_adapters() {
         let caps = Capabilities::from_permissions(None, true).unwrap();
-        let (fs_caps, net_caps, sys_caps, ui_caps, process_caps, wasm_caps) =
-            create_capability_adapters(caps);
+        let adapters = create_capability_adapters(caps);
 
         // Test FS adapter
-        assert!(fs_caps.check_read("/any/path").is_ok());
-        assert!(fs_caps.check_write("/any/path").is_ok());
+        assert!(adapters.fs.check_read("/any/path").is_ok());
+        assert!(adapters.fs.check_write("/any/path").is_ok());
 
         // Test Net adapter
-        assert!(net_caps.check_connect("any.host.com").is_ok());
-        assert!(net_caps.check_listen(8080).is_ok());
+        assert!(adapters.net.check_connect("any.host.com").is_ok());
+        assert!(adapters.net.check_listen(8080).is_ok());
 
         // Test Sys adapter
-        assert!(sys_caps.check_clipboard_read().is_ok());
-        assert!(sys_caps.check_clipboard_write().is_ok());
-        assert!(sys_caps.check_notify().is_ok());
-        assert!(sys_caps.check_env("PATH").is_ok());
-        assert!(sys_caps.check_env_write("MY_VAR").is_ok());
-        assert!(sys_caps.check_power().is_ok());
+        assert!(adapters.sys.check_clipboard_read().is_ok());
+        assert!(adapters.sys.check_clipboard_write().is_ok());
+        assert!(adapters.sys.check_notify().is_ok());
+        assert!(adapters.sys.check_env("PATH").is_ok());
+        assert!(adapters.sys.check_env_write("MY_VAR").is_ok());
+        assert!(adapters.sys.check_power().is_ok());
 
         // Test UI adapter
-        assert!(ui_caps.check_windows().is_ok());
-        assert!(ui_caps.check_menus().is_ok());
-        assert!(ui_caps.check_dialogs().is_ok());
-        assert!(ui_caps.check_tray().is_ok());
+        assert!(adapters.ui.check_windows().is_ok());
+        assert!(adapters.ui.check_menus().is_ok());
+        assert!(adapters.ui.check_dialogs().is_ok());
+        assert!(adapters.ui.check_tray().is_ok());
 
         // Test Process adapter
-        assert!(process_caps.check_spawn("ls").is_ok());
-        assert!(process_caps.check_env("PATH").is_ok());
+        assert!(adapters.process.check_spawn("ls").is_ok());
+        assert!(adapters.process.check_env("PATH").is_ok());
 
         // Test WASM adapter
-        assert!(wasm_caps.check_load("/any/path.wasm").is_ok());
-        assert!(wasm_caps.check_preopen("/any/dir").is_ok());
+        assert!(adapters.wasm.check_load("/any/path.wasm").is_ok());
+        assert!(adapters.wasm.check_preopen("/any/dir").is_ok());
     }
 }

@@ -400,8 +400,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     }
 
     // Create capability adapters for each extension
-    let (fs_caps, net_caps, sys_caps, ui_caps, process_caps, wasm_caps) =
-        create_capability_adapters(capabilities.clone());
+    let adapters = create_capability_adapters(capabilities.clone());
 
     // Create IPC channels for Deno <-> Host <-> Renderer communication
     let (to_deno_tx, to_deno_rx) = tokio::sync::mpsc::channel::<UiEvent>(256);
@@ -440,24 +439,24 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         );
 
         // Initialize FS state with capability checker
-        ext_fs::init_fs_state(&mut state, Some(fs_caps));
+        ext_fs::init_fs_state(&mut state, Some(adapters.fs));
 
         // Initialize Net state with capability checker
-        ext_net::init_net_state(&mut state, Some(net_caps));
+        ext_net::init_net_state(&mut state, Some(adapters.net));
 
         // Initialize Sys state with capability checker
-        ext_sys::init_sys_state(&mut state, Some(sys_caps));
+        ext_sys::init_sys_state(&mut state, Some(adapters.sys));
 
         // Initialize UI capabilities
-        init_ui_capabilities(&mut state, Some(ui_caps));
+        init_ui_capabilities(&mut state, Some(adapters.ui));
 
         // Initialize Process state with capability checker
         let max_processes = capabilities.get_max_processes();
-        ext_process::init_process_state(&mut state, Some(process_caps), Some(max_processes));
+        ext_process::init_process_state(&mut state, Some(adapters.process), Some(max_processes));
 
         // Initialize WASM state with capability checker
         let max_wasm_instances = capabilities.get_max_wasm_instances();
-        ext_wasm::init_wasm_state(&mut state, Some(wasm_caps), Some(max_wasm_instances));
+        ext_wasm::init_wasm_state(&mut state, Some(adapters.wasm), Some(max_wasm_instances));
     }
 
     // Load the app's main.ts as an ES module (but don't evaluate yet)
@@ -597,7 +596,6 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     let mut tray_counter: u64 = 0;
 
     // App menu storage (using muda) - kept alive to prevent menu from being dropped
-    #[allow(unused_assignments)]
     let mut _app_menu: Option<muda::Menu> = None;
 
     // Menu ID mapping: muda's internal MenuId -> (user_id, label)
@@ -1148,10 +1146,9 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 }
 
                 // Keep menu alive to prevent it from being dropped
-                #[allow(unused_assignments)]
-                {
-                    _app_menu = Some(menu);
-                }
+                _app_menu = Some(menu);
+                // Reference to suppress unused_assignments warning while keeping menu alive
+                let _ = _app_menu.is_some();
                 tracing::info!("Set app menu with {} items", items.len());
                 let _ = respond.send(true);
             }
