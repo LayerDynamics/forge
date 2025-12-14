@@ -604,24 +604,8 @@ pub fn init_sys_state(op_state: &mut OpState, capabilities: Option<Arc<dyn SysCa
 // Extension Registration
 // ============================================================================
 
-deno_core::extension!(
-    host_sys,
-    ops = [
-        op_sys_info,
-        op_sys_env_get,
-        op_sys_env_set,
-        op_sys_cwd,
-        op_sys_home_dir,
-        op_sys_temp_dir,
-        op_sys_clipboard_read,
-        op_sys_clipboard_write,
-        op_sys_notify,
-        op_sys_notify_ext,
-        op_sys_power_info,
-    ],
-    esm_entry_point = "ext:host_sys/init.js",
-    esm = ["ext:host_sys/init.js" = "js/init.js"]
-);
+// Include generated extension! macro from build.rs (contains transpiled TypeScript)
+include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 pub fn sys_extension() -> Extension {
     host_sys::ext()

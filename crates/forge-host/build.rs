@@ -5,7 +5,21 @@ use std::path::Path;
 
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
-    let dest_path = Path::new(&out_dir).join("assets.rs");
+    let out_path = Path::new(&out_dir);
+
+    // Copy sdk/preload.ts to OUT_DIR for inclusion in main.rs
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let preload_src = Path::new(&manifest_dir).join("../../sdk/preload.ts");
+    let preload_dest = out_path.join("preload.ts");
+
+    if preload_src.exists() {
+        fs::copy(&preload_src, &preload_dest).expect("Failed to copy preload.ts to OUT_DIR");
+        println!("cargo:rerun-if-changed={}", preload_src.display());
+    } else {
+        panic!("sdk/preload.ts not found at {}", preload_src.display());
+    }
+
+    let dest_path = out_path.join("assets.rs");
     let mut f = File::create(&dest_path).unwrap();
 
     // Check if FORGE_EMBED_DIR is set (for release builds with embedded assets)

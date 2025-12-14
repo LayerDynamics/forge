@@ -9,8 +9,8 @@ Forge is an Electron-like desktop application framework using Rust + Deno. It em
 ## User Commands (after installation)
 
 ```bash
-# Scaffold a new app
-forge init my-new-app
+# Copy an example to start a new app
+cp -r examples/react-app my-new-app
 
 # Run app in dev mode
 forge dev my-app
@@ -41,7 +41,7 @@ cargo build -p forge
 cargo build -p forge-host
 
 # Run sample app via cargo (development)
-cargo run -p forge -- dev apps/example-deno-app
+cargo run -p forge -- dev examples/example-deno-app
 
 # Run tests
 cargo test
@@ -52,7 +52,7 @@ cargo test
 ### Crate Structure
 
 - **`crates/forge-host`**: Main runtime binary. Embeds Deno JsRuntime, creates windows via tao/wry, handles IPC between Deno and WebView renderers. Contains `build.rs` for asset embedding.
-- **`crates/forge`**: CLI tool (`forge init/dev/build/bundle`). Scaffolds apps and orchestrates forge-host.
+- **`crates/forge`**: CLI tool (`forge dev/build/bundle`). Orchestrates forge-host for app development.
 - **`crates/ext_fs`**: Rust extension providing `host:fs` module (file operations exposed to Deno).
 - **`crates/ext_ui`**: Rust extension providing `host:ui` module (window management, IPC bridge).
 
@@ -91,7 +91,7 @@ These resolve to ESM shims in `crates/ext_*/js/*.js` that call Rust ops via `Den
 ## App Structure
 
 ```text
-apps/example-deno-app/
+examples/example-deno-app/
 ├── manifest.app.toml   # App metadata, window config, permissions
 ├── deno.json           # Deno config
 ├── src/main.ts         # Deno entry point (calls host:ui, host:fs)
@@ -110,7 +110,7 @@ apps/example-deno-app/
 
 Implemented features:
 - Window creation and `app://` loading
-- `forge init` with templates (minimal, react, vue, svelte)
+- Example apps for React, Next.js-style, Svelte, and vanilla TypeScript
 - `forge dev` for development mode
 - `forge build` for web asset bundling (esbuild via Deno)
 - `forge bundle` for platform packaging (macOS .app/.dmg, Windows .msix, Linux AppImage)

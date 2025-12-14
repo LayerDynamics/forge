@@ -1,0 +1,25 @@
+[package]
+name = "forge-weld"
+version = "0.1.0"
+edition = "2021"
+description = "Code generation and binding utilities for Forge framework"
+license = "MIT"
+
+[dependencies]
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# TypeScript transpilation
+deno_ast = { version = "*", features = ["transpiling"] }
+
+# Proc macro support (for parsing, not the macros themselves)
+syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"
+
+# Compile-time inventory
+linkme = "0.3"
+
+# Error handling
+thiserror = "1"

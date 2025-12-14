@@ -56,14 +56,10 @@ declare module "host:window" {
 
   /** Native window handle (platform-specific) */
   export interface NativeHandle {
-    /** Platform type: "windows", "macos", "linux-x11", "linux-wayland", or "linux" (placeholder) */
+    /** Platform type: "windows", "macos", "linux-x11", "linux-wayland" */
     platform: string;
-    /**
-     * Raw handle value (HWND on Windows, NSView* on macOS, X11 window ID on Linux).
-     * Note: On Linux without X11/Wayland detection, returns 0 as a placeholder.
-     * Typed as number since Rust u64 serializes to JS number (safe for values up to 2^53).
-     */
-    handle: number;
+    /** Raw handle value (HWND, NSView*, X11 window, etc.) */
+    handle: bigint;
   }
 
   /** Window system event */

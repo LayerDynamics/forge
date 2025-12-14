@@ -23,14 +23,11 @@ Your app icon must meet these specifications:
 ## Quick Start
 
 ```bash
-# Create a new app with placeholder icon
-forge init my-app
+# Create a placeholder icon
+forge icon create my-app/assets/icon.png
 
 # Validate your icon
 forge icon validate my-app
-
-# Create a placeholder icon manually
-forge icon create my-app/assets/icon.png
 ```
 
 ---
@@ -258,11 +255,11 @@ A 256x256 icon is also placed at the AppImage root for file managers.
 
 ## Build Integration
 
-### During `forge init`
+### Creating a New App
 
-When you create a new app, Forge automatically:
-1. Creates the `assets/` directory
-2. Generates a placeholder icon at `assets/icon.png`
+When copying an example to start a new app, create an icon:
+1. Create the `assets/` directory if needed
+2. Run `forge icon create my-app/assets/icon.png` to create a placeholder
 
 ### During `forge build`
 

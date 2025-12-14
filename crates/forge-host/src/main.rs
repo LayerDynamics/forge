@@ -58,9 +58,9 @@ pub struct Windows {
     pub resizable: Option<bool>,
 }
 
-fn preload_js() -> &'static str {
+fn preload_ts() -> &'static str {
     // Generated from sdk/preload.ts at build time
-    include_str!(concat!(env!("OUT_DIR"), "/preload.js"))
+    include_str!(concat!(env!("OUT_DIR"), "/preload.ts"))
 }
 
 fn mime_for(path: &str) -> &'static str {
@@ -352,12 +352,14 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
     // Parse args: --app-dir <dir> --dev
     let mut args = env::args().skip(1);
-    let mut app_dir = PathBuf::from("apps/example-deno-app");
+    let mut app_dir: Option<PathBuf> = None;
     let mut dev_mode = false;
     while let Some(a) = args.next() {
         match a.as_str() {
             "--app-dir" => {
-                app_dir = PathBuf::from(args.next().expect("--app-dir requires a path"));
+                app_dir = Some(PathBuf::from(
+                    args.next().expect("--app-dir requires a path"),
+                ));
             }
             "--dev" => {
                 dev_mode = true;
@@ -365,6 +367,8 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
             _ => {}
         }
     }
+
+    let app_dir = app_dir.ok_or_else(|| anyhow::anyhow!("Usage: forge-host --app-dir <path> [--dev]"))?;
 
     let manifest_path = app_dir.join("manifest.app.toml");
     let manifest_txt = rt
@@ -911,7 +915,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 let mut builder = WebViewBuilder::new();
 
                 // Inject preload script for window.host bridge
-                builder = builder.with_initialization_script(preload_js());
+                builder = builder.with_initialization_script(preload_ts());
 
                 // IPC handler: messages from renderer -> Deno
                 // Channel filtering happens here for incoming messages
@@ -1845,7 +1849,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
                         // Build WebView with custom app:// protocol (same pattern as CreateWindow)
                         let mut wv_builder = WebViewBuilder::new();
-                        wv_builder = wv_builder.with_initialization_script(preload_js());
+                        wv_builder = wv_builder.with_initialization_script(preload_ts());
 
                         // IPC handler
                         let to_deno_tx_clone = to_deno_tx.clone();
@@ -2347,7 +2351,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                             use muda::ContextMenu;
                             use tao::platform::macos::WindowExtMacOS;
                             unsafe {
-                                let _ = menu.show_context_menu_for_nsview(
+                                menu.show_context_menu_for_nsview(
                                     window.ns_view() as _,
                                     None::<muda::dpi::Position>,
                                 );

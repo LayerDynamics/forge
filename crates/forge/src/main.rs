@@ -7,14 +7,10 @@ use std::{
 
 mod bundler;
 
-// Include auto-generated template embedding code
-include!(concat!(env!("OUT_DIR"), "/templates.rs"));
-
 fn usage() {
-    eprintln!("forge <init|dev|build|bundle|sign|icon> [options] <app-dir>");
+    eprintln!("forge <dev|build|bundle|sign|icon> [options] <app-dir>");
     eprintln!();
     eprintln!("Commands:");
-    eprintln!("  init [--template <name>] <app-dir>  Create a new Forge app");
     eprintln!("  dev <app-dir>                       Run in development mode");
     eprintln!("  build <app-dir>                     Build for production");
     eprintln!("  bundle <app-dir>                    Package into distributable");
@@ -25,11 +21,14 @@ fn usage() {
     eprintln!("  icon create <path>                  Create a placeholder icon");
     eprintln!("  icon validate <app-dir>             Validate app icon requirements");
     eprintln!();
-    eprintln!("Templates for init:");
-    eprintln!("  minimal (default)  Basic HTML + Deno app");
-    eprintln!("  react              React with TypeScript");
-    eprintln!("  vue                Vue.js with JavaScript");
-    eprintln!("  svelte             Svelte with TypeScript");
+    eprintln!("Getting Started:");
+    eprintln!("  Copy an example from the examples/ folder to start a new app:");
+    eprintln!("  - examples/example-deno-app   Minimal TypeScript app");
+    eprintln!("  - examples/react-app          React with TypeScript");
+    eprintln!("  - examples/nextjs-app         Next.js-style patterns");
+    eprintln!("  - examples/svelte-app         Svelte with TypeScript");
+    eprintln!("  - examples/todo-app           Todo app with persistence");
+    eprintln!("  - examples/text-editor        File operations example");
     eprintln!();
     eprintln!("Bundle output formats:");
     eprintln!("  Windows: .msix package");
@@ -86,90 +85,6 @@ fn find_forge_host() -> Result<PathBuf> {
         Install Forge with:\n  \
         curl -fsSL https://forge-deno.com/install.sh | sh"
     )
-}
-
-fn cmd_init(app_dir: &Path, template: &str) -> Result<()> {
-    use bundler::{IconProcessor, RECOMMENDED_ICON_SIZE};
-
-    if app_dir.exists() {
-        return Err(anyhow!("path exists: {}", app_dir.display()));
-    }
-
-    match template {
-        "minimal" => init_minimal(app_dir)?,
-        "react" => init_react(app_dir)?,
-        "vue" => init_vue(app_dir)?,
-        "svelte" => init_svelte(app_dir)?,
-        _ => {
-            return Err(anyhow!(
-                "Unknown template: {}. Use: minimal, react, vue, svelte",
-                template
-            ))
-        }
-    }
-
-    // Create assets directory and generate placeholder icon
-    let assets_dir = app_dir.join("assets");
-    fs::create_dir_all(&assets_dir)?;
-    let icon_path = assets_dir.join("icon.png");
-    let processor = IconProcessor::create_placeholder(RECOMMENDED_ICON_SIZE);
-    processor.save(&icon_path)?;
-
-    println!("Initialized {} app at {}", template, app_dir.display());
-    println!("\nCreated:");
-    println!("  - App template files");
-    println!("  - Placeholder icon at assets/icon.png");
-    println!();
-    println!("IMPORTANT: Replace assets/icon.png with your actual app icon before bundling.");
-    println!("Icon requirements: 1024x1024 PNG with transparency");
-    println!("\nNext steps:");
-    println!("  cd {}", app_dir.display());
-    println!("  forge dev .");
-    Ok(())
-}
-
-fn init_minimal(app_dir: &Path) -> Result<()> {
-    fs::create_dir_all(app_dir.join("web"))?;
-    fs::create_dir_all(app_dir.join("src"))?;
-    fs::write(app_dir.join("manifest.app.toml"), minimal::MANIFEST)?;
-    fs::write(app_dir.join("deno.json"), minimal::DENO_JSON)?;
-    fs::write(app_dir.join("src/main.ts"), minimal::SRC_MAIN)?;
-    fs::write(app_dir.join("web/index.html"), minimal::web::INDEX_HTML)?;
-    Ok(())
-}
-
-fn init_react(app_dir: &Path) -> Result<()> {
-    fs::create_dir_all(app_dir.join("web"))?;
-    fs::create_dir_all(app_dir.join("src"))?;
-    fs::write(app_dir.join("manifest.app.toml"), react::MANIFEST)?;
-    fs::write(app_dir.join("deno.json"), react::DENO_JSON)?;
-    fs::write(app_dir.join("src/main.ts"), react::SRC_MAIN)?;
-    fs::write(app_dir.join("web/index.html"), react::web::INDEX_HTML)?;
-    fs::write(app_dir.join("web/main.tsx"), react::web::MAIN_TSX)?;
-    Ok(())
-}
-
-fn init_vue(app_dir: &Path) -> Result<()> {
-    fs::create_dir_all(app_dir.join("web"))?;
-    fs::create_dir_all(app_dir.join("src"))?;
-    fs::write(app_dir.join("manifest.app.toml"), vue::MANIFEST)?;
-    fs::write(app_dir.join("deno.json"), vue::DENO_JSON)?;
-    fs::write(app_dir.join("src/main.ts"), vue::SRC_MAIN)?;
-    fs::write(app_dir.join("web/index.html"), vue::web::INDEX_HTML)?;
-    fs::write(app_dir.join("web/main.js"), vue::web::MAIN_JS)?;
-    Ok(())
-}
-
-fn init_svelte(app_dir: &Path) -> Result<()> {
-    fs::create_dir_all(app_dir.join("web"))?;
-    fs::create_dir_all(app_dir.join("src"))?;
-    fs::write(app_dir.join("manifest.app.toml"), svelte::MANIFEST)?;
-    fs::write(app_dir.join("deno.json"), svelte::DENO_JSON)?;
-    fs::write(app_dir.join("src/main.ts"), svelte::SRC_MAIN)?;
-    fs::write(app_dir.join("web/index.html"), svelte::web::INDEX_HTML)?;
-    fs::write(app_dir.join("web/main.ts"), svelte::web::MAIN_TS)?;
-    fs::write(app_dir.join("web/App.svelte"), svelte::web::APP_SVELTE)?;
-    Ok(())
 }
 
 fn cmd_dev(app_dir: &Path) -> Result<()> {
@@ -1047,51 +962,25 @@ fn main() -> Result<()> {
     let cmd = args.remove(0);
 
     match cmd.as_str() {
-        "init" => {
-            // Parse --template flag
-            let mut template = "minimal".to_string();
-            let mut app_dir = None;
-
-            let mut i = 0;
-            while i < args.len() {
-                if args[i] == "--template" || args[i] == "-t" {
-                    if i + 1 < args.len() {
-                        template = args[i + 1].clone();
-                        i += 2;
-                    } else {
-                        return Err(anyhow!("--template requires a value"));
-                    }
-                } else if !args[i].starts_with('-') {
-                    app_dir = Some(PathBuf::from(&args[i]));
-                    i += 1;
-                } else {
-                    return Err(anyhow!("Unknown flag: {}", args[i]));
-                }
-            }
-
-            let app_dir = app_dir
-                .ok_or_else(|| anyhow!("Usage: forge init [--template <name>] <app-dir>"))?;
-            cmd_init(&app_dir, &template)?;
-        }
         "dev" => {
             let app_dir = args
                 .first()
                 .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("apps/example-deno-app"));
+                .ok_or_else(|| anyhow!("Usage: forge dev <app-dir>"))?;
             cmd_dev(&app_dir)?;
         }
         "build" => {
             let app_dir = args
                 .first()
                 .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("apps/example-deno-app"));
+                .ok_or_else(|| anyhow!("Usage: forge build <app-dir>"))?;
             cmd_build(&app_dir)?;
         }
         "bundle" => {
             let app_dir = args
                 .first()
                 .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("apps/example-deno-app"));
+                .ok_or_else(|| anyhow!("Usage: forge bundle <app-dir>"))?;
             cmd_bundle(&app_dir)?;
         }
         "sign" => {

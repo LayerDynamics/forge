@@ -499,12 +499,8 @@ pub fn init_net_state(op_state: &mut OpState, capabilities: Option<Arc<dyn NetCa
 // Extension Registration
 // ============================================================================
 
-deno_core::extension!(
-    host_net,
-    ops = [op_net_fetch, op_net_fetch_bytes,],
-    esm_entry_point = "ext:host_net/init.js",
-    esm = ["ext:host_net/init.js" = "js/init.js"]
-);
+// Include generated extension! macro from build.rs (contains transpiled TypeScript)
+include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 pub fn net_extension() -> Extension {
     host_net::ext()

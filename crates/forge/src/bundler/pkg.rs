@@ -113,7 +113,7 @@ pub fn create_component_pkg(
         cmd.args(["--scripts", &scripts_dir.display().to_string()]);
     }
 
-    cmd.arg(&pkg_path.display().to_string());
+    cmd.arg(pkg_path.display().to_string());
 
     // Generate component plist
     let bundle_name = bundle_path.file_name().unwrap().to_string_lossy();
@@ -230,7 +230,7 @@ pub fn create_installer_pkg(
         version,
     ]);
 
-    cmd.arg(&installer_path.display().to_string());
+    cmd.arg(installer_path.display().to_string());
 
     let status = cmd.status().context("Failed to run productbuild")?;
 

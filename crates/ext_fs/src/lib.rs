@@ -637,27 +637,8 @@ pub fn init_fs_state(op_state: &mut OpState, capabilities: Option<Arc<dyn FsCapa
 // Extension Registration
 // ============================================================================
 
-deno_core::extension!(
-    host_fs,
-    ops = [
-        op_fs_read_text,
-        op_fs_write_text,
-        op_fs_read_bytes,
-        op_fs_write_bytes,
-        op_fs_stat,
-        op_fs_read_dir,
-        op_fs_mkdir,
-        op_fs_remove,
-        op_fs_rename,
-        op_fs_copy,
-        op_fs_exists,
-        op_fs_watch,
-        op_fs_watch_next,
-        op_fs_watch_close,
-    ],
-    esm_entry_point = "ext:host_fs/init.js",
-    esm = ["ext:host_fs/init.js" = "js/init.js"]
-);
+// Include generated extension! macro from build.rs (contains transpiled TypeScript)
+include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 pub fn fs_extension() -> Extension {
     host_fs::ext()

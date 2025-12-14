@@ -24,11 +24,17 @@ Or download manually from [GitHub Releases](https://github.com/LayerDynamics/for
 
 ## Create Your First App
 
-Use the Forge CLI to scaffold a new project:
+Copy an example to start a new project:
 
 ```bash
-forge init my-app
+# Copy the minimal example
+cp -r examples/example-deno-app my-app
 cd my-app
+
+# Or use a framework example
+cp -r examples/react-app my-app      # React with TypeScript
+cp -r examples/nextjs-app my-app     # Next.js-style patterns
+cp -r examples/svelte-app my-app     # Svelte with TypeScript
 ```
 
 This creates a new Forge application with the following structure:
@@ -74,19 +80,42 @@ allowed = ["*"]
 The main Deno entry point handles app logic:
 
 ```typescript
-import { openWindow, windowEvents } from "host:ui";
+import { createWindow, dialog, menu } from "host:window";
+import { onChannel, sendToWindow } from "host:ipc";
 
-// Open the main window
-const win = await openWindow({
+// Create the main window
+const win = await createWindow({
   url: "app://index.html",
   width: 800,
   height: 600,
-  title: "My App"
+  title: "My App",
 });
 
-// Listen for events from the renderer
-for await (const event of windowEvents()) {
-  console.log("Event:", event.channel, event.payload);
+// Set up application menu
+await menu.setAppMenu([
+  {
+    label: "File",
+    submenu: [
+      { id: "open", label: "Open...", accelerator: "CmdOrCtrl+O" },
+      { id: "quit", label: "Quit", accelerator: "CmdOrCtrl+Q" },
+    ],
+  },
+]);
+
+// Listen for IPC messages from the renderer
+onChannel("hello", async (payload, windowId) => {
+  console.log("Received from renderer:", payload);
+  await sendToWindow(windowId, "reply", { message: "Hello from Deno!" });
+});
+
+// Listen for window events
+for await (const event of win.events()) {
+  if (event.type === "close") {
+    const confirmed = await dialog.confirm("Are you sure you want to quit?");
+    if (confirmed) {
+      Deno.exit(0);
+    }
+  }
 }
 ```
 
@@ -103,16 +132,13 @@ The UI is standard HTML/CSS/JS served via the `app://` protocol:
 <body>
   <h1>Hello, Forge!</h1>
   <script>
-    // Communicate with Deno backend
+    // Send message to Deno backend
     window.host.send("hello", { message: "Hi from renderer!" });
 
     // Listen for messages from backend
     window.host.on("reply", (data) => {
       console.log("Received:", data);
     });
-
-    // Signal ready
-    window.host.emit("ready");
   </script>
 </body>
 </html>
@@ -135,16 +161,96 @@ This starts the Forge runtime with:
 
 Forge provides native capabilities through `host:*` modules:
 
-### host:ui - Window Management
+### host:window - Window Management
+
+Full window control including position, size, state, dialogs, menus, and system tray:
+
+```typescript
+import { createWindow, dialog, menu, tray } from "host:window";
+
+// Create a window with full control
+const win = await createWindow({
+  url: "app://index.html",
+  title: "My App",
+  width: 1024,
+  height: 768,
+});
+
+// Window manipulation
+await win.setPosition(100, 100);
+await win.setSize(1280, 720);
+await win.maximize();
+await win.setAlwaysOnTop(true);
+
+// Dialogs
+const files = await dialog.open({
+  title: "Select Files",
+  multiple: true,
+  filters: [{ name: "Images", extensions: ["png", "jpg"] }],
+});
+
+// Application menu
+await menu.setAppMenu([
+  {
+    label: "File",
+    submenu: [
+      { id: "new", label: "New", accelerator: "CmdOrCtrl+N" },
+      { id: "quit", label: "Quit", accelerator: "CmdOrCtrl+Q" },
+    ],
+  },
+]);
+
+// System tray
+const trayIcon = await tray.create({
+  tooltip: "My App",
+  menu: [
+    { id: "show", label: "Show Window" },
+    { id: "quit", label: "Quit" },
+  ],
+});
+```
+
+### host:ipc - Inter-Process Communication
+
+Bidirectional messaging between Deno and WebView renderers:
+
+```typescript
+import { sendToWindow, onChannel, windowEvents, broadcast } from "host:ipc";
+
+// Send to a specific window
+await sendToWindow("main", "update", { count: 42 });
+
+// Listen for events on a specific channel
+onChannel("button-click", (payload, windowId) => {
+  console.log(`Button clicked in ${windowId}:`, payload);
+});
+
+// Async generator for all events
+for await (const event of windowEvents()) {
+  console.log(`[${event.windowId}] ${event.channel}:`, event.payload);
+}
+
+// Broadcast to multiple windows
+await broadcast(["main", "settings"], "theme-changed", { theme: "dark" });
+```
+
+### host:ui - Basic Window Operations
+
+Simplified window creation for common use cases:
 
 ```typescript
 import { openWindow, dialog, createTray } from "host:ui";
 
-// Open a window
-const win = await openWindow({ url: "app://index.html" });
+// Open a window with basic options
+const win = await openWindow({
+  url: "app://index.html",
+  title: "Simple Window",
+  width: 800,
+  height: 600,
+});
 
 // Show a dialog
-const path = await dialog.open({ title: "Select File" });
+await dialog.alert("Operation completed!");
 
 // Create a tray icon
 const tray = await createTray({ tooltip: "My App" });
@@ -205,9 +311,18 @@ for await (const line of proc.stdout) {
 await proc.wait();
 ```
 
+### host:wasm - WebAssembly
+
+```typescript
+import { compileFile, instantiate } from "host:wasm";
+
+const module = await compileFile("./module.wasm");
+const instance = await instantiate(module, {});
+```
+
 ## IPC Communication
 
-Forge uses a simple message-passing model for communication between Deno and the renderer:
+Forge uses a message-passing model for communication between Deno and the renderer.
 
 ### From Renderer to Deno
 
@@ -220,13 +335,24 @@ window.host.send("channel-name", { data: "value" });
 
 ```typescript
 // In src/main.ts
-win.send("channel-name", { data: "value" });
+import { sendToWindow } from "host:ipc";
+
+await sendToWindow("window-id", "channel-name", { data: "value" });
 ```
 
 ### Listening for Events
 
 ```typescript
-// In Deno - listen for all window events
+// In Deno - callback-based
+import { onChannel } from "host:ipc";
+
+onChannel("user-action", (payload, windowId) => {
+  console.log(`Action from ${windowId}:`, payload);
+});
+
+// In Deno - async generator
+import { windowEvents } from "host:ipc";
+
 for await (const event of windowEvents()) {
   if (event.channel === "user-action") {
     // Handle event
@@ -256,15 +382,19 @@ forge sign ./bundle/MyApp.app --identity "Developer ID"
 
 ## Example Apps
 
-Check out the example apps in the `apps/` directory:
+Check out the example apps in the `examples/` directory:
 
-- **todo-app** - File persistence, menus, IPC patterns (React)
-- **weather-app** - HTTP fetch, notifications, tray icons (Vue)
+- **example-deno-app** - Minimal starter app
+- **react-app** - React with TypeScript and IPC demo
+- **nextjs-app** - Next.js-style routing patterns
+- **svelte-app** - Svelte with TypeScript and todo list
+- **todo-app** - File persistence, menus, IPC patterns
 - **text-editor** - Full file operations, dialogs, context menus
+- **weather-app** - HTTP fetch, notifications, tray icons
 - **system-monitor** - System info, multi-window, process management
 
 ## Next Steps
 
 - Read the [Architecture Overview](/docs/architecture)
-- Explore the [API Reference](/docs/api/host-ui)
-- Check the [Example Apps](https://github.com/LayerDynamics/forge/tree/main/apps)
+- Explore the [API Reference](/docs/api/host-window)
+- Check the [Example Apps](https://github.com/LayerDynamics/forge/tree/main/examples)

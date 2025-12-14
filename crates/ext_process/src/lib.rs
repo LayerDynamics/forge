@@ -818,20 +818,8 @@ pub fn init_process_state(
 // Extension Registration
 // ============================================================================
 
-deno_core::extension!(
-    host_process,
-    ops = [
-        op_process_spawn,
-        op_process_kill,
-        op_process_wait,
-        op_process_status,
-        op_process_write_stdin,
-        op_process_read_stdout,
-        op_process_read_stderr,
-    ],
-    esm_entry_point = "ext:host_process/init.js",
-    esm = ["ext:host_process/init.js" = "js/init.js"]
-);
+// Include generated extension! macro from build.rs (contains transpiled TypeScript)
+include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 pub fn process_extension() -> Extension {
     host_process::ext()

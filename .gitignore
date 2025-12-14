@@ -51,3 +51,4 @@ test-app-tmp/
 
 # Site build
 site/node_modules
+resources/

@@ -1,121 +1,57 @@
-use deno_ast::{EmitOptions, MediaType, ParseParams, TranspileModuleOptions, TranspileOptions};
-use std::env;
-use std::fs;
-use std::path::Path;
-
-/// Transpile TypeScript to JavaScript using deno_ast
-fn transpile_ts(ts_code: &str, specifier: &str) -> String {
-    let parsed = deno_ast::parse_module(ParseParams {
-        specifier: deno_ast::ModuleSpecifier::parse(specifier).unwrap(),
-        text: ts_code.into(),
-        media_type: MediaType::TypeScript,
-        capture_tokens: false,
-        scope_analysis: false,
-        maybe_syntax: None,
-    })
-    .expect("Failed to parse TypeScript");
-
-    let transpile_result = parsed
-        .transpile(
-            &TranspileOptions::default(),
-            &TranspileModuleOptions::default(),
-            &EmitOptions::default(),
-        )
-        .expect("Failed to transpile TypeScript");
-
-    transpile_result.into_source().text
-}
+use forge_weld::ExtensionBuilder;
 
 fn main() {
-    let out_dir = env::var("OUT_DIR").unwrap();
-    let out_path = Path::new(&out_dir);
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-
-    // Transpile ts/init.ts and generate extension.rs
-    println!("cargo:rerun-if-changed=ts/init.ts");
-
-    let ts_path = Path::new("ts/init.ts");
-    if ts_path.exists() {
-        let ts_code = fs::read_to_string(ts_path).expect("Failed to read ts/init.ts");
-        let js_code = transpile_ts(&ts_code, "file:///init.ts");
-
-        // Generate complete extension! macro invocation with all 37 ops
-        let extension_rs = format!(
-            r#"deno_core::extension!(
-    host_window,
-    ops = [
-        // Window Lifecycle (10 ops)
-        op_window_create,
-        op_window_close,
-        op_window_minimize,
-        op_window_maximize,
-        op_window_unmaximize,
-        op_window_restore,
-        op_window_set_fullscreen,
-        op_window_is_fullscreen,
-        op_window_focus,
-        op_window_is_focused,
-        // Window Properties (16 ops)
-        op_window_get_position,
-        op_window_set_position,
-        op_window_get_size,
-        op_window_set_size,
-        op_window_get_title,
-        op_window_set_title,
-        op_window_set_resizable,
-        op_window_is_resizable,
-        op_window_set_decorations,
-        op_window_has_decorations,
-        op_window_set_always_on_top,
-        op_window_is_always_on_top,
-        op_window_set_visible,
-        op_window_is_visible,
-        op_window_is_maximized,
-        op_window_is_minimized,
-        // Dialogs (3 ops)
-        op_window_dialog_open,
-        op_window_dialog_save,
-        op_window_dialog_message,
-        // Menus (3 ops)
-        op_window_set_app_menu,
-        op_window_show_context_menu,
-        op_window_menu_recv,
-        // Tray (3 ops)
-        op_window_create_tray,
-        op_window_update_tray,
-        op_window_destroy_tray,
-        // Events & Native (2 ops)
-        op_window_events_recv,
-        op_window_get_native_handle,
-    ],
-    esm_entry_point = "ext:host_window/init.js",
-    esm = ["ext:host_window/init.js" = {{ source = {:?} }}]
-);"#,
-            js_code
-        );
-        fs::write(out_path.join("extension.rs"), extension_rs)
-            .expect("Failed to write extension.rs");
-    }
-
-    // Go up to workspace root and then to sdk directory
-    let workspace_root = Path::new(&manifest_dir).parent().unwrap().parent().unwrap();
-    let sdk_dir = workspace_root.join("sdk");
-    let generated_dir = sdk_dir.join("generated");
-
-    // Create generated directory if it doesn't exist
-    fs::create_dir_all(&generated_dir).ok();
-
-    // Generate type definitions
-    let types = generate_host_window_types();
-
-    let dest_path = generated_dir.join("host.window.d.ts");
-    fs::write(&dest_path, types).unwrap();
-
-    // Also write to OUT_DIR for reference
-    let out_path = Path::new(&out_dir).join("host.window.d.ts");
-    fs::write(&out_path, generate_host_window_types()).unwrap();
-
-    println!("cargo:rerun-if-changed=src/lib.rs");
+    ExtensionBuilder::new("host_window", "host:window")
+        .ts_path("ts/init.ts")
+        .ops(&[
+            // Window Lifecycle (10 ops)
+            "op_window_create",
+            "op_window_close",
+            "op_window_minimize",
+            "op_window_maximize",
+            "op_window_unmaximize",
+            "op_window_restore",
+            "op_window_set_fullscreen",
+            "op_window_is_fullscreen",
+            "op_window_focus",
+            "op_window_is_focused",
+            // Window Properties (16 ops)
+            "op_window_get_position",
+            "op_window_set_position",
+            "op_window_get_size",
+            "op_window_set_size",
+            "op_window_get_title",
+            "op_window_set_title",
+            "op_window_set_resizable",
+            "op_window_is_resizable",
+            "op_window_set_decorations",
+            "op_window_has_decorations",
+            "op_window_set_always_on_top",
+            "op_window_is_always_on_top",
+            "op_window_set_visible",
+            "op_window_is_visible",
+            "op_window_is_maximized",
+            "op_window_is_minimized",
+            // Dialogs (3 ops)
+            "op_window_dialog_open",
+            "op_window_dialog_save",
+            "op_window_dialog_message",
+            // Menus (3 ops)
+            "op_window_set_app_menu",
+            "op_window_show_context_menu",
+            "op_window_menu_recv",
+            // Tray (3 ops)
+            "op_window_create_tray",
+            "op_window_update_tray",
+            "op_window_destroy_tray",
+            // Events & Native (2 ops)
+            "op_window_events_recv",
+            "op_window_get_native_handle",
+        ])
+        .generate_sdk_types("sdk")
+        .dts_generator(generate_host_window_types)
+        .build()
+        .expect("Failed to build host_window extension");
 }
 
 fn generate_host_window_types() -> String {
