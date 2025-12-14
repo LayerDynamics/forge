@@ -58,9 +58,9 @@ pub struct Windows {
     pub resizable: Option<bool>,
 }
 
-fn preload_ts() -> &'static str {
-    // Generated from sdk/preload.ts at build time
-    include_str!(concat!(env!("OUT_DIR"), "/preload.ts"))
+fn preload_js() -> &'static str {
+    // Generated from sdk/preload.ts at build time (transpiled to JS)
+    include_str!(concat!(env!("OUT_DIR"), "/preload.js"))
 }
 
 fn mime_for(path: &str) -> &'static str {
@@ -965,7 +965,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 let mut builder = WebViewBuilder::new();
 
                 // Inject preload script for window.host bridge
-                builder = builder.with_initialization_script(preload_ts());
+                builder = builder.with_initialization_script(preload_js());
 
                 // IPC handler: messages from renderer -> Deno
                 // Channel filtering happens here for incoming messages
@@ -1899,7 +1899,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
                         // Build WebView with custom app:// protocol (same pattern as CreateWindow)
                         let mut wv_builder = WebViewBuilder::new();
-                        wv_builder = wv_builder.with_initialization_script(preload_ts());
+                        wv_builder = wv_builder.with_initialization_script(preload_js());
 
                         // IPC handler
                         let to_deno_tx_clone = to_deno_tx.clone();
@@ -2420,10 +2420,12 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                         }
                         #[cfg(target_os = "linux")]
                         {
+                            use gtk::prelude::*;
                             use muda::ContextMenu;
                             use tao::platform::unix::WindowExtUnix;
+                            let gtk_win: &gtk::Window = window.gtk_window().upcast_ref();
                             let _ = menu.show_context_menu_for_gtk_window(
-                                window.gtk_window(),
+                                gtk_win,
                                 None::<muda::dpi::Position>,
                             );
                         }

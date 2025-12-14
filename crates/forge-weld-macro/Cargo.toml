@@ -12,3 +12,4 @@ proc-macro = true
 syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
 quote = "1"
 proc-macro2 = "1"
+forge-weld = { path = "../forge-weld" }
