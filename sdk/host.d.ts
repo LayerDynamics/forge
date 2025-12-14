@@ -488,3 +488,226 @@ declare module "host:wasm" {
     grow(instanceId: string, pages: number): Promise<number>;
   };
 }
+
+declare module "host:window" {
+  /** Options for creating a new window */
+  export interface WindowOptions {
+    url?: string;
+    width?: number;
+    height?: number;
+    title?: string;
+    resizable?: boolean;
+    decorations?: boolean;
+    visible?: boolean;
+    transparent?: boolean;
+    alwaysOnTop?: boolean;
+    x?: number;
+    y?: number;
+    minWidth?: number;
+    minHeight?: number;
+    maxWidth?: number;
+    maxHeight?: number;
+    channels?: string[];
+  }
+
+  /** Window position */
+  export interface Position {
+    x: number;
+    y: number;
+  }
+
+  /** Window size */
+  export interface Size {
+    width: number;
+    height: number;
+  }
+
+  /** Native window handle (platform-specific) */
+  export interface NativeHandle {
+    /** Platform type: "windows", "macos", "linux-x11", "linux-wayland", or "linux" (placeholder) */
+    platform: string;
+    /**
+     * Raw handle value (HWND on Windows, NSView* on macOS, X11 window ID on Linux).
+     * Note: On Linux without X11/Wayland detection, returns 0 as a placeholder.
+     * Typed as number since Rust u64 serializes to JS number (safe for values up to 2^53).
+     */
+    handle: number;
+  }
+
+  /** Window system event */
+  export interface WindowSystemEvent {
+    windowId: string;
+    type: "close" | "focus" | "blur" | "resize" | "move" | "minimize" | "maximize" | "restore";
+    payload: unknown;
+  }
+
+  /** File filter for dialogs */
+  export interface FileFilter {
+    name: string;
+    extensions: string[];
+  }
+
+  /** Options for file open/save dialog */
+  export interface FileDialogOptions {
+    title?: string;
+    defaultPath?: string;
+    filters?: FileFilter[];
+    multiple?: boolean;
+    directory?: boolean;
+  }
+
+  /** Options for message dialog */
+  export interface MessageDialogOptions {
+    title?: string;
+    message: string;
+    kind?: "info" | "warning" | "error";
+    /**
+     * Button labels to display.
+     * NOTE: The underlying rfd library only supports preset button configurations
+     * (Ok, OkCancel, YesNo, etc.). Custom button labels may be ignored or mapped
+     * to the closest preset. For reliable cross-platform behavior, use convenience
+     * methods like dialog.alert(), dialog.confirm(), dialog.error(), dialog.warning().
+     */
+    buttons?: string[];
+  }
+
+  /** Menu item definition */
+  export interface MenuItem {
+    id?: string;
+    label: string;
+    accelerator?: string;
+    enabled?: boolean;
+    checked?: boolean;
+    submenu?: MenuItem[];
+    type?: "normal" | "checkbox" | "separator";
+  }
+
+  /** Menu event */
+  export interface MenuEvent {
+    menuId: string;
+    itemId: string;
+    label: string;
+  }
+
+  /** Tray options */
+  export interface TrayOptions {
+    icon?: string;
+    tooltip?: string;
+    menu?: MenuItem[];
+  }
+
+  /** Tray handle */
+  export interface TrayHandle {
+    readonly id: string;
+    update(options: TrayOptions): Promise<boolean>;
+    destroy(): Promise<boolean>;
+  }
+
+  /** Window handle */
+  export interface Window {
+    readonly id: string;
+    close(): Promise<boolean>;
+    minimize(): Promise<void>;
+    maximize(): Promise<void>;
+    unmaximize(): Promise<void>;
+    restore(): Promise<void>;
+    focus(): Promise<void>;
+    getPosition(): Promise<Position>;
+    setPosition(x: number, y: number): Promise<void>;
+    getSize(): Promise<Size>;
+    setSize(width: number, height: number): Promise<void>;
+    getTitle(): Promise<string>;
+    setTitle(title: string): Promise<void>;
+    isFullscreen(): Promise<boolean>;
+    setFullscreen(fullscreen: boolean): Promise<void>;
+    isFocused(): Promise<boolean>;
+    isMaximized(): Promise<boolean>;
+    isMinimized(): Promise<boolean>;
+    isVisible(): Promise<boolean>;
+    isResizable(): Promise<boolean>;
+    hasDecorations(): Promise<boolean>;
+    isAlwaysOnTop(): Promise<boolean>;
+    setResizable(resizable: boolean): Promise<void>;
+    setDecorations(decorations: boolean): Promise<void>;
+    setAlwaysOnTop(alwaysOnTop: boolean): Promise<void>;
+    setVisible(visible: boolean): Promise<void>;
+    show(): Promise<void>;
+    hide(): Promise<void>;
+    getNativeHandle(): Promise<NativeHandle>;
+    events(): AsyncGenerator<WindowSystemEvent, void, unknown>;
+  }
+
+  /** Create a new window */
+  export function createWindow(options?: WindowOptions): Promise<Window>;
+
+  /** Close a window by ID */
+  export function closeWindow(windowId: string): Promise<boolean>;
+
+  /** Async iterator for window system events */
+  export function windowEvents(): AsyncGenerator<WindowSystemEvent, void, unknown>;
+
+  /** Dialog functions */
+  export const dialog: {
+    open(options?: FileDialogOptions): Promise<string[] | null>;
+    save(options?: FileDialogOptions): Promise<string | null>;
+    message(options: MessageDialogOptions | string): Promise<number>;
+    alert(message: string, title?: string): Promise<number>;
+    confirm(message: string, title?: string): Promise<boolean>;
+    error(message: string, title?: string): Promise<number>;
+    warning(message: string, title?: string): Promise<number>;
+  };
+
+  /** Menu functions */
+  export const menu: {
+    setAppMenu(items: MenuItem[]): Promise<boolean>;
+    showContextMenu(items: MenuItem[], windowId?: string): Promise<string | null>;
+    events(): AsyncGenerator<MenuEvent, void, unknown>;
+    onMenu(callback: (event: MenuEvent) => void): () => void;
+  };
+
+  /** Tray functions */
+  export const tray: {
+    create(options?: TrayOptions): Promise<TrayHandle>;
+    destroy(trayId: string): Promise<boolean>;
+  };
+}
+
+declare module "host:ipc" {
+  /** IPC event from renderer */
+  export interface IpcEvent {
+    windowId: string;
+    channel: string;
+    payload: unknown;
+    type?: "close" | "focus" | "blur" | "resize" | "move";
+  }
+
+  /** Callback for IPC events */
+  export type IpcEventCallback = (event: IpcEvent) => void;
+
+  /** Callback for channel-specific events */
+  export type ChannelCallback = (payload: unknown, windowId: string) => void;
+
+  /** Send message to a window's renderer */
+  export function sendToWindow(windowId: string, channel: string, payload?: unknown): Promise<void>;
+
+  /** Receive next IPC event */
+  export function recvWindowEvent(): Promise<IpcEvent | null>;
+
+  /** Async iterator for IPC events */
+  export function windowEvents(): AsyncGenerator<IpcEvent, void, unknown>;
+
+  /** Filter events for a specific window */
+  export function windowEventsFor(windowId: string): AsyncGenerator<IpcEvent, void, unknown>;
+
+  /** Filter events for a specific channel */
+  export function channelEvents(channel: string): AsyncGenerator<IpcEvent, void, unknown>;
+
+  /** Register callback for all IPC events */
+  export function onEvent(callback: IpcEventCallback): () => void;
+
+  /** Register callback for specific channel */
+  export function onChannel(channel: string, callback: ChannelCallback): () => void;
+
+  /** Broadcast to multiple windows */
+  export function broadcast(windowIds: string[], channel: string, payload?: unknown): Promise<void>;
+}
