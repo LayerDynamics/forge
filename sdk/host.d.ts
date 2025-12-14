@@ -245,6 +245,13 @@ declare module "host:ui" {
     title?: string;
     message: string;
     kind?: "info" | "warning" | "error";
+    /**
+     * Button labels to display.
+     * NOTE: The underlying rfd library only supports preset button configurations
+     * (Ok, OkCancel, YesNo, etc.). Custom button labels may be ignored or mapped
+     * to the closest preset. Use showMessageDialog carefully or prefer
+     * convenience wrappers for reliable cross-platform behavior.
+     */
     buttons?: string[];
   }
 

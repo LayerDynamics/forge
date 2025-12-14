@@ -143,7 +143,24 @@ impl Default for IpcCapabilities {
 // IPC Operations
 // ============================================================================
 
+/// Helper to check IPC channel capability
+fn check_ipc_capability(state: &OpState, channel: &str) -> Result<(), IpcError> {
+    // Try to get capabilities - if not set, allow all (dev mode behavior)
+    if let Some(caps) = state.try_borrow::<IpcCapabilities>() {
+        // For outgoing messages from Deno, we use the global channel check (None for window_channels)
+        // The host will perform additional per-window checks when delivering the message
+        caps.checker
+            .check_channel(channel, None)
+            .map_err(IpcError::permission_denied)?;
+    }
+    Ok(())
+}
+
 /// Send a message to a specific window's renderer
+///
+/// Note: Channel permissions are enforced symmetrically - both outgoing messages from Deno
+/// and incoming messages from the renderer are subject to the capability checker. The host
+/// may perform additional per-window channel filtering when delivering the message.
 #[op2(async)]
 async fn op_ipc_send(
     state: Rc<RefCell<OpState>>,
@@ -151,6 +168,12 @@ async fn op_ipc_send(
     #[string] channel: String,
     #[serde] payload: serde_json::Value,
 ) -> Result<(), IpcError> {
+    // Check channel capability before sending
+    {
+        let s = state.borrow();
+        check_ipc_capability(&s, &channel)?;
+    }
+
     let to_renderer_tx = {
         let s = state.borrow();
         let ipc_state = s.borrow::<IpcState>();

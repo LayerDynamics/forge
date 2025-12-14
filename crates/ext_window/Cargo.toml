@@ -1,0 +1,28 @@
+[package]
+name = "ext_window"
+version = "0.1.0-alpha.1"
+edition = "2021"
+build = "build.rs"
+
+[build-dependencies]
+deno_ast = { version = "*", features = ["transpiling"] }
+
+[dependencies]
+anyhow = "1"
+deno_core = "*"
+deno_error = "*"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+tokio = { version = "1", features = ["sync"] }
+tracing = "0.1"
+# Window management
+tao = "0.30"
+wry = "0.46"
+# Dialogs
+rfd = "0.14"
+# Menus
+muda = "0.15"
+# System tray
+tray-icon = "0.19"
+image = "0.25"

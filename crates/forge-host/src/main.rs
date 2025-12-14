@@ -1164,15 +1164,26 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     _ => MessageLevel::Info,
                 };
 
+                // Build buttons with custom labels when provided
+                // rfd supports: Ok, OkCancel, YesNo, YesNoCancel, and custom variants
                 let buttons = if let Some(btns) = &opts.buttons {
-                    if btns.len() == 1 {
-                        MessageButtons::Ok
-                    } else if btns.len() == 2 && btns[0].to_lowercase() == "cancel" {
-                        MessageButtons::OkCancel
-                    } else if btns.len() == 2 && btns[0].to_lowercase() == "yes" {
-                        MessageButtons::YesNo
-                    } else {
-                        MessageButtons::OkCancel
+                    match btns.len() {
+                        0 => MessageButtons::Ok,
+                        1 => MessageButtons::OkCustom(btns[0].clone()),
+                        2 => MessageButtons::OkCancelCustom(btns[0].clone(), btns[1].clone()),
+                        n => {
+                            if n > 3 {
+                                tracing::warn!(
+                                    "Message dialog supports at most 3 buttons, got {}. Extra buttons will be ignored.",
+                                    n
+                                );
+                            }
+                            MessageButtons::YesNoCancelCustom(
+                                btns[0].clone(),
+                                btns[1].clone(),
+                                btns.get(2).cloned().unwrap_or_else(|| "Cancel".to_string()),
+                            )
+                        }
                     }
                 } else {
                     MessageButtons::Ok
@@ -2197,13 +2208,26 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     _ => rfd::MessageLevel::Info,
                 };
 
+                // Build buttons with custom labels when provided
+                // rfd supports: Ok, OkCancel, YesNo, YesNoCancel, and custom variants
                 let buttons = if let Some(ref btns) = opts.buttons {
-                    if btns.len() == 1 {
-                        rfd::MessageButtons::Ok
-                    } else if btns.len() == 2 {
-                        rfd::MessageButtons::OkCancel
-                    } else {
-                        rfd::MessageButtons::Ok
+                    match btns.len() {
+                        0 => rfd::MessageButtons::Ok,
+                        1 => rfd::MessageButtons::OkCustom(btns[0].clone()),
+                        2 => rfd::MessageButtons::OkCancelCustom(btns[0].clone(), btns[1].clone()),
+                        n => {
+                            if n > 3 {
+                                tracing::warn!(
+                                    "Message dialog supports at most 3 buttons, got {}. Extra buttons will be ignored.",
+                                    n
+                                );
+                            }
+                            rfd::MessageButtons::YesNoCancelCustom(
+                                btns[0].clone(),
+                                btns[1].clone(),
+                                btns.get(2).cloned().unwrap_or_else(|| "Cancel".to_string()),
+                            )
+                        }
                     }
                 } else {
                     rfd::MessageButtons::Ok
@@ -2485,12 +2509,12 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     }
                     #[cfg(target_os = "linux")]
                     {
-                        // On Linux, we can try to get X11 or Wayland handle
-                        // For now, return a placeholder
-                        let _ = respond.send(Ok(NativeHandle {
-                            platform: "linux".to_string(),
-                            handle: 0,
-                        }));
+                        // Native handle retrieval not yet implemented on Linux
+                        // Linux supports both X11 and Wayland, requiring different APIs
+                        let _ = respond.send(Err(
+                            "Native handle retrieval is not yet supported on Linux. \
+                            Consider using X11/Wayland-specific APIs directly if needed.".to_string()
+                        ));
                     }
                 } else {
                     let _ = respond.send(Err(format!("Window not found: {}", window_id)));
