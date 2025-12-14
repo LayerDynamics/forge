@@ -827,7 +827,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     let mut tray_counter: u64 = 0;
 
     // App menu storage (using muda) - kept alive to prevent menu from being dropped
-    let mut _app_menu: Option<muda::Menu> = None;
+    let mut app_menu: Option<muda::Menu> = None;
 
     // Menu ID mapping: muda's internal MenuId -> (user_id, label)
     // This is shared between the menu event thread and the main event loop
@@ -1397,10 +1397,12 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 }
 
                 // Keep menu alive to prevent it from being dropped
-                _app_menu = Some(menu);
-                // Reference to suppress unused_assignments warning while keeping menu alive
-                let _ = _app_menu.is_some();
-                tracing::info!("Set app menu with {} items", items.len());
+                // Drop any previous menu first
+                if app_menu.is_some() {
+                    tracing::debug!("Replacing existing app menu");
+                }
+                app_menu = Some(menu);
+                tracing::info!("Set app menu with {} items (menu active: {})", items.len(), app_menu.is_some());
                 let _ = respond.send(true);
             }
 
@@ -2424,7 +2426,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                             use muda::ContextMenu;
                             use tao::platform::unix::WindowExtUnix;
                             let gtk_win: &gtk::Window = window.gtk_window().upcast_ref();
-                            let _ = menu.show_context_menu_for_gtk_window(
+                            menu.show_context_menu_for_gtk_window(
                                 gtk_win,
                                 None::<muda::dpi::Position>,
                             );
@@ -2565,12 +2567,24 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     }
                     #[cfg(target_os = "linux")]
                     {
-                        // Native handle retrieval not yet implemented on Linux
-                        // Linux supports both X11 and Wayland, requiring different APIs
-                        let _ = respond.send(Err(
-                            "Native handle retrieval is not yet supported on Linux. \
-                            Consider using X11/Wayland-specific APIs directly if needed.".to_string()
-                        ));
+                        use tao::platform::unix::WindowExtUnix;
+                        // Get the GTK window and its native handle
+                        let gtk_window = window.gtk_window();
+                        // Use GDK to get the native window handle (X11 XID or Wayland surface)
+                        use gtk::prelude::*;
+                        if let Some(gdk_window) = gtk_window.window() {
+                            // This returns the X11 XID on X11 or a handle on Wayland
+                            #[allow(deprecated)]
+                            let handle = gdk::ffi::gdk_x11_window_get_xid(gdk_window.as_ptr() as *mut _) as u64;
+                            let _ = respond.send(Ok(NativeHandle {
+                                platform: "linux".to_string(),
+                                handle,
+                            }));
+                        } else {
+                            let _ = respond.send(Err(
+                                "Could not get GDK window handle. Window may not be realized yet.".to_string()
+                            ));
+                        }
                     }
                 } else {
                     let _ = respond.send(Err(format!("Window not found: {}", window_id)));
