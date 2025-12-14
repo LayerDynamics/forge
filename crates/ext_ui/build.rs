@@ -27,20 +27,45 @@ fn transpile_ts(ts_code: &str, specifier: &str) -> String {
 }
 
 fn main() {
-    // Transpile js/init.ts to js/init.js
-    println!("cargo:rerun-if-changed=js/init.ts");
-
-    let ts_path = Path::new("js/init.ts");
-    let js_path = Path::new("js/init.js");
-
-    if ts_path.exists() {
-        let ts_code = fs::read_to_string(ts_path).expect("Failed to read js/init.ts");
-        let js_code = transpile_ts(&ts_code, "file:///init.ts");
-        fs::write(js_path, js_code).expect("Failed to write js/init.js");
-    }
     // Generate TypeScript type definitions for host:ui module
     let out_dir = env::var("OUT_DIR").unwrap();
+    let out_path = Path::new(&out_dir);
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+
+    // Transpile ts/init.ts and generate extension.rs
+    println!("cargo:rerun-if-changed=ts/init.ts");
+
+    let ts_path = Path::new("ts/init.ts");
+    if ts_path.exists() {
+        let ts_code = fs::read_to_string(ts_path).expect("Failed to read ts/init.ts");
+        let js_code = transpile_ts(&ts_code, "file:///init.ts");
+
+        // Generate complete extension! macro invocation
+        // Note: IPC ops (op_ui_window_send, op_ui_window_recv) have moved to ext_ipc
+        let extension_rs = format!(
+            r#"deno_core::extension!(
+    host_ui,
+    ops = [
+        op_ui_open_window,
+        op_ui_close_window,
+        op_ui_set_window_title,
+        op_ui_dialog_open,
+        op_ui_dialog_save,
+        op_ui_dialog_message,
+        op_ui_set_app_menu,
+        op_ui_show_context_menu,
+        op_ui_menu_recv,
+        op_ui_create_tray,
+        op_ui_update_tray,
+        op_ui_destroy_tray,
+    ],
+    esm_entry_point = "ext:host_ui/init.js",
+    esm = ["ext:host_ui/init.js" = {{ source = {:?} }}]
+);"#,
+            js_code
+        );
+        fs::write(out_path.join("extension.rs"), extension_rs).expect("Failed to write extension.rs");
+    }
 
     // Go up to workspace root and then to sdk directory
     let workspace_root = Path::new(&manifest_dir).parent().unwrap().parent().unwrap();

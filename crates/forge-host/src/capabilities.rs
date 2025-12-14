@@ -665,9 +665,11 @@ use std::sync::Arc;
 /// Struct containing all capability adapter Arc pointers
 pub struct CapabilityAdapters {
     pub fs: Arc<dyn ext_fs::FsCapabilityChecker>,
+    pub ipc: Arc<dyn ext_ipc::IpcCapabilityChecker>,
     pub net: Arc<dyn ext_net::NetCapabilityChecker>,
     pub sys: Arc<dyn ext_sys::SysCapabilityChecker>,
     pub ui: Arc<dyn ext_ui::UiCapabilityChecker>,
+    pub window: Arc<dyn ext_window::WindowCapabilityChecker>,
     pub process: Arc<dyn ext_process::ProcessCapabilityChecker>,
     pub wasm: Arc<dyn ext_wasm::WasmCapabilityChecker>,
 }
@@ -804,6 +806,67 @@ impl ext_ui::UiCapabilityChecker for UiCapabilityAdapter {
     }
 }
 
+/// Adapter that implements ext_window::WindowCapabilityChecker using Capabilities
+pub struct WindowCapabilityAdapter {
+    capabilities: Arc<Capabilities>,
+}
+
+impl WindowCapabilityAdapter {
+    pub fn new(capabilities: Arc<Capabilities>) -> Self {
+        Self { capabilities }
+    }
+}
+
+impl ext_window::WindowCapabilityChecker for WindowCapabilityAdapter {
+    fn check_windows(&self) -> Result<(), String> {
+        self.capabilities
+            .check_ui_windows()
+            .map_err(|e| e.to_string())
+    }
+
+    fn check_menus(&self) -> Result<(), String> {
+        self.capabilities
+            .check_ui_menus()
+            .map_err(|e| e.to_string())
+    }
+
+    fn check_dialogs(&self) -> Result<(), String> {
+        self.capabilities
+            .check_ui_dialogs()
+            .map_err(|e| e.to_string())
+    }
+
+    fn check_tray(&self) -> Result<(), String> {
+        self.capabilities.check_ui_tray().map_err(|e| e.to_string())
+    }
+
+    fn check_native_handle(&self) -> Result<(), String> {
+        // Native handle access requires windows permission
+        self.capabilities
+            .check_ui_windows()
+            .map_err(|e| e.to_string())
+    }
+}
+
+/// Adapter that implements ext_ipc::IpcCapabilityChecker using Capabilities
+pub struct IpcCapabilityAdapter {
+    capabilities: Arc<Capabilities>,
+}
+
+impl IpcCapabilityAdapter {
+    pub fn new(capabilities: Arc<Capabilities>) -> Self {
+        Self { capabilities }
+    }
+}
+
+impl ext_ipc::IpcCapabilityChecker for IpcCapabilityAdapter {
+    fn check_channel(&self, channel: &str, window_channels: Option<&[String]>) -> Result<(), String> {
+        self.capabilities
+            .check_channel(channel, window_channels)
+            .map_err(|e| e.to_string())
+    }
+}
+
 /// Adapter that implements ext_process::ProcessCapabilityChecker using Capabilities
 pub struct ProcessCapabilityAdapter {
     capabilities: Arc<Capabilities>,
@@ -859,9 +922,11 @@ pub fn create_capability_adapters(capabilities: Capabilities) -> CapabilityAdapt
     let caps = Arc::new(capabilities);
     CapabilityAdapters {
         fs: Arc::new(FsCapabilityAdapter::new(caps.clone())),
+        ipc: Arc::new(IpcCapabilityAdapter::new(caps.clone())),
         net: Arc::new(NetCapabilityAdapter::new(caps.clone())),
         sys: Arc::new(SysCapabilityAdapter::new(caps.clone())),
         ui: Arc::new(UiCapabilityAdapter::new(caps.clone())),
+        window: Arc::new(WindowCapabilityAdapter::new(caps.clone())),
         process: Arc::new(ProcessCapabilityAdapter::new(caps.clone())),
         wasm: Arc::new(WasmCapabilityAdapter::new(caps)),
     }

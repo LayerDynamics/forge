@@ -83,25 +83,9 @@ pub struct MenuEvent {
     pub label: String,
 }
 
-/// Event sent from renderer (WebView) to Deno
-#[derive(Debug, Clone)]
-pub struct UiEvent {
-    pub window_id: String,
-    pub channel: String,
-    pub payload: serde_json::Value,
-    /// Event type for window events: "close", "focus", "blur", "resize", "move"
-    pub event_type: Option<String>,
-}
-
-/// Command sent from Deno to renderer (WebView)
-#[derive(Debug, Clone)]
-pub enum ToRendererCmd {
-    Send {
-        window_id: String,
-        channel: String,
-        payload: serde_json::Value,
-    },
-}
+// IPC types (IpcEvent, ToRendererCmd) have been moved to ext_ipc module
+// Re-export them for backwards compatibility
+pub use ext_ipc::{IpcEvent, ToRendererCmd};
 
 /// Command sent from Deno to the Host (for window creation, etc.)
 #[derive(Debug)]
@@ -157,9 +141,8 @@ pub enum FromDenoCmd {
 }
 
 /// State stored in OpState for UI operations
+/// Note: IPC channels (to_renderer_tx, to_deno_rx) have moved to ext_ipc
 pub struct UiState {
-    pub to_renderer_tx: mpsc::Sender<ToRendererCmd>,
-    pub to_deno_rx: Rc<RefCell<Option<mpsc::Receiver<UiEvent>>>>,
     pub from_deno_tx: mpsc::Sender<FromDenoCmd>,
     /// Channel for receiving menu events
     pub menu_events_rx: Rc<RefCell<Option<mpsc::Receiver<MenuEvent>>>>,
@@ -350,74 +333,8 @@ async fn op_ui_set_window_title(
     Ok(())
 }
 
-/// Send a message to a specific window's renderer
-#[op2(async)]
-async fn op_ui_window_send(
-    state: Rc<RefCell<OpState>>,
-    #[string] window_id: String,
-    #[string] channel: String,
-    #[serde] payload: serde_json::Value,
-) -> Result<(), UiError> {
-    let to_renderer_tx = {
-        let s = state.borrow();
-        let ui_state = s.borrow::<UiState>();
-        ui_state.to_renderer_tx.clone()
-    };
-
-    to_renderer_tx
-        .send(ToRendererCmd::Send {
-            window_id,
-            channel,
-            payload,
-        })
-        .await
-        .map_err(|e| UiError::ChannelSend(e.to_string()))?;
-
-    Ok(())
-}
-
-/// Receive the next event from any window (blocking)
-#[op2(async)]
-#[serde]
-async fn op_ui_window_recv(
-    state: Rc<RefCell<OpState>>,
-) -> Result<Option<serde_json::Value>, UiError> {
-    let maybe_rx = {
-        let s = state.borrow();
-        let ui_state = s.borrow::<UiState>();
-        let result = ui_state.to_deno_rx.borrow_mut().take();
-        result
-    };
-
-    if let Some(mut rx) = maybe_rx {
-        let result = rx.recv().await;
-
-        // Put the receiver back
-        {
-            let s = state.borrow();
-            let ui_state = s.borrow::<UiState>();
-            *ui_state.to_deno_rx.borrow_mut() = Some(rx);
-        }
-
-        match result {
-            Some(event) => {
-                let mut json = serde_json::json!({
-                    "windowId": event.window_id,
-                    "channel": event.channel,
-                    "payload": event.payload,
-                });
-                // Include event_type if present (for window system events)
-                if let Some(ref event_type) = event.event_type {
-                    json["type"] = serde_json::json!(event_type);
-                }
-                Ok(Some(json))
-            }
-            None => Ok(None),
-        }
-    } else {
-        Ok(None)
-    }
-}
+// IPC ops (op_ui_window_send, op_ui_window_recv) have been moved to ext_ipc module
+// Use host:ipc for sendToWindow, recvWindowEvent, windowEvents
 
 /// Show file open dialog
 #[op2(async)]
@@ -749,29 +666,8 @@ async fn op_ui_menu_recv(state: Rc<RefCell<OpState>>) -> Result<Option<MenuEvent
     }
 }
 
-deno_core::extension!(
-    host_ui,
-    ops = [
-        op_ui_open_window,
-        op_ui_close_window,
-        op_ui_set_window_title,
-        op_ui_window_send,
-        op_ui_window_recv,
-        op_ui_dialog_open,
-        op_ui_dialog_save,
-        op_ui_dialog_message,
-        // Menu ops
-        op_ui_set_app_menu,
-        op_ui_show_context_menu,
-        op_ui_menu_recv,
-        // Tray ops
-        op_ui_create_tray,
-        op_ui_update_tray,
-        op_ui_destroy_tray,
-    ],
-    esm_entry_point = "ext:host_ui/init.js",
-    esm = ["ext:host_ui/init.js" = "js/init.js"]
-);
+// Include generated extension! macro from build.rs (contains transpiled TypeScript)
+include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 /// Build the UI extension
 /// Note: IPC channels are initialized via init_ui_state() after JsRuntime creation
@@ -780,16 +676,13 @@ pub fn ui_extension() -> Extension {
 }
 
 /// Initialize UI state in OpState - must be called after creating JsRuntime
+/// Note: IPC channels are now initialized via ext_ipc::init_ipc_state
 pub fn init_ui_state(
     op_state: &mut OpState,
-    to_renderer_tx: mpsc::Sender<ToRendererCmd>,
-    to_deno_rx: mpsc::Receiver<UiEvent>,
     from_deno_tx: mpsc::Sender<FromDenoCmd>,
     menu_events_rx: mpsc::Receiver<MenuEvent>,
 ) {
     op_state.put(UiState {
-        to_renderer_tx,
-        to_deno_rx: Rc::new(RefCell::new(Some(to_deno_rx))),
         from_deno_tx,
         menu_events_rx: Rc::new(RefCell::new(Some(menu_events_rx))),
     });
