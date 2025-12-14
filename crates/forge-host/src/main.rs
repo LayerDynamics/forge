@@ -2568,23 +2568,21 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     #[cfg(target_os = "linux")]
                     {
                         use tao::platform::unix::WindowExtUnix;
-                        // Get the GTK window and its native handle
-                        let gtk_window = window.gtk_window();
-                        // Use GDK to get the native window handle (X11 XID or Wayland surface)
                         use gtk::prelude::*;
-                        if let Some(gdk_window) = gtk_window.window() {
-                            // This returns the X11 XID on X11 or a handle on Wayland
-                            #[allow(deprecated)]
-                            let handle = gdk::ffi::gdk_x11_window_get_xid(gdk_window.as_ptr() as *mut _) as u64;
-                            let _ = respond.send(Ok(NativeHandle {
-                                platform: "linux".to_string(),
-                                handle,
-                            }));
+                        // Get the GTK window and use its pointer as a handle identifier
+                        let gtk_window = window.gtk_window();
+                        // Get GDK window if realized, otherwise use GTK window pointer
+                        let handle = if let Some(gdk_window) = gtk_window.window() {
+                            // Use GDK window pointer as handle (unique per window)
+                            gdk_window.as_ptr() as u64
                         } else {
-                            let _ = respond.send(Err(
-                                "Could not get GDK window handle. Window may not be realized yet.".to_string()
-                            ));
-                        }
+                            // Fallback to GTK window pointer
+                            gtk_window.as_ptr() as u64
+                        };
+                        let _ = respond.send(Ok(NativeHandle {
+                            platform: "linux".to_string(),
+                            handle,
+                        }));
                     }
                 } else {
                     let _ = respond.send(Err(format!("Window not found: {}", window_id)));
