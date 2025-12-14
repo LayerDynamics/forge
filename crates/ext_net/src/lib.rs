@@ -240,11 +240,12 @@ fn extract_host(url: &str) -> Result<String, NetError> {
         _ => None,
     };
 
-    if port.is_some() && port != default_port {
-        Ok(format!("{}:{}", host, port.unwrap()))
-    } else {
-        Ok(host.to_string())
+    if let Some(p) = port {
+        if port != default_port {
+            return Ok(format!("{}:{}", host, p));
+        }
     }
+    Ok(host.to_string())
 }
 
 /// Check net connect capability

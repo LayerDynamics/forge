@@ -225,25 +225,40 @@ impl LinuxBundleConfig {
 
 /// Sanitize a name for use as executable/identifier
 /// - Lowercase
-/// - Replace spaces with hyphens
-/// - Remove non-alphanumeric characters (except hyphens)
+/// - Replace spaces and special characters with hyphens
+/// - Collapse consecutive hyphens to single hyphen
+/// - Trim leading/trailing hyphens
 pub fn sanitize_name(name: &str) -> String {
-    name.to_lowercase()
+    let result: String = name
+        .to_lowercase()
         .chars()
         .map(|c| {
             if c.is_alphanumeric() {
                 c
-            } else if c == ' ' || c == '_' {
-                '-'
-            } else if c == '-' {
-                c
             } else {
-                // Skip invalid characters
-                '\0'
+                // Replace all non-alphanumeric characters with hyphen
+                '-'
             }
         })
-        .filter(|&c| c != '\0')
-        .collect()
+        .collect();
+
+    // Collapse consecutive hyphens and trim leading/trailing hyphens
+    let mut collapsed = String::new();
+    let mut prev_hyphen = true; // Start as true to skip leading hyphens
+    for c in result.chars() {
+        if c == '-' {
+            if !prev_hyphen {
+                collapsed.push(c);
+            }
+            prev_hyphen = true;
+        } else {
+            collapsed.push(c);
+            prev_hyphen = false;
+        }
+    }
+
+    // Trim trailing hyphen
+    collapsed.trim_end_matches('-').to_string()
 }
 
 /// Sanitize identifier for MSIX package name

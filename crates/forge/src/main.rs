@@ -1,5 +1,9 @@
 use anyhow::{anyhow, bail, Context, Result};
-use std::{env, fs, path::{Path, PathBuf}, process::Command};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 mod bundler;
 

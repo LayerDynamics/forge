@@ -1107,7 +1107,9 @@ mod tests {
         let valf32 = WasmValue::F32(std::f32::consts::PI);
         let wt_valf32 = valf32.to_wasmtime();
         let back_f32 = WasmValue::from_wasmtime(&wt_valf32);
-        assert!(matches!(back_f32, Some(WasmValue::F32(f)) if (f - std::f32::consts::PI).abs() < 0.001));
+        assert!(
+            matches!(back_f32, Some(WasmValue::F32(f)) if (f - std::f32::consts::PI).abs() < 0.001)
+        );
     }
 
     #[test]
