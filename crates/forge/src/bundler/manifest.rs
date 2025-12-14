@@ -77,6 +77,8 @@ pub struct WindowsBundleConfig {
 #[derive(Debug, Deserialize, Clone, Default)]
 #[allow(dead_code)]
 pub struct MacosBundleConfig {
+    /// Package format: "dmg" (default), "pkg", "app", or "zip"
+    pub format: Option<String>,
     /// Enable code signing
     pub sign: Option<bool>,
     /// Enable notarization (requires sign=true)

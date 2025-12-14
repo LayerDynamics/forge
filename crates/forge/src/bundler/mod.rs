@@ -20,6 +20,15 @@ pub mod manifest;
 #[cfg(target_os = "windows")]
 pub mod msix;
 
+#[cfg(target_os = "windows")]
+pub mod windows;
+
+#[cfg(target_os = "macos")]
+pub mod dmg;
+
+#[cfg(target_os = "macos")]
+pub mod pkg;
+
 #[cfg(target_os = "macos")]
 pub mod macos;
 
@@ -110,7 +119,7 @@ pub fn bundle(
 
     #[cfg(target_os = "windows")]
     {
-        msix::bundle(app_dir, dist_dir, output_dir, manifest)
+        windows::bundle(app_dir, dist_dir, output_dir, manifest)
     }
 
     #[cfg(target_os = "macos")]

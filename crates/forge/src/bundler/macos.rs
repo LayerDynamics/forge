@@ -1,10 +1,21 @@
-//! macOS .app bundle and DMG packaging backend
+//! macOS packaging backend
 //!
 //! Creates:
-//! - .app bundle with proper structure (Contents/MacOS, Resources, Info.plist)
-//! - DMG disk image via hdiutil (system tool)
-//! - Optional code signing via codesign
-//! - Optional notarization via xcrun notarytool
+//! - DMG disk images (default, for direct distribution)
+//! - PKG installers (for enterprise/MDM deployment)
+//! - .app bundles (standalone application bundle)
+//! - ZIP archives (for notarization or simple distribution)
+//!
+//! ## Bundle Formats
+//!
+//! - **dmg**: DMG disk image with Applications symlink for drag-to-install.
+//!   Best for direct downloads and user-friendly installation.
+//! - **pkg**: PKG installer package. Best for enterprise deployment via MDM
+//!   or when pre/post-install scripts are needed.
+//! - **app**: Just the .app bundle without packaging. Useful for testing
+//!   or when you want to handle distribution yourself.
+//! - **zip**: ZIP archive of the .app bundle. Required for notarization
+//!   submission and useful for simple distribution.
 
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
@@ -14,7 +25,7 @@ use std::process::Command;
 
 use super::{build_embedded_binary, copy_dir_recursive, sanitize_name, AppManifest, IconProcessor};
 
-/// macOS bundler
+/// macOS bundler supporting multiple output formats
 pub struct MacosBundler<'a> {
     app_dir: &'a Path,
     dist_dir: &'a Path,
@@ -37,55 +48,79 @@ impl<'a> MacosBundler<'a> {
         }
     }
 
-    /// Execute full macOS bundling pipeline
+    /// Execute macOS bundling pipeline based on format configuration
     pub fn bundle(&self) -> Result<PathBuf> {
-        println!("Creating macOS app bundle...");
+        println!("Creating macOS package...");
 
-        let app_name = &self.manifest.app.name;
         let macos_config = self.manifest.bundle.macos.as_ref();
+        let format = macos_config
+            .and_then(|c| c.format.as_ref())
+            .map(|s| s.as_str())
+            .unwrap_or("dmg");
+
+        // Always create the .app bundle first
+        let app_bundle = self.create_app_bundle()?;
+
+        // Optional code signing before packaging
+        let should_sign = macos_config
+            .map(|c| c.sign.unwrap_or(false))
+            .unwrap_or(false);
+
+        if should_sign {
+            println!("  Signing app bundle...");
+            self.codesign_bundle(&app_bundle)?;
+        }
+
+        // Create final package based on format
+        let result = match format {
+            "dmg" => self.bundle_dmg(&app_bundle),
+            "pkg" => self.bundle_pkg(&app_bundle),
+            "app" => Ok(app_bundle.clone()),
+            "zip" => self.bundle_zip(&app_bundle),
+            _ => bail!(
+                "Unknown macOS bundle format: '{}'. Supported: dmg, pkg, app, zip",
+                format
+            ),
+        };
+
+        // Optional notarization
+        if let Ok(ref output_path) = result {
+            let should_notarize = macos_config
+                .map(|c| c.notarize.unwrap_or(false))
+                .unwrap_or(false);
+
+            if should_notarize {
+                println!("  Submitting for notarization...");
+                self.notarize(output_path)?;
+            }
+        }
+
+        // Print summary
+        if let Ok(ref output_path) = result {
+            println!("\n  App bundle: {}", app_bundle.display());
+            if output_path != &app_bundle {
+                println!("  Package: {}", output_path.display());
+            }
+        }
+
+        result
+    }
+
+    /// Create .app bundle directory structure
+    fn create_app_bundle(&self) -> Result<PathBuf> {
+        let app_name = &self.manifest.app.name;
+
+        println!("  Creating .app bundle...");
 
         // 1. Build forge-host with embedded assets
         let binary_path = build_embedded_binary(self.dist_dir)?;
 
-        // 2. Create .app bundle structure
+        // 2. Create bundle structure
         let bundle_path = self.output_dir.join(format!("{}.app", app_name));
-        self.create_app_bundle(&bundle_path, &binary_path)?;
-
-        // 3. Code sign if requested
-        if macos_config
-            .map(|c| c.sign.unwrap_or(false))
-            .unwrap_or(false)
-        {
-            println!("  Signing app bundle...");
-            self.codesign_bundle(&bundle_path)?;
-        }
-
-        // 4. Create DMG
-        println!("  Creating DMG...");
-        let dmg_path = self.create_dmg(&bundle_path)?;
-
-        // 5. Notarize if requested
-        if macos_config
-            .map(|c| c.notarize.unwrap_or(false))
-            .unwrap_or(false)
-        {
-            println!("  Submitting for notarization...");
-            self.notarize_dmg(&dmg_path)?;
-        }
-
-        println!("\n  App bundle: {}", bundle_path.display());
-        println!("  DMG: {}", dmg_path.display());
-
-        Ok(dmg_path)
-    }
-
-    /// Create .app bundle directory structure
-    fn create_app_bundle(&self, bundle_path: &Path, binary_path: &Path) -> Result<()> {
-        let app_name = &self.manifest.app.name;
 
         // Clean up existing bundle
         if bundle_path.exists() {
-            fs::remove_dir_all(bundle_path)?;
+            fs::remove_dir_all(&bundle_path)?;
         }
 
         // Create directory structure
@@ -96,9 +131,9 @@ impl<'a> MacosBundler<'a> {
         fs::create_dir_all(&macos_dir)?;
         fs::create_dir_all(&resources_dir)?;
 
-        // 1. Copy binary
+        // 3. Copy binary
         let dest_binary = macos_dir.join(sanitize_name(app_name));
-        fs::copy(binary_path, &dest_binary)
+        fs::copy(&binary_path, &dest_binary)
             .with_context(|| format!("Failed to copy binary to {}", dest_binary.display()))?;
 
         // Make binary executable
@@ -110,22 +145,22 @@ impl<'a> MacosBundler<'a> {
             fs::set_permissions(&dest_binary, perms)?;
         }
 
-        // 2. Generate Info.plist
+        // 4. Generate Info.plist
         println!("  Generating Info.plist...");
         let info_plist = self.generate_info_plist()?;
         fs::write(contents_dir.join("Info.plist"), info_plist)?;
 
-        // 3. Create PkgInfo
+        // 5. Create PkgInfo
         fs::write(contents_dir.join("PkgInfo"), "APPL????")?;
 
-        // 4. Handle icon
+        // 6. Handle icon
         println!("  Generating icon...");
         let icon_base = self.manifest.bundle.icon.as_deref();
         let icon_processor = IconProcessor::find_icon(self.app_dir, icon_base)?;
         let icns_path = resources_dir.join("AppIcon.icns");
         icon_processor.convert_to_icns(&icns_path)?;
 
-        // 5. Copy app resources (manifest, src for Deno runtime)
+        // 7. Copy app resources (manifest, src for Deno runtime)
         let app_resources = resources_dir.join("app");
         fs::create_dir_all(&app_resources)?;
 
@@ -142,7 +177,7 @@ impl<'a> MacosBundler<'a> {
         }
 
         println!("  Created app bundle: {}", bundle_path.display());
-        Ok(())
+        Ok(bundle_path)
     }
 
     /// Generate Info.plist content
@@ -277,98 +312,67 @@ impl<'a> MacosBundler<'a> {
         Ok(())
     }
 
-    /// Create DMG disk image containing the app bundle
-    fn create_dmg(&self, bundle_path: &Path) -> Result<PathBuf> {
+    /// Create DMG disk image (delegates to dmg module)
+    fn bundle_dmg(&self, bundle_path: &Path) -> Result<PathBuf> {
+        super::dmg::create_dmg(bundle_path, self.output_dir, self.manifest)
+    }
+
+    /// Create PKG installer (delegates to pkg module)
+    fn bundle_pkg(&self, bundle_path: &Path) -> Result<PathBuf> {
+        let pkg_path = super::pkg::create_pkg(bundle_path, self.output_dir, self.manifest)?;
+
+        // Sign PKG if signing is enabled
+        let macos_config = self.manifest.bundle.macos.as_ref();
+        if let Some(config) = macos_config {
+            if config.sign.unwrap_or(false) {
+                if let Some(ref identity) = config.signing_identity {
+                    // PKG signing uses "Developer ID Installer" certificate
+                    let installer_identity = identity.replace("Application", "Installer");
+                    super::pkg::sign_pkg(&pkg_path, &installer_identity)?;
+                }
+            }
+        }
+
+        Ok(pkg_path)
+    }
+
+    /// Create ZIP archive of the app bundle
+    fn bundle_zip(&self, bundle_path: &Path) -> Result<PathBuf> {
         let app_name = &self.manifest.app.name;
         let version = &self.manifest.app.version;
 
-        let dmg_name = format!("{}-{}-macos.dmg", sanitize_name(app_name), version);
-        let dmg_path = self.output_dir.join(&dmg_name);
+        println!("  Creating ZIP archive...");
 
-        // Remove existing DMG
-        if dmg_path.exists() {
-            fs::remove_file(&dmg_path)?;
+        let zip_name = format!("{}-{}-macos.zip", sanitize_name(app_name), version);
+        let zip_path = self.output_dir.join(&zip_name);
+
+        // Remove existing ZIP
+        if zip_path.exists() {
+            fs::remove_file(&zip_path)?;
         }
 
-        // Create staging directory for DMG contents
-        let staging_dir = self.output_dir.join(".dmg_staging");
-        if staging_dir.exists() {
-            fs::remove_dir_all(&staging_dir)?;
-        }
-        fs::create_dir_all(&staging_dir)?;
-
-        // Copy app bundle to staging
-        let bundle_name = bundle_path.file_name().unwrap();
-        let staged_app = staging_dir.join(bundle_name);
-        copy_dir_recursive(bundle_path, &staged_app)?;
-
-        // Create Applications symlink for drag-install
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::symlink;
-            let apps_link = staging_dir.join("Applications");
-            symlink("/Applications", &apps_link)?;
-        }
-
-        // Create read-write DMG first
-        let temp_dmg = self
-            .output_dir
-            .join(format!("{}.temp.dmg", sanitize_name(app_name)));
-
-        let create_status = Command::new("hdiutil")
+        // Use ditto for proper handling of macOS metadata and symlinks
+        let status = Command::new("ditto")
             .args([
-                "create",
-                "-srcfolder",
-                &staging_dir.display().to_string(),
-                "-volname",
-                app_name,
-                "-fs",
-                "HFS+",
-                "-fsargs",
-                "-c c=64,a=16,e=16",
-                "-format",
-                "UDRW",
-                "-size",
-                "500m", // Max size, will be smaller after conversion
-                &temp_dmg.display().to_string(),
+                "-c",
+                "-k",
+                "--keepParent",
+                &bundle_path.display().to_string(),
+                &zip_path.display().to_string(),
             ])
             .status()
-            .context("Failed to run hdiutil create")?;
+            .context("Failed to run ditto")?;
 
-        if !create_status.success() {
-            // Clean up staging
-            let _ = fs::remove_dir_all(&staging_dir);
-            bail!("hdiutil create failed");
+        if !status.success() {
+            bail!("ditto failed to create ZIP archive");
         }
 
-        // Convert to compressed read-only DMG
-        let convert_status = Command::new("hdiutil")
-            .args([
-                "convert",
-                &temp_dmg.display().to_string(),
-                "-format",
-                "UDZO",
-                "-imagekey",
-                "zlib-level=9",
-                "-o",
-                &dmg_path.display().to_string(),
-            ])
-            .status()
-            .context("Failed to run hdiutil convert")?;
-
-        // Clean up
-        let _ = fs::remove_file(&temp_dmg);
-        let _ = fs::remove_dir_all(&staging_dir);
-
-        if !convert_status.success() {
-            bail!("hdiutil convert failed");
-        }
-
-        Ok(dmg_path)
+        println!("  ZIP archive created: {}", zip_path.display());
+        Ok(zip_path)
     }
 
-    /// Notarize the DMG with Apple
-    fn notarize_dmg(&self, dmg_path: &Path) -> Result<()> {
+    /// Notarize a package with Apple
+    fn notarize(&self, path: &Path) -> Result<()> {
         let macos_config = self
             .manifest
             .bundle
@@ -384,13 +388,11 @@ impl<'a> MacosBundler<'a> {
         println!("    Submitting to Apple (this may take several minutes)...");
 
         // Submit for notarization using notarytool
-        // Note: Requires keychain profile setup via:
-        // xcrun notarytool store-credentials "forge-notarize"
         let submit_status = Command::new("xcrun")
             .args([
                 "notarytool",
                 "submit",
-                &dmg_path.display().to_string(),
+                &path.display().to_string(),
                 "--keychain-profile",
                 "forge-notarize",
                 "--team-id",
@@ -405,7 +407,7 @@ impl<'a> MacosBundler<'a> {
 
                 // Staple the notarization ticket
                 let staple_status = Command::new("xcrun")
-                    .args(["stapler", "staple", &dmg_path.display().to_string()])
+                    .args(["stapler", "staple", &path.display().to_string()])
                     .status()
                     .context("Failed to staple notarization ticket")?;
 
