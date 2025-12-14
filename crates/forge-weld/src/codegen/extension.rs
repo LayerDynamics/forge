@@ -53,11 +53,7 @@ impl<'a> ExtensionGenerator<'a> {
     }
 
     /// Generate extension! macro with custom state initialization
-    pub fn generate_with_state(
-        &self,
-        js_source: &str,
-        state_fn: &str,
-    ) -> String {
+    pub fn generate_with_state(&self, js_source: &str, state_fn: &str) -> String {
         let op_names = self.module.op_names();
         let ops_list = if op_names.is_empty() {
             String::new()
@@ -85,11 +81,7 @@ impl<'a> ExtensionGenerator<'a> {
     }
 
     /// Generate extension! macro for extensions with dependencies
-    pub fn generate_with_deps(
-        &self,
-        js_source: &str,
-        deps: &[&str],
-    ) -> String {
+    pub fn generate_with_deps(&self, js_source: &str, deps: &[&str]) -> String {
         let op_names = self.module.op_names();
         let ops_list = if op_names.is_empty() {
             String::new()
@@ -138,9 +130,7 @@ impl<'a> ExtensionGenerator<'a> {
 
         let esm_entries: Vec<String> = esm_files
             .iter()
-            .map(|(specifier, source)| {
-                format!("\"{}\" = {{ source = {:?} }}", specifier, source)
-            })
+            .map(|(specifier, source)| format!("\"{}\" = {{ source = {:?} }}", specifier, source))
             .collect();
 
         format!(
@@ -202,7 +192,7 @@ pub fn generate_extension_file(module: &WeldModule, js_source: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{OpSymbol, WeldType, OpParam};
+    use crate::ir::{OpParam, OpSymbol, WeldType};
 
     #[test]
     fn test_generate_extension() {
@@ -227,8 +217,7 @@ mod tests {
 
     #[test]
     fn test_generate_with_deps() {
-        let module = WeldModule::host("ui")
-            .op(OpSymbol::from_rust_name("op_ui_open"));
+        let module = WeldModule::host("ui").op(OpSymbol::from_rust_name("op_ui_open"));
 
         let gen = ExtensionGenerator::new(&module);
         let output = gen.generate_with_deps("const x = 1;", &["host_ipc"]);

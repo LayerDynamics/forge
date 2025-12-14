@@ -124,16 +124,10 @@ pub enum WeldType {
     Tuple(Vec<WeldType>),
 
     /// Array [T; N] -> T[] (fixed size arrays)
-    Array {
-        element: Box<WeldType>,
-        size: usize,
-    },
+    Array { element: Box<WeldType>, size: usize },
 
     /// Generic type with parameters: Foo<T, U> -> Foo<T, U>
-    Generic {
-        base: String,
-        params: Vec<WeldType>,
-    },
+    Generic { base: String, params: Vec<WeldType> },
 
     /// Custom struct reference -> interface name
     Struct(String),
@@ -166,16 +160,10 @@ pub enum WeldType {
     RwLock(Box<WeldType>),
 
     /// Reference &T or &mut T -> T (dereferenced)
-    Reference {
-        inner: Box<WeldType>,
-        mutable: bool,
-    },
+    Reference { inner: Box<WeldType>, mutable: bool },
 
     /// Raw pointer *const T or *mut T -> T (for advanced use)
-    Pointer {
-        inner: Box<WeldType>,
-        mutable: bool,
-    },
+    Pointer { inner: Box<WeldType>, mutable: bool },
 
     /// Never type ! -> never
     Never,
@@ -223,7 +211,8 @@ impl WeldType {
                 if params.is_empty() {
                     base.clone()
                 } else {
-                    let type_params: Vec<String> = params.iter().map(|t| t.to_typescript()).collect();
+                    let type_params: Vec<String> =
+                        params.iter().map(|t| t.to_typescript()).collect();
                     format!("{}<{}>", base, type_params.join(", "))
                 }
             }

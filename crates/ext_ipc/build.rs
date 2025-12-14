@@ -3,10 +3,7 @@ use forge_weld::ExtensionBuilder;
 fn main() {
     ExtensionBuilder::new("host_ipc", "host:ipc")
         .ts_path("ts/init.ts")
-        .ops(&[
-            "op_ipc_send",
-            "op_ipc_recv",
-        ])
+        .ops(&["op_ipc_send", "op_ipc_recv"])
         .generate_sdk_types("sdk")
         .dts_generator(generate_host_ipc_types)
         .build()
@@ -133,5 +130,6 @@ declare module "host:ipc" {
     payload?: unknown
   ): Promise<void>;
 }
-"#.to_string()
+"#
+    .to_string()
 }

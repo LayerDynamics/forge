@@ -1,11 +1,8 @@
 //! Implementation of the #[weld_op] macro
 
 use proc_macro2::TokenStream;
-use quote::{quote, format_ident};
-use syn::{
-    parse2, FnArg, ItemFn, Pat, ReturnType,
-    punctuated::Punctuated, Token,
-};
+use quote::{format_ident, quote};
+use syn::{parse2, punctuated::Punctuated, FnArg, ItemFn, Pat, ReturnType, Token};
 
 /// Parse weld_op attributes
 struct WeldOpAttrs {
@@ -59,9 +56,10 @@ fn extract_params(inputs: &Punctuated<FnArg, Token![,]>) -> Vec<(String, String,
             let ty = quote!(#(pat_type.ty)).to_string();
 
             // Check for #[state] or other attributes
-            let is_state = pat_type.attrs.iter().any(|attr| {
-                attr.path().is_ident("state")
-            });
+            let is_state = pat_type
+                .attrs
+                .iter()
+                .any(|attr| attr.path().is_ident("state"));
 
             // Skip OpState parameters
             if ty.contains("OpState") || is_state {

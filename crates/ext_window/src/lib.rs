@@ -1347,7 +1347,9 @@ async fn op_window_show_context_menu(
 /// Receive menu events
 #[op2(async)]
 #[serde]
-async fn op_window_menu_recv(state: Rc<RefCell<OpState>>) -> Result<Option<MenuEvent>, WindowError> {
+async fn op_window_menu_recv(
+    state: Rc<RefCell<OpState>>,
+) -> Result<Option<MenuEvent>, WindowError> {
     {
         let s = state.borrow();
         check_menu_capability(&s)?;

@@ -253,11 +253,7 @@ fn generate_distribution_xml(manifest: &AppManifest, config: &PkgConfig) -> Resu
     let version = &manifest.app.version;
     let pkg_ref = format!("{}-{}.pkg", sanitize_name(app_name), version);
 
-    let auth_level = if config.require_admin {
-        "root"
-    } else {
-        "none"
-    };
+    let auth_level = if config.require_admin { "root" } else { "none" };
 
     let background_element = if config.background.is_some() {
         r#"<background file="background.png" alignment="bottomleft" scaling="none"/>"#

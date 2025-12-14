@@ -1,7 +1,7 @@
 //! Implementation of the #[weld_struct] and #[weld_enum] macros
 
 use proc_macro2::TokenStream;
-use quote::{quote, format_ident};
+use quote::{format_ident, quote};
 use syn::{parse2, Fields, ItemEnum, ItemStruct};
 
 /// Parse weld_struct attributes
@@ -142,48 +142,44 @@ pub fn weld_enum_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             // Extract variant fields
             let field_tokens: Vec<_> = match &v.fields {
-                Fields::Named(fields) => {
-                    fields
-                        .named
-                        .iter()
-                        .filter_map(|f| {
-                            let field_name = f.ident.as_ref()?;
-                            let field_name_str = field_name.to_string();
-                            let ts_field_name = to_camel_case(&field_name_str);
+                Fields::Named(fields) => fields
+                    .named
+                    .iter()
+                    .filter_map(|f| {
+                        let field_name = f.ident.as_ref()?;
+                        let field_name_str = field_name.to_string();
+                        let ts_field_name = to_camel_case(&field_name_str);
 
-                            Some(quote! {
-                                forge_weld::StructField {
-                                    rust_name: #field_name_str.to_string(),
-                                    ts_name: #ts_field_name.to_string(),
-                                    ty: forge_weld::WeldType::Unknown,
-                                    optional: false,
-                                    readonly: false,
-                                    doc: None,
-                                }
-                            })
-                        })
-                        .collect()
-                }
-                Fields::Unnamed(fields) => {
-                    fields
-                        .unnamed
-                        .iter()
-                        .enumerate()
-                        .map(|(i, _f)| {
-                            let field_name = format!("field{}", i);
-                            quote! {
-                                forge_weld::StructField {
-                                    rust_name: #field_name.to_string(),
-                                    ts_name: #field_name.to_string(),
-                                    ty: forge_weld::WeldType::Unknown,
-                                    optional: false,
-                                    readonly: false,
-                                    doc: None,
-                                }
+                        Some(quote! {
+                            forge_weld::StructField {
+                                rust_name: #field_name_str.to_string(),
+                                ts_name: #ts_field_name.to_string(),
+                                ty: forge_weld::WeldType::Unknown,
+                                optional: false,
+                                readonly: false,
+                                doc: None,
                             }
                         })
-                        .collect()
-                }
+                    })
+                    .collect(),
+                Fields::Unnamed(fields) => fields
+                    .unnamed
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _f)| {
+                        let field_name = format!("field{}", i);
+                        quote! {
+                            forge_weld::StructField {
+                                rust_name: #field_name.to_string(),
+                                ts_name: #field_name.to_string(),
+                                ty: forge_weld::WeldType::Unknown,
+                                optional: false,
+                                readonly: false,
+                                doc: None,
+                            }
+                        }
+                    })
+                    .collect(),
                 Fields::Unit => Vec::new(),
             };
 

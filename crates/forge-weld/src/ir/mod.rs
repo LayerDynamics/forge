@@ -3,12 +3,12 @@
 //! This module provides the type system and metadata structures for
 //! representing Rust deno_core ops and their TypeScript equivalents.
 
-pub mod types;
-pub mod symbol;
-pub mod module;
 pub mod inventory;
+pub mod module;
+pub mod symbol;
+pub mod types;
 
-pub use types::*;
-pub use symbol::*;
-pub use module::*;
 pub use inventory::*;
+pub use module::*;
+pub use symbol::*;
+pub use types::*;

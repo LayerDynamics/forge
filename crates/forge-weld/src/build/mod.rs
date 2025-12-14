@@ -4,8 +4,8 @@
 //! - TypeScript transpilation via deno_ast
 //! - ExtensionBuilder for simplified extension crate setup
 
-pub mod transpile;
 pub mod extension;
+pub mod transpile;
 
-pub use transpile::{transpile_ts, transpile_file, TranspileError};
 pub use extension::{ExtensionBuilder, ExtensionBuilderError};
+pub use transpile::{transpile_file, transpile_ts, TranspileError};

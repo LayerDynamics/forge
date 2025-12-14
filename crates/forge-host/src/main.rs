@@ -368,7 +368,8 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         }
     }
 
-    let app_dir = app_dir.ok_or_else(|| anyhow::anyhow!("Usage: forge-host --app-dir <path> [--dev]"))?;
+    let app_dir =
+        app_dir.ok_or_else(|| anyhow::anyhow!("Usage: forge-host --app-dir <path> [--dev]"))?;
 
     let manifest_path = app_dir.join("manifest.app.toml");
     let manifest_txt = rt
@@ -423,8 +424,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
     // Create channels for ext_window (native window operations)
     let (window_cmd_tx, mut window_cmd_rx) = tokio::sync::mpsc::channel::<WindowCmd>(64);
-    let (window_events_tx, window_events_rx) =
-        tokio::sync::mpsc::channel::<WindowSystemEvent>(64);
+    let (window_events_tx, window_events_rx) = tokio::sync::mpsc::channel::<WindowSystemEvent>(64);
     let (window_menu_events_tx, window_menu_events_rx) =
         tokio::sync::mpsc::channel::<WinMenuEvent>(64);
 
@@ -536,7 +536,10 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
         // === ext_window events ===
         // Window lifecycle (from host:window)
-        WinCreate(WindowOpts, tokio::sync::oneshot::Sender<Result<String, String>>),
+        WinCreate(
+            WindowOpts,
+            tokio::sync::oneshot::Sender<Result<String, String>>,
+        ),
         WinClose(String, tokio::sync::oneshot::Sender<bool>),
         WinMinimize(String),
         WinMaximize(String),
@@ -546,7 +549,10 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         WinFocus(String),
 
         // Window properties
-        WinGetPosition(String, tokio::sync::oneshot::Sender<Result<Position, String>>),
+        WinGetPosition(
+            String,
+            tokio::sync::oneshot::Sender<Result<Position, String>>,
+        ),
         WinSetPosition(String, i32, i32),
         WinGetSize(String, tokio::sync::oneshot::Sender<Result<Size, String>>),
         WinSetSize(String, u32, u32),
@@ -558,16 +564,29 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         WinSetVisible(String, bool),
 
         // State queries
-        WinGetState(String, tokio::sync::oneshot::Sender<Result<WinWindowState, String>>),
+        WinGetState(
+            String,
+            tokio::sync::oneshot::Sender<Result<WinWindowState, String>>,
+        ),
 
         // Dialogs (from host:window)
-        WinShowOpenDialog(WinFileDialogOpts, tokio::sync::oneshot::Sender<Option<Vec<String>>>),
-        WinShowSaveDialog(WinFileDialogOpts, tokio::sync::oneshot::Sender<Option<String>>),
+        WinShowOpenDialog(
+            WinFileDialogOpts,
+            tokio::sync::oneshot::Sender<Option<Vec<String>>>,
+        ),
+        WinShowSaveDialog(
+            WinFileDialogOpts,
+            tokio::sync::oneshot::Sender<Option<String>>,
+        ),
         WinShowMessageDialog(WinMessageDialogOpts, tokio::sync::oneshot::Sender<usize>),
 
         // Menus (from host:window)
         WinSetAppMenu(Vec<WinMenuItem>, tokio::sync::oneshot::Sender<bool>),
-        WinShowContextMenu(Option<String>, Vec<WinMenuItem>, tokio::sync::oneshot::Sender<Option<String>>),
+        WinShowContextMenu(
+            Option<String>,
+            Vec<WinMenuItem>,
+            tokio::sync::oneshot::Sender<Option<String>>,
+        ),
 
         // Tray (from host:window)
         WinCreateTray(WinTrayOpts, tokio::sync::oneshot::Sender<String>),
@@ -575,7 +594,10 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         WinDestroyTray(String, tokio::sync::oneshot::Sender<bool>),
 
         // Native handle
-        WinGetNativeHandle(String, tokio::sync::oneshot::Sender<Result<NativeHandle, String>>),
+        WinGetNativeHandle(
+            String,
+            tokio::sync::oneshot::Sender<Result<NativeHandle, String>>,
+        ),
     }
 
     let event_loop: EventLoop<UserEvent> = EventLoopBuilder::with_user_event().build();
@@ -680,8 +702,12 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     WindowCmd::Restore { window_id } => {
                         let _ = proxy.send_event(UserEvent::WinRestore(window_id));
                     }
-                    WindowCmd::SetFullscreen { window_id, fullscreen } => {
-                        let _ = proxy.send_event(UserEvent::WinSetFullscreen(window_id, fullscreen));
+                    WindowCmd::SetFullscreen {
+                        window_id,
+                        fullscreen,
+                    } => {
+                        let _ =
+                            proxy.send_event(UserEvent::WinSetFullscreen(window_id, fullscreen));
                     }
                     WindowCmd::Focus { window_id } => {
                         let _ = proxy.send_event(UserEvent::WinFocus(window_id));
@@ -697,7 +723,11 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     WindowCmd::GetSize { window_id, respond } => {
                         let _ = proxy.send_event(UserEvent::WinGetSize(window_id, respond));
                     }
-                    WindowCmd::SetSize { window_id, width, height } => {
+                    WindowCmd::SetSize {
+                        window_id,
+                        width,
+                        height,
+                    } => {
                         let _ = proxy.send_event(UserEvent::WinSetSize(window_id, width, height));
                     }
                     WindowCmd::GetTitle { window_id, respond } => {
@@ -706,14 +736,25 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     WindowCmd::SetTitle { window_id, title } => {
                         let _ = proxy.send_event(UserEvent::WinSetTitle(window_id, title));
                     }
-                    WindowCmd::SetResizable { window_id, resizable } => {
+                    WindowCmd::SetResizable {
+                        window_id,
+                        resizable,
+                    } => {
                         let _ = proxy.send_event(UserEvent::WinSetResizable(window_id, resizable));
                     }
-                    WindowCmd::SetDecorations { window_id, decorations } => {
-                        let _ = proxy.send_event(UserEvent::WinSetDecorations(window_id, decorations));
+                    WindowCmd::SetDecorations {
+                        window_id,
+                        decorations,
+                    } => {
+                        let _ =
+                            proxy.send_event(UserEvent::WinSetDecorations(window_id, decorations));
                     }
-                    WindowCmd::SetAlwaysOnTop { window_id, always_on_top } => {
-                        let _ = proxy.send_event(UserEvent::WinSetAlwaysOnTop(window_id, always_on_top));
+                    WindowCmd::SetAlwaysOnTop {
+                        window_id,
+                        always_on_top,
+                    } => {
+                        let _ = proxy
+                            .send_event(UserEvent::WinSetAlwaysOnTop(window_id, always_on_top));
                     }
                     WindowCmd::SetVisible { window_id, visible } => {
                         let _ = proxy.send_event(UserEvent::WinSetVisible(window_id, visible));
@@ -739,15 +780,24 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     WindowCmd::SetAppMenu { items, respond } => {
                         let _ = proxy.send_event(UserEvent::WinSetAppMenu(items, respond));
                     }
-                    WindowCmd::ShowContextMenu { window_id, items, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinShowContextMenu(window_id, items, respond));
+                    WindowCmd::ShowContextMenu {
+                        window_id,
+                        items,
+                        respond,
+                    } => {
+                        let _ = proxy
+                            .send_event(UserEvent::WinShowContextMenu(window_id, items, respond));
                     }
 
                     // Tray
                     WindowCmd::CreateTray { opts, respond } => {
                         let _ = proxy.send_event(UserEvent::WinCreateTray(opts, respond));
                     }
-                    WindowCmd::UpdateTray { tray_id, opts, respond } => {
+                    WindowCmd::UpdateTray {
+                        tray_id,
+                        opts,
+                        respond,
+                    } => {
                         let _ = proxy.send_event(UserEvent::WinUpdateTray(tray_id, opts, respond));
                     }
                     WindowCmd::DestroyTray { tray_id, respond } => {

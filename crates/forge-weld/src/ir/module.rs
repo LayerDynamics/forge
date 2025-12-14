@@ -3,8 +3,8 @@
 //! This module provides the WeldModule structure that represents
 //! an entire Forge extension module with its ops, structs, and configuration.
 
+use crate::ir::{OpSymbol, WeldEnum, WeldStruct};
 use serde::{Deserialize, Serialize};
-use crate::ir::{OpSymbol, WeldStruct, WeldEnum};
 
 /// Metadata for an entire extension module
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -287,7 +287,9 @@ impl ModuleBuilder {
     /// Build the module
     pub fn build(self) -> Result<WeldModule, ModuleValidationError> {
         let name = self.name.ok_or(ModuleValidationError::EmptyName)?;
-        let specifier = self.specifier.ok_or(ModuleValidationError::EmptySpecifier)?;
+        let specifier = self
+            .specifier
+            .ok_or(ModuleValidationError::EmptySpecifier)?;
 
         let mut module = WeldModule::new(name, specifier)
             .with_ops(self.ops)
@@ -314,7 +316,7 @@ impl ModuleBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{WeldType, OpParam};
+    use crate::ir::{OpParam, WeldType};
 
     #[test]
     fn test_module_creation() {
@@ -322,7 +324,10 @@ mod tests {
             .op(OpSymbol::from_rust_name("op_fs_read_text")
                 .async_op()
                 .param(OpParam::new("path", WeldType::string()))
-                .returns(WeldType::result(WeldType::string(), WeldType::struct_ref("FsError"))))
+                .returns(WeldType::result(
+                    WeldType::string(),
+                    WeldType::struct_ref("FsError"),
+                )))
             .with_doc("Filesystem operations");
 
         assert_eq!(module.name, "host_fs");
@@ -333,11 +338,13 @@ mod tests {
 
     #[test]
     fn test_deno_core_ops_declaration() {
-        let module = WeldModule::host("fs")
-            .op(OpSymbol::from_rust_name("op_fs_read_text")
-                .async_op()
-                .param(OpParam::new("path", WeldType::string()))
-                .returns(WeldType::result(WeldType::string(), WeldType::struct_ref("FsError"))));
+        let module = WeldModule::host("fs").op(OpSymbol::from_rust_name("op_fs_read_text")
+            .async_op()
+            .param(OpParam::new("path", WeldType::string()))
+            .returns(WeldType::result(
+                WeldType::string(),
+                WeldType::struct_ref("FsError"),
+            )));
 
         let decl = module.deno_core_ops_declaration();
         assert!(decl.contains("op_fs_read_text(path: string): Promise<string>"));

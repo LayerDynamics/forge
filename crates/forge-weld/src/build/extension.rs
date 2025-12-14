@@ -106,7 +106,9 @@ impl ExtensionBuilder {
     /// Set the ops for this extension
     pub fn ops(mut self, ops: &[&str]) -> Self {
         for op_name in ops {
-            self.module = self.module.op(crate::ir::OpSymbol::from_rust_name(*op_name));
+            self.module = self
+                .module
+                .op(crate::ir::OpSymbol::from_rust_name(*op_name));
         }
         self
     }
@@ -200,10 +202,7 @@ impl ExtensionBuilder {
             };
 
             // Write to SDK generated directory
-            let dts_filename = format!(
-                "{}.d.ts",
-                self.module.specifier.replace(':', ".")
-            );
+            let dts_filename = format!("{}.d.ts", self.module.specifier.replace(':', "."));
             let dts_path = generated_dir.join(&dts_filename);
             fs::write(&dts_path, &dts_content)?;
 
@@ -228,10 +227,7 @@ impl ExtensionBuilder {
         let out_dir = env::var("OUT_DIR")
             .map_err(|_| ExtensionBuilderError::EnvVarMissing("OUT_DIR".to_string()))?;
 
-        let dts_filename = format!(
-            "{}.d.ts",
-            self.module.specifier.replace(':', ".")
-        );
+        let dts_filename = format!("{}.d.ts", self.module.specifier.replace(':', "."));
 
         let has_sdk_path = self.sdk_path.is_some();
 
@@ -292,8 +288,7 @@ mod tests {
 
     #[test]
     fn test_host_extension() {
-        let builder = ExtensionBuilder::host("net")
-            .ops(&["op_net_fetch"]);
+        let builder = ExtensionBuilder::host("net").ops(&["op_net_fetch"]);
 
         assert_eq!(builder.module.name, "host_net");
         assert_eq!(builder.module.specifier, "host:net");

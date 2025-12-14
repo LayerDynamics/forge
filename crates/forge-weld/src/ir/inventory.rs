@@ -3,7 +3,7 @@
 //! This module provides the infrastructure for collecting op symbols
 //! at compile time using the `linkme` crate's distributed slices.
 
-use crate::ir::{OpSymbol, WeldStruct, WeldEnum};
+use crate::ir::{OpSymbol, WeldEnum, WeldStruct};
 
 /// Distributed slice for collecting op symbols at compile time
 #[linkme::distributed_slice]
@@ -131,7 +131,7 @@ macro_rules! register_enum {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{WeldType, OpParam};
+    use crate::ir::{OpParam, WeldType};
 
     #[test]
     fn test_symbol_registry() {
@@ -140,7 +140,7 @@ mod tests {
         registry.register_op(
             OpSymbol::from_rust_name("op_test")
                 .param(OpParam::new("path", WeldType::string()))
-                .returns(WeldType::void())
+                .returns(WeldType::void()),
         );
 
         assert_eq!(registry.ops().len(), 1);

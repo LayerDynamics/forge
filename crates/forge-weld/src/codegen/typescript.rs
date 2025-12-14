@@ -2,7 +2,7 @@
 //!
 //! Generates the TypeScript source files that wrap Deno.core.ops calls.
 
-use crate::ir::{WeldModule, OpSymbol, WeldStruct, WeldEnum, WeldType};
+use crate::ir::{OpSymbol, WeldEnum, WeldModule, WeldStruct, WeldType};
 
 /// Generator for TypeScript init.ts modules
 pub struct TypeScriptGenerator<'a> {
@@ -123,7 +123,8 @@ impl<'a> TypeScriptGenerator<'a> {
 
         if all_unit {
             // Generate as string literal union type
-            let variants: Vec<String> = e.variants
+            let variants: Vec<String> = e
+                .variants
                 .iter()
                 .map(|v| {
                     let value = v.value.as_ref().unwrap_or(&v.name);
@@ -142,10 +143,7 @@ impl<'a> TypeScriptGenerator<'a> {
                 output.push_str(&format!("  type: \"{}\";\n", variant.name));
 
                 if let Some(ref data) = variant.data {
-                    output.push_str(&format!(
-                        "  data: {};\n",
-                        data.to_typescript()
-                    ));
+                    output.push_str(&format!("  data: {};\n", data.to_typescript()));
                 }
 
                 output.push_str("}\n\n");
@@ -186,10 +184,7 @@ impl<'a> TypeScriptGenerator<'a> {
             .collect();
 
         // Build parameter names for the op call
-        let param_names: Vec<String> = visible_params
-            .iter()
-            .map(|p| p.ts_name.clone())
-            .collect();
+        let param_names: Vec<String> = visible_params.iter().map(|p| p.ts_name.clone()).collect();
 
         // Determine return type
         let return_type = op.ts_return_type();
@@ -237,11 +232,15 @@ mod tests {
 
     #[test]
     fn test_generate_interface() {
-        let module = WeldModule::host("fs")
-            .struct_def(WeldStruct::new("FileStat")
+        let module = WeldModule::host("fs").struct_def(
+            WeldStruct::new("FileStat")
                 .field(StructField::new("isFile", WeldType::bool()))
-                .field(StructField::new("size", WeldType::Primitive(WeldPrimitive::U64)))
-                .with_doc("File status information"));
+                .field(StructField::new(
+                    "size",
+                    WeldType::Primitive(WeldPrimitive::U64),
+                ))
+                .with_doc("File status information"),
+        );
 
         let gen = TypeScriptGenerator::new(&module);
         let output = gen.generate();
@@ -253,13 +252,15 @@ mod tests {
 
     #[test]
     fn test_generate_export_function() {
-        let module = WeldModule::host("fs")
-            .op(OpSymbol::from_rust_name("op_fs_read_text")
-                .async_op()
-                .ts_name("readTextFile")
-                .param(OpParam::new("path", WeldType::string()))
-                .returns(WeldType::result(WeldType::string(), WeldType::struct_ref("FsError")))
-                .with_doc("Read a file as UTF-8 text"));
+        let module = WeldModule::host("fs").op(OpSymbol::from_rust_name("op_fs_read_text")
+            .async_op()
+            .ts_name("readTextFile")
+            .param(OpParam::new("path", WeldType::string()))
+            .returns(WeldType::result(
+                WeldType::string(),
+                WeldType::struct_ref("FsError"),
+            ))
+            .with_doc("Read a file as UTF-8 text"));
 
         let gen = TypeScriptGenerator::new(&module);
         let output = gen.generate();

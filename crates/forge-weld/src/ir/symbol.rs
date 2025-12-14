@@ -3,9 +3,9 @@
 //! This module provides metadata structures for representing Rust ops
 //! and structs that will be exposed to TypeScript.
 
-use std::str::FromStr;
-use serde::{Deserialize, Serialize};
 use crate::ir::WeldType;
+use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 /// Parameter attribute from deno_core
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
@@ -420,7 +420,10 @@ impl WeldStruct {
             }
         } else {
             // Interface
-            output.push_str(&format!("export interface {}{} {{\n", self.ts_name, type_params));
+            output.push_str(&format!(
+                "export interface {}{} {{\n",
+                self.ts_name, type_params
+            ));
 
             for field in &self.fields {
                 if let Some(doc) = &field.doc {
@@ -554,9 +557,7 @@ pub fn to_camel_case(s: &str) -> String {
 /// Convert op name (op_fs_read_text) to TypeScript name (readText)
 pub fn op_name_to_ts(op_name: &str) -> String {
     // Remove op_ prefix and module prefix (e.g., op_fs_read_text -> read_text)
-    let name = op_name
-        .strip_prefix("op_")
-        .unwrap_or(op_name);
+    let name = op_name.strip_prefix("op_").unwrap_or(op_name);
 
     // Find second underscore (after module name) and take rest
     let parts: Vec<&str> = name.splitn(2, '_').collect();
@@ -597,7 +598,10 @@ mod tests {
         let op = OpSymbol::from_rust_name("op_fs_read_text")
             .async_op()
             .param(OpParam::new("path", WeldType::string()))
-            .returns(WeldType::result(WeldType::string(), WeldType::struct_ref("FsError")));
+            .returns(WeldType::result(
+                WeldType::string(),
+                WeldType::struct_ref("FsError"),
+            ));
 
         assert_eq!(op.ts_name, "readText");
         assert!(op.is_async);
@@ -615,7 +619,10 @@ mod tests {
     fn test_weld_struct() {
         let s = WeldStruct::new("FileStat")
             .field(StructField::new("is_file", WeldType::bool()))
-            .field(StructField::new("size", WeldType::Primitive(crate::ir::WeldPrimitive::U64)))
+            .field(StructField::new(
+                "size",
+                WeldType::Primitive(crate::ir::WeldPrimitive::U64),
+            ))
             .with_doc("File metadata");
 
         let ts = s.to_typescript_interface();

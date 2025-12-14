@@ -27,19 +27,20 @@
 //! }
 //! ```
 
-pub mod ir;
-pub mod codegen;
 pub mod build;
+pub mod codegen;
+pub mod ir;
 
 // Re-export commonly used types
-pub use ir::{
-    WeldType, WeldPrimitive, OpSymbol, WeldStruct, StructField, WeldModule,
-    OpParam, ParamAttr, Op2Attrs, WeldEnum, EnumVariant, ModuleBuilder,
-    ModuleValidationError, SymbolRegistry, collect_ops, collect_structs, collect_enums,
-    WELD_OPS, WELD_STRUCTS, WELD_ENUMS,
+pub use build::{
+    transpile_file, transpile_ts, ExtensionBuilder, ExtensionBuilderError, TranspileError,
 };
-pub use codegen::{TypeScriptGenerator, DtsGenerator, ExtensionGenerator, DtsBuilder};
-pub use build::{transpile_ts, transpile_file, ExtensionBuilder, ExtensionBuilderError, TranspileError};
+pub use codegen::{DtsBuilder, DtsGenerator, ExtensionGenerator, TypeScriptGenerator};
+pub use ir::{
+    collect_enums, collect_ops, collect_structs, EnumVariant, ModuleBuilder, ModuleValidationError,
+    Op2Attrs, OpParam, OpSymbol, ParamAttr, StructField, SymbolRegistry, WeldEnum, WeldModule,
+    WeldPrimitive, WeldStruct, WeldType, WELD_ENUMS, WELD_OPS, WELD_STRUCTS,
+};
 
 // Re-export linkme for inventory
 pub use linkme;

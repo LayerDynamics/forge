@@ -361,5 +361,6 @@ declare module "host:window" {
     destroy(trayId: string): Promise<boolean>;
   };
 }
-"#.to_string()
+"#
+    .to_string()
 }
