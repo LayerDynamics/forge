@@ -25,7 +25,7 @@ Supported types:
 
 ### ~~Dependency Version Not Pinned~~ FIXED
 
-**Resolution**: All deno dependencies are now pinned:
+**Resolution**: All Deno dependencies are now pinned:
 - `deno_core = "0.373"` (all crates)
 - `deno_ast = { version = "0.52", features = ["transpiling"] }`
 - `deno_error = "0.7"`

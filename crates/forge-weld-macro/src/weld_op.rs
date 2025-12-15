@@ -140,7 +140,10 @@ pub fn weld_op_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     // Extract return type
     let return_type = extract_return_type(&input.sig.output);
     let return_type_tokens = match return_type {
-        Some(ref ty) => rust_type_to_weld_type(ty),
+        Some(ref ty) => match rust_type_to_weld_type(ty) {
+            Ok(tokens) => tokens,
+            Err(e) => return e.to_compile_error(),
+        },
         None => quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::Unit) },
     };
 
@@ -148,12 +151,12 @@ pub fn weld_op_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let metadata_fn_name = format_ident!("__{}_weld_metadata", fn_name);
 
     // Generate parameter metadata with proper type inference
-    let param_tokens: Vec<_> = params
+    let param_tokens: Result<Vec<_>, syn::Error> = params
         .iter()
         .map(|(name, ty, optional)| {
             let ts_param_name = to_camel_case(name);
-            let type_tokens = rust_type_to_weld_type(ty);
-            quote! {
+            let type_tokens = rust_type_to_weld_type(ty)?;
+            Ok(quote! {
                 forge_weld::OpParam {
                     rust_name: #name.to_string(),
                     ts_name: #ts_param_name.to_string(),
@@ -162,9 +165,14 @@ pub fn weld_op_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                     optional: #optional,
                     doc: None,
                 }
-            }
+            })
         })
         .collect();
+
+    let param_tokens = match param_tokens {
+        Ok(tokens) => tokens,
+        Err(e) => return e.to_compile_error(),
+    };
 
     // Generate the metadata function and registration
     let expanded = quote! {

@@ -12,16 +12,21 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tao::event_loop::EventLoopWindowTarget;
 use tao::window::{Window, WindowBuilder, WindowId};
 use tokio::sync::mpsc;
 use wry::http::{Response, StatusCode};
 use wry::WebView;
 
-/// Pending context menu state
+/// Context menu timeout in seconds (user has this long to select an item)
+pub const CONTEXT_MENU_TIMEOUT_SECS: u64 = 30;
+
+/// Pending context menu state with timestamp for timeout handling
 pub type PendingContextMenu = Option<(
     HashSet<muda::MenuId>,
     tokio::sync::oneshot::Sender<Option<String>>,
+    Instant, // When the menu was shown
 )>;
 
 /// Configuration for WindowManager
@@ -391,20 +396,18 @@ impl<U: 'static> WindowManager<U> {
                  connect-src 'self' app:;"
             };
 
-            // Try embedded assets first
-            if asset_provider.is_embedded() {
-                if let Some(bytes) = asset_provider.get_asset(path) {
-                    return Response::builder()
-                        .status(StatusCode::OK)
-                        .header("Content-Type", mime_for(path))
-                        .header("Content-Security-Policy", csp)
-                        .header("X-Content-Type-Options", "nosniff")
-                        .body(Cow::Owned(bytes))
-                        .unwrap();
-                }
+            // Try asset provider first (handles both embedded and filesystem)
+            if let Some(bytes) = asset_provider.get_asset(path) {
+                return Response::builder()
+                    .status(StatusCode::OK)
+                    .header("Content-Type", mime_for(path))
+                    .header("Content-Security-Policy", csp)
+                    .header("X-Content-Type-Options", "nosniff")
+                    .body(Cow::Owned(bytes))
+                    .unwrap();
             }
 
-            // Fallback to filesystem
+            // Fallback to direct filesystem (for dev mode if provider doesn't handle path)
             let file_path = app_dir.join("web").join(path);
             if file_path.exists() {
                 if let Ok(bytes) = std::fs::read(&file_path) {
@@ -446,7 +449,7 @@ impl<U: 'static> WindowManager<U> {
             payload: serde_json::json!({}),
         });
 
-        tracing::info!("Created window {} at {}", win_id, start_url);
+        tracing::debug!("Created window {} at {}", win_id, start_url);
         Ok(win_id)
     }
 
@@ -464,7 +467,7 @@ impl<U: 'static> WindowManager<U> {
                 payload: serde_json::json!({}),
             });
 
-            tracing::info!("Window {} closed", window_id);
+            tracing::debug!("Window {} closed", window_id);
             true
         } else {
             false
@@ -801,7 +804,7 @@ impl<U: 'static> WindowManager<U> {
             tracing::debug!("Replacing existing app menu");
         }
         self.app_menu = Some(menu);
-        tracing::info!(
+        tracing::debug!(
             "Set app menu with {} items (menu active: {})",
             items.len(),
             self.app_menu.is_some()
@@ -823,7 +826,7 @@ impl<U: 'static> WindowManager<U> {
         // Cancel any pending context menu response
         {
             let mut pending = self.pending_ctx_menu.lock().unwrap();
-            if let Some((_, old_sender)) = pending.take() {
+            if let Some((_, old_sender, _)) = pending.take() {
                 let _ = old_sender.send(None);
             }
         }
@@ -843,10 +846,10 @@ impl<U: 'static> WindowManager<U> {
             add_context_menu_items(&menu, &items, &mut map, &mut ctx_menu_ids);
         }
 
-        // Store the pending response with the set of IDs
+        // Store the pending response with the set of IDs and timestamp
         {
             let mut pending = self.pending_ctx_menu.lock().unwrap();
-            *pending = Some((ctx_menu_ids, respond));
+            *pending = Some((ctx_menu_ids, respond, Instant::now()));
         }
 
         // Show context menu on the window
@@ -885,11 +888,11 @@ impl<U: 'static> WindowManager<U> {
                 menu.show_context_menu_for_gtk_window(gtk_win, None::<muda::dpi::Position>);
             }
 
-            tracing::info!("Showed context menu with {} items", items.len());
+            tracing::debug!("Showed context menu with {} items", items.len());
         } else {
             tracing::warn!("No window found to show context menu");
             let mut pending = self.pending_ctx_menu.lock().unwrap();
-            if let Some((_, sender)) = pending.take() {
+            if let Some((_, sender, _)) = pending.take() {
                 let _ = sender.send(None);
             }
         }
@@ -951,7 +954,7 @@ impl<U: 'static> WindowManager<U> {
         match builder.build() {
             Ok(tray) => {
                 self.trays.insert(tray_id_str.clone(), tray);
-                tracing::info!("Created tray icon: {}", tray_id_str);
+                tracing::debug!("Created tray icon: {}", tray_id_str);
                 tray_id_str
             }
             Err(e) => {
@@ -978,7 +981,7 @@ impl<U: 'static> WindowManager<U> {
     /// Destroy a tray icon
     pub fn destroy_tray(&mut self, tray_id: &str) -> bool {
         if self.trays.remove(tray_id).is_some() {
-            tracing::info!("Destroyed tray: {}", tray_id);
+            tracing::debug!("Destroyed tray: {}", tray_id);
             true
         } else {
             tracing::warn!("Tray not found: {}", tray_id);
@@ -1049,7 +1052,7 @@ impl<U: 'static> WindowManager<U> {
             self.webviews.remove(&win_id);
             self.tao_windows.remove(&win_id);
             self.window_channels.remove(&win_id);
-            tracing::info!("Window {} closed", win_id);
+            tracing::debug!("Window {} closed", win_id);
             true
         } else {
             false
@@ -1249,7 +1252,8 @@ impl<U: 'static> WindowManager<U> {
 // Helper Functions
 // ============================================================================
 
-fn mime_for(path: &str) -> &'static str {
+/// Get MIME type for a file path based on extension
+pub fn mime_for(path: &str) -> &'static str {
     if let Some(ext) = std::path::Path::new(path)
         .extension()
         .and_then(|s| s.to_str())

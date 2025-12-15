@@ -250,7 +250,7 @@ impl WasmValue {
                 // Look up the funcref from the instance's handle registry
                 if let Some(inst) = instance {
                     if let Some(func) = inst.get_func_ref(handle) {
-                        Val::FuncRef(Some(func.clone()))
+                        Val::FuncRef(Some(*func))
                     } else {
                         // Handle not found, return null
                         debug!(handle = %handle, "FuncRef handle not found in registry, returning null");
@@ -282,19 +282,17 @@ impl WasmValue {
             Val::FuncRef(func_opt) => {
                 // Store the funcref in the instance registry and return the handle
                 let handle = func_opt.as_ref().map(|func| {
-                    instance.store_func_ref(func.clone())
+                    instance.store_func_ref(*func)
                 });
                 Some(WasmValue::FuncRef(handle))
             }
             Val::ExternRef(extern_opt) => {
-                // ExternRefs are GC-managed - we track them with an opaque handle
-                // The handle allows round-trip identification but externrefs
-                // cannot be reconstructed from JS (they exist only in WASM memory)
-                let handle = extern_opt.as_ref().map(|_| {
-                    // Generate a tracking handle for this externref
-                    instance.store_extern_ref(instance.next_extern_ref_id)
-                });
-                Some(WasmValue::ExternRef(handle))
+                // ExternRefs are GC-managed and cannot be meaningfully tracked
+                // across the JS/WASM boundary. Return None for the handle to
+                // indicate presence without identity (externrefs are opaque).
+                Some(WasmValue::ExternRef(
+                    extern_opt.as_ref().map(|_| "opaque".to_string()),
+                ))
             }
             // V128 and other types not yet supported
             _ => None,
@@ -364,11 +362,6 @@ pub struct WasmInstance {
     pub func_refs: HashMap<String, Func>,
     /// Counter for generating unique funcref handles
     pub next_func_ref_id: u64,
-    /// Registry for externref handles - stores the raw pointer as u64
-    /// (externrefs are GC-managed, we store identifiers to track them)
-    pub extern_ref_ids: HashMap<String, u64>,
-    /// Counter for generating unique externref handles
-    pub next_extern_ref_id: u64,
 }
 
 impl WasmInstance {
@@ -383,19 +376,6 @@ impl WasmInstance {
     /// Retrieve a stored function by handle
     pub fn get_func_ref(&self, handle: &str) -> Option<&Func> {
         self.func_refs.get(handle)
-    }
-
-    /// Generate a unique externref handle
-    pub fn store_extern_ref(&mut self, id: u64) -> String {
-        let handle = format!("externref_{}", self.next_extern_ref_id);
-        self.next_extern_ref_id += 1;
-        self.extern_ref_ids.insert(handle.clone(), id);
-        handle
-    }
-
-    /// Retrieve externref ID by handle
-    pub fn get_extern_ref_id(&self, handle: &str) -> Option<u64> {
-        self.extern_ref_ids.get(handle).copied()
     }
 }
 
@@ -770,8 +750,6 @@ async fn op_wasm_instantiate(
                 module_id: module_id.clone(),
                 func_refs: HashMap::new(),
                 next_func_ref_id: 1,
-                extern_ref_ids: HashMap::new(),
-                next_extern_ref_id: 1,
             })),
         );
     }
@@ -891,26 +869,21 @@ async fn op_wasm_call(
 
     let mut inst = instance_arc.lock().await;
 
-    // Get the function first (need to borrow store temporarily)
-    let func: Func = {
+    // Get the function and its type info in one borrow
+    let (func, expected_params, result_count) = {
         let WasmInstance {
             store, instance, ..
         } = &mut *inst;
-        instance.get_func(&mut *store, &func_name).ok_or_else(|| {
+        let func = instance.get_func(&mut *store, &func_name).ok_or_else(|| {
             WasmError::export_not_found(format!(
                 "Function '{}' not found in instance '{}'",
                 func_name, instance_id
             ))
-        })?
-    };
-
-    // Verify argument types
-    let (expected_params, result_count) = {
-        let WasmInstance { store, .. } = &mut *inst;
+        })?;
         let func_ty = func.ty(&*store);
         let expected_params: Vec<ValType> = func_ty.params().collect();
         let result_count = func_ty.results().count();
-        (expected_params, result_count)
+        (func, expected_params, result_count)
     };
 
     if args.len() != expected_params.len() {
@@ -921,23 +894,25 @@ async fn op_wasm_call(
         )));
     }
 
-    for (i, (arg, expected)) in args.iter().zip(expected_params.iter()).enumerate() {
-        // Compare types by string representation since ValType doesn't implement PartialEq
-        let arg_type_str = val_type_to_string(&arg.val_type());
-        let expected_type_str = val_type_to_string(expected);
-        if arg_type_str != expected_type_str {
-            return Err(WasmError::type_error(format!(
-                "Argument {} type mismatch: expected {}, got {}",
-                i, expected_type_str, arg_type_str
-            )));
-        }
-    }
-
-    // Convert arguments using instance registry for reference types
+    // Validate types and convert arguments in a single pass
     let wasm_args: Vec<Val> = args
         .iter()
-        .map(|a| a.to_wasmtime(Some(&*inst)))
-        .collect();
+        .zip(expected_params.iter())
+        .enumerate()
+        .map(|(i, (arg, expected))| {
+            // Validate type
+            let arg_type_str = val_type_to_string(&arg.val_type());
+            let expected_type_str = val_type_to_string(expected);
+            if arg_type_str != expected_type_str {
+                return Err(WasmError::type_error(format!(
+                    "Argument {} type mismatch: expected {}, got {}",
+                    i, expected_type_str, arg_type_str
+                )));
+            }
+            // Convert to wasmtime value
+            Ok(arg.to_wasmtime(Some(&*inst)))
+        })
+        .collect::<Result<Vec<Val>, WasmError>>()?;
 
     // Prepare results buffer
     let mut results = vec![Val::I32(0); result_count];
@@ -951,7 +926,7 @@ async fn op_wasm_call(
     // Convert results, storing any reference types in the instance registry
     let output: Vec<WasmValue> = results
         .iter()
-        .filter_map(|val| WasmValue::from_wasmtime(val, &mut *inst))
+        .filter_map(|val| WasmValue::from_wasmtime(val, &mut inst))
         .collect();
 
     debug!(instance_id = %instance_id, func_name = %func_name, results_count = output.len(), "wasm.call complete");
@@ -1201,8 +1176,6 @@ mod tests {
             module_id: "test".to_string(),
             func_refs: HashMap::new(),
             next_func_ref_id: 1,
-            extern_ref_ids: HashMap::new(),
-            next_extern_ref_id: 1,
         };
 
         // Test i32
@@ -1240,8 +1213,6 @@ mod tests {
             module_id: "test".to_string(),
             func_refs: HashMap::new(),
             next_func_ref_id: 1,
-            extern_ref_ids: HashMap::new(),
-            next_extern_ref_id: 1,
         };
 
         // Get the exported function
@@ -1275,8 +1246,6 @@ mod tests {
             module_id: "test".to_string(),
             func_refs: HashMap::new(),
             next_func_ref_id: 1,
-            extern_ref_ids: HashMap::new(),
-            next_extern_ref_id: 1,
         };
 
         // Test null funcref

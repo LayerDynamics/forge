@@ -22,6 +22,7 @@ image = "0.25"
 globset = "0.4"
 rfd = "0.14"
 muda = "0.15"
+crossbeam-channel = "0.5"
 # HMR support
 tokio-tungstenite = "0.24"
 futures-util = "0.3"

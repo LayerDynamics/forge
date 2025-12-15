@@ -67,7 +67,7 @@ pub fn weld_struct_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let ts_name = attrs.ts_name.unwrap_or_else(|| struct_name_str.clone());
 
     // Extract fields
-    let field_tokens: Vec<_> = match &input.fields {
+    let field_results: Vec<_> = match &input.fields {
         Fields::Named(fields) => {
             fields
                 .named
@@ -82,9 +82,12 @@ pub fn weld_struct_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let is_optional = quote!(#ty).to_string().starts_with("Option");
 
                     // Parse the type
-                    let type_tokens = rust_type_to_weld_type(ty);
+                    let type_tokens = match rust_type_to_weld_type(ty) {
+                        Ok(tokens) => tokens,
+                        Err(e) => return Some(Err(e)),
+                    };
 
-                    Some(quote! {
+                    Some(Ok(quote! {
                         forge_weld::StructField {
                             rust_name: #name_str.to_string(),
                             ts_name: #ts_field_name.to_string(),
@@ -93,11 +96,23 @@ pub fn weld_struct_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                             readonly: false,
                             doc: None,
                         }
-                    })
+                    }))
                 })
                 .collect()
         }
         _ => Vec::new(),
+    };
+
+    // Check for errors in field parsing
+    let field_tokens: Vec<_> = {
+        let mut tokens = Vec::new();
+        for result in field_results {
+            match result {
+                Ok(t) => tokens.push(t),
+                Err(e) => return e.to_compile_error(),
+            }
+        }
+        tokens
     };
 
     // Generate metadata function name
@@ -138,7 +153,7 @@ pub fn weld_enum_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let ts_name = attrs.ts_name.unwrap_or_else(|| enum_name_str.clone());
 
     // Extract variants
-    let variant_tokens: Vec<_> = input
+    let variant_results: Result<Vec<_>, syn::Error> = input
         .variants
         .iter()
         .map(|v| {
@@ -146,16 +161,18 @@ pub fn weld_enum_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             // Extract variant fields
             let field_tokens: Vec<_> = match &v.fields {
-                Fields::Named(fields) => fields
-                    .named
-                    .iter()
-                    .filter_map(|f| {
-                        let field_name = f.ident.as_ref()?;
+                Fields::Named(fields) => {
+                    let mut tokens = Vec::new();
+                    for f in fields.named.iter() {
+                        let field_name = match f.ident.as_ref() {
+                            Some(n) => n,
+                            None => continue,
+                        };
                         let field_name_str = field_name.to_string();
                         let ts_field_name = to_camel_case(&field_name_str);
-                        let type_tokens = rust_type_to_weld_type(&f.ty);
+                        let type_tokens = rust_type_to_weld_type(&f.ty)?;
 
-                        Some(quote! {
+                        tokens.push(quote! {
                             forge_weld::StructField {
                                 rust_name: #field_name_str.to_string(),
                                 ts_name: #ts_field_name.to_string(),
@@ -164,17 +181,16 @@ pub fn weld_enum_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                                 readonly: false,
                                 doc: None,
                             }
-                        })
-                    })
-                    .collect(),
-                Fields::Unnamed(fields) => fields
-                    .unnamed
-                    .iter()
-                    .enumerate()
-                    .map(|(i, f)| {
+                        });
+                    }
+                    tokens
+                }
+                Fields::Unnamed(fields) => {
+                    let mut tokens = Vec::new();
+                    for (i, f) in fields.unnamed.iter().enumerate() {
                         let field_name = format!("field{}", i);
-                        let type_tokens = rust_type_to_weld_type(&f.ty);
-                        quote! {
+                        let type_tokens = rust_type_to_weld_type(&f.ty)?;
+                        tokens.push(quote! {
                             forge_weld::StructField {
                                 rust_name: #field_name.to_string(),
                                 ts_name: #field_name.to_string(),
@@ -183,21 +199,27 @@ pub fn weld_enum_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                                 readonly: false,
                                 doc: None,
                             }
-                        }
-                    })
-                    .collect(),
+                        });
+                    }
+                    tokens
+                }
                 Fields::Unit => Vec::new(),
             };
 
-            quote! {
+            Ok(quote! {
                 forge_weld::EnumVariant {
                     name: #name.to_string(),
                     fields: vec![#(#field_tokens),*],
                     doc: None,
                 }
-            }
+            })
         })
         .collect();
+
+    let variant_tokens = match variant_results {
+        Ok(tokens) => tokens,
+        Err(e) => return e.to_compile_error(),
+    };
 
     // Generate metadata function name
     let metadata_fn_name = format_ident!("__{}_weld_metadata", enum_name);

@@ -27,8 +27,9 @@ use ext_ui::{
 };
 
 use ext_window::{
-    init_window_capabilities, init_window_state, AssetProvider, ChannelChecker,
+    init_window_capabilities, init_window_state, mime_for, AssetProvider, ChannelChecker,
     MenuEvent as WinMenuEvent, WindowCmd, WindowManager, WindowManagerConfig, WindowSystemEvent,
+    CONTEXT_MENU_TIMEOUT_SECS,
 };
 
 mod capabilities;
@@ -59,30 +60,6 @@ pub struct Windows {
 fn preload_js() -> &'static str {
     // Generated from sdk/preload.ts at build time (transpiled to JS)
     include_str!(concat!(env!("OUT_DIR"), "/preload.js"))
-}
-
-fn mime_for(path: &str) -> &'static str {
-    if let Some(ext) = std::path::Path::new(path)
-        .extension()
-        .and_then(|s| s.to_str())
-    {
-        match ext {
-            "html" | "htm" => "text/html; charset=utf-8",
-            "js" | "mjs" => "text/javascript; charset=utf-8",
-            "css" => "text/css; charset=utf-8",
-            "json" => "application/json",
-            "svg" => "image/svg+xml",
-            "png" => "image/png",
-            "jpg" | "jpeg" => "image/jpeg",
-            "gif" => "image/gif",
-            "ico" => "image/x-icon",
-            "txt" => "text/plain; charset=utf-8",
-            "wasm" => "application/wasm",
-            _ => "application/octet-stream",
-        }
-    } else {
-        "application/octet-stream"
-    }
 }
 
 // Include generated assets module (for release builds with embedded assets)
@@ -703,52 +680,74 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     let menu_id_map_for_thread = menu_id_map.clone();
     let pending_ctx_menu_for_thread = pending_ctx_menu.clone();
     std::thread::spawn(move || {
+        use std::time::Duration;
         let receiver = muda::MenuEvent::receiver();
+        let timeout = Duration::from_secs(1); // Check every second for stale menus
+
         loop {
-            if let Ok(event) = receiver.recv() {
-                // First, check if this is a context menu selection
-                {
-                    let mut pending = pending_ctx_menu_for_thread.lock().unwrap();
-                    if let Some((ref ids, _)) = *pending {
-                        if ids.contains(&event.id) {
-                            // This is a context menu selection - respond and clear
-                            let map = menu_id_map_for_thread.lock().unwrap();
-                            if let Some((item_id, label)) = map.get(&event.id) {
-                                tracing::debug!(
-                                    "Context menu selection: item_id={}, label={}",
-                                    item_id,
-                                    label
-                                );
-                                if let Some((_, sender)) = pending.take() {
-                                    let _ = sender.send(Some(item_id.clone()));
+            // Use recv_timeout to periodically check for stale context menus
+            match receiver.recv_timeout(timeout) {
+                Ok(event) => {
+                    // First, check if this is a context menu selection
+                    {
+                        let mut pending = pending_ctx_menu_for_thread.lock().unwrap();
+                        if let Some((ref ids, _, _)) = *pending {
+                            if ids.contains(&event.id) {
+                                // This is a context menu selection - respond and clear
+                                let map = menu_id_map_for_thread.lock().unwrap();
+                                if let Some((item_id, label)) = map.get(&event.id) {
+                                    tracing::debug!(
+                                        "Context menu selection: item_id={}, label={}",
+                                        item_id,
+                                        label
+                                    );
+                                    if let Some((_, sender, _)) = pending.take() {
+                                        let _ = sender.send(Some(item_id.clone()));
+                                    }
                                 }
+                                continue; // Don't forward to regular menu events
                             }
-                            continue; // Don't forward to regular menu events
+                        }
+                    }
+
+                    // Regular menu event - forward to Deno (both ext_ui and ext_window)
+                    let map = menu_id_map_for_thread.lock().unwrap();
+                    if let Some((item_id, label)) = map.get(&event.id) {
+                        // Send to ext_ui menu events channel
+                        let menu_event = MenuEvent {
+                            menu_id: "app".to_string(),
+                            item_id: item_id.clone(),
+                            label: label.clone(),
+                        };
+                        tracing::debug!("Menu event: item_id={}, label={}", item_id, label);
+                        let _ = menu_events_tx.blocking_send(menu_event);
+
+                        // Also send to ext_window menu events channel
+                        let win_menu_event = WinMenuEvent {
+                            menu_id: "app".to_string(),
+                            item_id: item_id.clone(),
+                            label: label.clone(),
+                        };
+                        let _ = window_menu_events_tx.blocking_send(win_menu_event);
+                    } else {
+                        tracing::warn!("Menu event for unknown MenuId: {:?}", event.id);
+                    }
+                }
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                    // Check for stale pending context menus (user dismissed without selecting)
+                    let mut pending = pending_ctx_menu_for_thread.lock().unwrap();
+                    if let Some((_, _, ref shown_at)) = *pending {
+                        if shown_at.elapsed().as_secs() >= CONTEXT_MENU_TIMEOUT_SECS {
+                            tracing::debug!("Context menu timed out after {} seconds", CONTEXT_MENU_TIMEOUT_SECS);
+                            if let Some((_, sender, _)) = pending.take() {
+                                let _ = sender.send(None);
+                            }
                         }
                     }
                 }
-
-                // Regular menu event - forward to Deno (both ext_ui and ext_window)
-                let map = menu_id_map_for_thread.lock().unwrap();
-                if let Some((item_id, label)) = map.get(&event.id) {
-                    // Send to ext_ui menu events channel
-                    let menu_event = MenuEvent {
-                        menu_id: "app".to_string(),
-                        item_id: item_id.clone(),
-                        label: label.clone(),
-                    };
-                    tracing::debug!("Menu event: item_id={}, label={}", item_id, label);
-                    let _ = menu_events_tx.blocking_send(menu_event);
-
-                    // Also send to ext_window menu events channel
-                    let win_menu_event = WinMenuEvent {
-                        menu_id: "app".to_string(),
-                        item_id: item_id.clone(),
-                        label: label.clone(),
-                    };
-                    let _ = window_menu_events_tx.blocking_send(win_menu_event);
-                } else {
-                    tracing::warn!("Menu event for unknown MenuId: {:?}", event.id);
+                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                    tracing::debug!("Menu event channel disconnected");
+                    break;
                 }
             }
         }
@@ -944,7 +943,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 window_manager.insert_tao_window(win_id.clone(), window);
                 window_manager.insert_window_channels(win_id.clone(), win_channels);
 
-                tracing::info!("Created window {} at {}", win_id, start_url);
+                tracing::debug!("Created window {} at {}", win_id, start_url);
                 let _ = respond.send(win_id);
             }
 
@@ -956,7 +955,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
             Event::UserEvent(UserEvent::CloseWindow(window_id, respond)) => {
                 let success = window_manager.remove_window(&window_id);
                 if success {
-                    tracing::info!("Window {} closed programmatically", window_id);
+                    tracing::debug!("Window {} closed programmatically", window_id);
                 }
                 let _ = respond.send(success);
 
@@ -1218,7 +1217,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 }
                 let menu_active = true;
                 window_manager.set_app_menu_raw(Some(menu));
-                tracing::info!("Set app menu with {} items (menu active: {})", items.len(), menu_active);
+                tracing::debug!("Set app menu with {} items (menu active: {})", items.len(), menu_active);
                 let _ = respond.send(true);
             }
 
@@ -1230,7 +1229,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 // Cancel any pending context menu response
                 {
                     let mut pending = pending_ctx_menu.lock().unwrap();
-                    if let Some((_, old_sender)) = pending.take() {
+                    if let Some((_, old_sender, _)) = pending.take() {
                         let _ = old_sender.send(None);
                     }
                 }
@@ -1327,10 +1326,10 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     add_context_menu_items(&menu, &items, &mut map, &mut ctx_menu_ids);
                 }
 
-                // Store the pending response with the set of IDs
+                // Store the pending response with the set of IDs and timestamp
                 {
                     let mut pending = pending_ctx_menu.lock().unwrap();
-                    *pending = Some((ctx_menu_ids, respond));
+                    *pending = Some((ctx_menu_ids, respond, std::time::Instant::now()));
                 }
 
                 // Show the context menu at cursor position
@@ -1367,12 +1366,12 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                         menu.show_context_menu_for_gtk_window(gtk_win_ref, None::<muda::dpi::Position>);
                     }
 
-                    tracing::info!("Showed context menu with {} items", items.len());
+                    tracing::debug!("Showed context menu with {} items", items.len());
                 } else {
                     tracing::warn!("No window found to show context menu");
                     // No window - respond with None
                     let mut pending = pending_ctx_menu.lock().unwrap();
-                    if let Some((_, sender)) = pending.take() {
+                    if let Some((_, sender, _)) = pending.take() {
                         let _ = sender.send(None);
                     }
                 }
@@ -1555,7 +1554,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 match builder.build() {
                     Ok(tray) => {
                         window_manager.insert_tray(tray_id_str.clone(), tray);
-                        tracing::info!("Created tray icon: {}", tray_id_str);
+                        tracing::debug!("Created tray icon: {}", tray_id_str);
                         let _ = respond.send(tray_id_str);
                     }
                     Err(e) => {
@@ -1580,7 +1579,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
             Event::UserEvent(UserEvent::DestroyTray(tray_id, respond)) => {
                 if window_manager.remove_tray(&tray_id) {
-                    tracing::info!("Destroyed tray: {}", tray_id);
+                    tracing::debug!("Destroyed tray: {}", tray_id);
                     let _ = respond.send(true);
                 } else {
                     tracing::warn!("Tray not found: {}", tray_id);
@@ -1593,17 +1592,9 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 window_id,
                 ..
             } => {
-                // Find and remove the window
-                if let Some(win_id) = window_manager.get_window_id(&window_id).cloned() {
-                    // Send close event to Deno before removing
-                    let _ = to_deno_tx.try_send(IpcEvent {
-                        window_id: win_id.clone(),
-                        channel: "__window__".to_string(),
-                        payload: serde_json::json!({}),
-                        event_type: Some("close".to_string()),
-                    });
-                    window_manager.remove_window(&win_id);
-                    tracing::info!("Window {} closed", win_id);
+                // Delegate to WindowManager (sends close event and cleans up)
+                if !window_manager.handle_close_requested(window_id) {
+                    tracing::warn!("Close requested for unknown window: {:?}", window_id);
                 }
 
                 // Exit if all windows are closed
