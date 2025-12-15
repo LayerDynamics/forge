@@ -59,9 +59,7 @@ pub fn rust_type_to_weld_type(ty: &Type) -> syn::Result<TokenStream> {
             // but Vec is more common and works for TypeScript
             Ok(quote! { forge_weld::WeldType::Vec(Box::new(#inner)) })
         }
-        Type::Never(_) => {
-            Ok(quote! { forge_weld::WeldType::Never })
-        }
+        Type::Never(_) => Ok(quote! { forge_weld::WeldType::Never }),
         Type::Ptr(type_ptr) => {
             let inner = rust_type_to_weld_type(&type_ptr.elem)?;
             let mutable = type_ptr.mutability.is_some();
@@ -80,48 +78,36 @@ pub fn rust_type_to_weld_type(ty: &Type) -> syn::Result<TokenStream> {
             // Group type (from macro expansion) - just unwrap
             rust_type_to_weld_type(&type_group.elem)
         }
-        Type::BareFn(bare_fn) => {
-            Err(Error::new_spanned(
-                bare_fn,
-                "forge-weld: Bare function types are not supported. \
+        Type::BareFn(bare_fn) => Err(Error::new_spanned(
+            bare_fn,
+            "forge-weld: Bare function types are not supported. \
                  Consider wrapping in a struct or using a different type.",
-            ))
-        }
-        Type::ImplTrait(impl_trait) => {
-            Err(Error::new_spanned(
-                impl_trait,
-                "forge-weld: `impl Trait` types are not supported. \
+        )),
+        Type::ImplTrait(impl_trait) => Err(Error::new_spanned(
+            impl_trait,
+            "forge-weld: `impl Trait` types are not supported. \
                  Use concrete types instead.",
-            ))
-        }
-        Type::TraitObject(trait_obj) => {
-            Err(Error::new_spanned(
-                trait_obj,
-                "forge-weld: Trait object types (`dyn Trait`) are not supported. \
+        )),
+        Type::TraitObject(trait_obj) => Err(Error::new_spanned(
+            trait_obj,
+            "forge-weld: Trait object types (`dyn Trait`) are not supported. \
                  Use concrete types instead.",
-            ))
-        }
-        Type::Infer(infer) => {
-            Err(Error::new_spanned(
-                infer,
-                "forge-weld: Inferred types (`_`) are not supported. \
+        )),
+        Type::Infer(infer) => Err(Error::new_spanned(
+            infer,
+            "forge-weld: Inferred types (`_`) are not supported. \
                  Please specify the concrete type.",
-            ))
-        }
-        Type::Macro(type_macro) => {
-            Err(Error::new_spanned(
-                type_macro,
-                "forge-weld: Macro types are not supported. \
+        )),
+        Type::Macro(type_macro) => Err(Error::new_spanned(
+            type_macro,
+            "forge-weld: Macro types are not supported. \
                  Expand the macro or use a concrete type.",
-            ))
-        }
-        Type::Verbatim(verbatim) => {
-            Err(Error::new_spanned(
-                verbatim,
-                "forge-weld: Verbatim type syntax not supported. \
+        )),
+        Type::Verbatim(verbatim) => Err(Error::new_spanned(
+            verbatim,
+            "forge-weld: Verbatim type syntax not supported. \
                  Please use standard Rust type syntax.",
-            ))
-        }
+        )),
         _ => {
             // Catch-all for any future syn::Type variants
             Err(Error::new_spanned(
@@ -325,8 +311,12 @@ mod tests {
     fn test_primitive_types() {
         let ty: Type = parse_quote!(String);
         let tokens = rust_type_to_weld_type(&ty).unwrap();
-        let expected = "forge_weld :: WeldType :: Primitive (forge_weld :: WeldPrimitive :: String)";
-        assert_eq!(tokens.to_string().replace(" ", ""), expected.replace(" ", ""));
+        let expected =
+            "forge_weld :: WeldType :: Primitive (forge_weld :: WeldPrimitive :: String)";
+        assert_eq!(
+            tokens.to_string().replace(" ", ""),
+            expected.replace(" ", "")
+        );
 
         let ty: Type = parse_quote!(u32);
         let tokens = rust_type_to_weld_type(&ty).unwrap();

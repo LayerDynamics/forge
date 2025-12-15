@@ -4,8 +4,8 @@
 //! forge-host creates a WindowManager instance and calls its methods from the event loop.
 
 use crate::{
-    FileDialogOpts, MenuItem, MessageDialogOpts, NativeHandle, Position, Size, TrayOpts,
-    WindowCmd, WindowOpts, WindowState, WindowSystemEvent,
+    FileDialogOpts, MenuItem, MessageDialogOpts, NativeHandle, Position, Size, TrayOpts, WindowCmd,
+    WindowOpts, WindowState, WindowSystemEvent,
 };
 pub use ext_ipc::IpcEvent;
 use std::borrow::Cow;
@@ -235,10 +235,7 @@ impl<U: 'static> WindowManager<U> {
     /// Send message to renderer
     pub fn send_to_renderer(&self, window_id: &str, channel: &str, payload: &str) {
         // Check if channel is allowed for this window
-        let win_allowed_channels = self
-            .window_channels
-            .get(window_id)
-            .and_then(|c| c.clone());
+        let win_allowed_channels = self.window_channels.get(window_id).and_then(|c| c.clone());
 
         if let Some(ref caps) = self.capabilities {
             if caps
@@ -303,12 +300,10 @@ impl<U: 'static> WindowManager<U> {
             win_builder = win_builder.with_always_on_top(always_on_top);
         }
         if let (Some(min_w), Some(min_h)) = (opts.min_width, opts.min_height) {
-            win_builder =
-                win_builder.with_min_inner_size(tao::dpi::LogicalSize::new(min_w, min_h));
+            win_builder = win_builder.with_min_inner_size(tao::dpi::LogicalSize::new(min_w, min_h));
         }
         if let (Some(max_w), Some(max_h)) = (opts.max_width, opts.max_height) {
-            win_builder =
-                win_builder.with_max_inner_size(tao::dpi::LogicalSize::new(max_w, max_h));
+            win_builder = win_builder.with_max_inner_size(tao::dpi::LogicalSize::new(max_w, max_h));
         }
 
         let window = win_builder

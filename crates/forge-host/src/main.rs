@@ -99,7 +99,9 @@ struct ForgeChannelChecker {
 
 impl ChannelChecker for ForgeChannelChecker {
     fn check_channel(&self, channel: &str, allowed: Option<&[String]>) -> Result<(), String> {
-        self.capabilities.check_channel(channel, allowed).map_err(|e| e.to_string())
+        self.capabilities
+            .check_channel(channel, allowed)
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -738,7 +740,10 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     let mut pending = pending_ctx_menu_for_thread.lock().unwrap();
                     if let Some((_, _, ref shown_at)) = *pending {
                         if shown_at.elapsed().as_secs() >= CONTEXT_MENU_TIMEOUT_SECS {
-                            tracing::debug!("Context menu timed out after {} seconds", CONTEXT_MENU_TIMEOUT_SECS);
+                            tracing::debug!(
+                                "Context menu timed out after {} seconds",
+                                CONTEXT_MENU_TIMEOUT_SECS
+                            );
                             if let Some((_, sender, _)) = pending.take() {
                                 let _ = sender.send(None);
                             }

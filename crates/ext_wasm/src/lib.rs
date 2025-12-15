@@ -281,9 +281,7 @@ impl WasmValue {
             Val::F64(v) => Some(WasmValue::F64(f64::from_bits(*v))),
             Val::FuncRef(func_opt) => {
                 // Store the funcref in the instance registry and return the handle
-                let handle = func_opt.as_ref().map(|func| {
-                    instance.store_func_ref(*func)
-                });
+                let handle = func_opt.as_ref().map(|func| instance.store_func_ref(*func));
                 Some(WasmValue::FuncRef(handle))
             }
             Val::ExternRef(extern_opt) => {
@@ -1216,7 +1214,10 @@ mod tests {
         };
 
         // Get the exported function
-        let func = wasm_inst.instance.get_func(&mut wasm_inst.store, "test").unwrap();
+        let func = wasm_inst
+            .instance
+            .get_func(&mut wasm_inst.store, "test")
+            .unwrap();
 
         // Store it in registry
         let handle = wasm_inst.store_func_ref(func.clone());
