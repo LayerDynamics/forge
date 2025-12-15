@@ -43,13 +43,18 @@ Forge is a desktop application framework that combines:
 
 ### 1. Forge Host (forge-host)
 
-The main Rust binary that:
+The main Rust binary that orchestrates all runtime components:
 
-- Embeds Deno runtime (JsRuntime)
-- Creates native windows (tao/wry)
-- Handles system events (window, menu, tray)
-- Routes IPC messages
-- Enforces capability permissions
+- **Embeds Deno runtime** (JsRuntime) with all extension crates registered
+- **Creates native windows** via tao/wry, handling the platform event loop
+- **Bridges async operations** - Extensions define ops and channel-based commands; forge-host handles the main thread event loop integration
+- **Initializes extension state** - Sets up IPC channels, capability checkers, and resource limits for each extension
+- **Routes IPC messages** - Forwards commands from Deno ops to platform APIs via tokio channels and UserEvent enums
+- **Enforces capability permissions** - Parses manifest.app.toml and creates capability adapters for each extension
+
+**Key architectural pattern**: Extensions do NOT reimplement logic in forge-host. Extensions define the ops and data structures; forge-host initializes their state and provides the event loop bridge. For example:
+- `ext_window` defines `WindowCmd` enum and ops
+- `forge-host` receives `WindowCmd` via channel and translates to `UserEvent` for the tao event loop
 
 Location: `crates/forge-host/`
 
@@ -101,18 +106,18 @@ readTextFile()  ──►  op_fs_read_text()  ──►  ext_fs::read_text()
 
 ### Extensions
 
-Each `host:*` module has a Rust extension:
+Each `host:*` module has a Rust extension with structured error codes:
 
-| Module | Extension | Description |
-|--------|-----------|-------------|
-| `host:window` | `ext_window` | Window management, dialogs, menus, tray |
-| `host:ipc` | `ext_ipc` | Inter-process communication |
-| `host:ui` | `ext_ui` | Basic window operations |
-| `host:fs` | `ext_fs` | File system operations |
-| `host:net` | `ext_net` | Networking |
-| `host:sys` | `ext_sys` | System info, clipboard, notifications |
-| `host:process` | `ext_process` | Process spawning |
-| `host:wasm` | `ext_wasm` | WebAssembly compilation and execution |
+| Module | Extension | Error Range | Description |
+|--------|-----------|-------------|-------------|
+| `host:fs` | `ext_fs` | 1000-1999 | File system operations |
+| `host:ipc` | `ext_ipc` | 2000-2999 | Inter-process communication |
+| `host:net` | `ext_net` | 3000-3999 | Networking |
+| `host:process` | `ext_process` | 4000-4999 | Process spawning |
+| `host:wasm` | `ext_wasm` | 5000-5999 | WebAssembly compilation and execution |
+| `host:window` | `ext_window` | 6000-6999 | Window management, dialogs, menus, tray |
+| `host:sys` | `ext_sys` | 7000-7999 | System info, clipboard, notifications |
+| `host:ui` | `ext_ui` | (legacy) | Basic window operations |
 
 ---
 
@@ -407,20 +412,28 @@ style-src 'self' 'unsafe-inline' app:;
 
 ```text
 forge-host
-├── deno_core      # Deno runtime
-├── tao            # Window management
-├── wry            # WebView
-├── muda           # Menus
-├── tray-icon      # System tray
-├── rfd            # File dialogs
-├── notify         # File watching
-├── wasmtime       # WebAssembly runtime
-└── ext_*          # Host modules
+├── deno_core          # Deno runtime
+├── deno_ast           # TypeScript transpilation
+├── tao                # Window management (cross-platform)
+├── wry                # WebView
+├── muda               # Menus
+├── tray-icon          # System tray
+├── rfd                # File dialogs
+├── notify             # File watching (HMR)
+├── tokio-tungstenite  # WebSocket for HMR
+├── tracing            # Logging
+└── ext_*              # Host modules (registered as Deno extensions)
 
 forge-weld
-├── swc_ecma_parser    # TypeScript parsing
-├── swc_ecma_codegen   # JavaScript generation
-└── linkme             # Build-time code collection
+├── deno_ast           # TypeScript transpilation via deno_ast
+├── linkme             # Compile-time symbol collection (distributed slices)
+├── serde              # Type serialization
+└── thiserror          # Error types
+
+forge-weld-macro
+├── syn                # Rust syntax parsing
+├── quote              # Token generation
+└── proc-macro2        # Proc macro utilities
 ```
 
 ---

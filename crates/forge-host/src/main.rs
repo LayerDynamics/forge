@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
-use tao::window::{WindowBuilder, WindowId};
+use tao::window::WindowBuilder;
 use tokio_tungstenite::tungstenite::Message;
 use wry::http::{Response, StatusCode};
 use wry::WebViewBuilder;
@@ -27,10 +27,8 @@ use ext_ui::{
 };
 
 use ext_window::{
-    init_window_capabilities, init_window_state, FileDialogOpts as WinFileDialogOpts,
-    MenuEvent as WinMenuEvent, MenuItem as WinMenuItem, MessageDialogOpts as WinMessageDialogOpts,
-    NativeHandle, Position, Size, TrayOpts as WinTrayOpts, WindowCmd, WindowOpts,
-    WindowState as WinWindowState, WindowSystemEvent,
+    init_window_capabilities, init_window_state, AssetProvider, ChannelChecker,
+    MenuEvent as WinMenuEvent, WindowCmd, WindowManager, WindowManagerConfig, WindowSystemEvent,
 };
 
 mod capabilities;
@@ -89,6 +87,44 @@ fn mime_for(path: &str) -> &'static str {
 
 // Include generated assets module (for release builds with embedded assets)
 include!(concat!(env!("OUT_DIR"), "/assets.rs"));
+
+// ============================================================================
+// WindowManager Support Types
+// ============================================================================
+
+/// Asset provider for WindowManager
+struct ForgeAssetProvider {
+    app_dir: PathBuf,
+}
+
+impl AssetProvider for ForgeAssetProvider {
+    fn get_asset(&self, path: &str) -> Option<Vec<u8>> {
+        // First try embedded assets
+        if ASSET_EMBEDDED {
+            if let Some(bytes) = get_asset(path) {
+                return Some(bytes.to_vec());
+            }
+        }
+        // Fallback to filesystem
+        let file_path = self.app_dir.join("web").join(path);
+        std::fs::read(&file_path).ok()
+    }
+
+    fn is_embedded(&self) -> bool {
+        ASSET_EMBEDDED
+    }
+}
+
+/// Channel checker wrapper for WindowManager
+struct ForgeChannelChecker {
+    capabilities: Capabilities,
+}
+
+impl ChannelChecker for ForgeChannelChecker {
+    fn check_channel(&self, channel: &str, allowed: Option<&[String]>) -> Result<(), String> {
+        self.capabilities.check_channel(channel, allowed).map_err(|e| e.to_string())
+    }
+}
 
 // ============================================================================
 // Module Loader for ES Modules
@@ -512,7 +548,9 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
     // Custom user events for the tao event loop
     enum UserEvent {
+        // IPC: Deno -> Renderer
         ToRenderer(ToRendererCmd),
+        // ext_ui commands (host:ui - legacy)
         CreateWindow(OpenOpts, tokio::sync::oneshot::Sender<String>),
         CloseWindow(String, tokio::sync::oneshot::Sender<bool>),
         SetWindowTitle(String, String),
@@ -522,82 +560,17 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         ),
         ShowSaveDialog(FileDialogOpts, tokio::sync::oneshot::Sender<Option<String>>),
         ShowMessageDialog(MessageDialogOpts, tokio::sync::oneshot::Sender<usize>),
-        // Menu events
         SetAppMenu(Vec<MenuItem>, tokio::sync::oneshot::Sender<bool>),
         ShowContextMenu(
             Option<String>,
             Vec<MenuItem>,
             tokio::sync::oneshot::Sender<Option<String>>,
         ),
-        // Tray events
         CreateTray(TrayOpts, tokio::sync::oneshot::Sender<String>),
         UpdateTray(String, TrayOpts, tokio::sync::oneshot::Sender<bool>),
         DestroyTray(String, tokio::sync::oneshot::Sender<bool>),
-
-        // === ext_window events ===
-        // Window lifecycle (from host:window)
-        WinCreate(
-            WindowOpts,
-            tokio::sync::oneshot::Sender<Result<String, String>>,
-        ),
-        WinClose(String, tokio::sync::oneshot::Sender<bool>),
-        WinMinimize(String),
-        WinMaximize(String),
-        WinUnmaximize(String),
-        WinRestore(String),
-        WinSetFullscreen(String, bool),
-        WinFocus(String),
-
-        // Window properties
-        WinGetPosition(
-            String,
-            tokio::sync::oneshot::Sender<Result<Position, String>>,
-        ),
-        WinSetPosition(String, i32, i32),
-        WinGetSize(String, tokio::sync::oneshot::Sender<Result<Size, String>>),
-        WinSetSize(String, u32, u32),
-        WinGetTitle(String, tokio::sync::oneshot::Sender<Result<String, String>>),
-        WinSetTitle(String, String),
-        WinSetResizable(String, bool),
-        WinSetDecorations(String, bool),
-        WinSetAlwaysOnTop(String, bool),
-        WinSetVisible(String, bool),
-
-        // State queries
-        WinGetState(
-            String,
-            tokio::sync::oneshot::Sender<Result<WinWindowState, String>>,
-        ),
-
-        // Dialogs (from host:window)
-        WinShowOpenDialog(
-            WinFileDialogOpts,
-            tokio::sync::oneshot::Sender<Option<Vec<String>>>,
-        ),
-        WinShowSaveDialog(
-            WinFileDialogOpts,
-            tokio::sync::oneshot::Sender<Option<String>>,
-        ),
-        WinShowMessageDialog(WinMessageDialogOpts, tokio::sync::oneshot::Sender<usize>),
-
-        // Menus (from host:window)
-        WinSetAppMenu(Vec<WinMenuItem>, tokio::sync::oneshot::Sender<bool>),
-        WinShowContextMenu(
-            Option<String>,
-            Vec<WinMenuItem>,
-            tokio::sync::oneshot::Sender<Option<String>>,
-        ),
-
-        // Tray (from host:window)
-        WinCreateTray(WinTrayOpts, tokio::sync::oneshot::Sender<String>),
-        WinUpdateTray(String, WinTrayOpts, tokio::sync::oneshot::Sender<bool>),
-        WinDestroyTray(String, tokio::sync::oneshot::Sender<bool>),
-
-        // Native handle
-        WinGetNativeHandle(
-            String,
-            tokio::sync::oneshot::Sender<Result<NativeHandle, String>>,
-        ),
+        // ext_window commands (host:window) - handled by WindowManager
+        WindowCmd(WindowCmd),
     }
 
     let event_loop: EventLoop<UserEvent> = EventLoopBuilder::with_user_event().build();
@@ -677,138 +650,12 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         }
     });
 
-    // Spawn task: handle ext_window WindowCmd
+    // Spawn task: forward ext_window WindowCmd to event loop
     tokio::task::spawn({
         let proxy = proxy.clone();
         async move {
             while let Some(cmd) = window_cmd_rx.recv().await {
-                match cmd {
-                    // Window lifecycle
-                    WindowCmd::Create { opts, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinCreate(opts, respond));
-                    }
-                    WindowCmd::Close { window_id, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinClose(window_id, respond));
-                    }
-                    WindowCmd::Minimize { window_id } => {
-                        let _ = proxy.send_event(UserEvent::WinMinimize(window_id));
-                    }
-                    WindowCmd::Maximize { window_id } => {
-                        let _ = proxy.send_event(UserEvent::WinMaximize(window_id));
-                    }
-                    WindowCmd::Unmaximize { window_id } => {
-                        let _ = proxy.send_event(UserEvent::WinUnmaximize(window_id));
-                    }
-                    WindowCmd::Restore { window_id } => {
-                        let _ = proxy.send_event(UserEvent::WinRestore(window_id));
-                    }
-                    WindowCmd::SetFullscreen {
-                        window_id,
-                        fullscreen,
-                    } => {
-                        let _ =
-                            proxy.send_event(UserEvent::WinSetFullscreen(window_id, fullscreen));
-                    }
-                    WindowCmd::Focus { window_id } => {
-                        let _ = proxy.send_event(UserEvent::WinFocus(window_id));
-                    }
-
-                    // Window properties
-                    WindowCmd::GetPosition { window_id, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinGetPosition(window_id, respond));
-                    }
-                    WindowCmd::SetPosition { window_id, x, y } => {
-                        let _ = proxy.send_event(UserEvent::WinSetPosition(window_id, x, y));
-                    }
-                    WindowCmd::GetSize { window_id, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinGetSize(window_id, respond));
-                    }
-                    WindowCmd::SetSize {
-                        window_id,
-                        width,
-                        height,
-                    } => {
-                        let _ = proxy.send_event(UserEvent::WinSetSize(window_id, width, height));
-                    }
-                    WindowCmd::GetTitle { window_id, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinGetTitle(window_id, respond));
-                    }
-                    WindowCmd::SetTitle { window_id, title } => {
-                        let _ = proxy.send_event(UserEvent::WinSetTitle(window_id, title));
-                    }
-                    WindowCmd::SetResizable {
-                        window_id,
-                        resizable,
-                    } => {
-                        let _ = proxy.send_event(UserEvent::WinSetResizable(window_id, resizable));
-                    }
-                    WindowCmd::SetDecorations {
-                        window_id,
-                        decorations,
-                    } => {
-                        let _ =
-                            proxy.send_event(UserEvent::WinSetDecorations(window_id, decorations));
-                    }
-                    WindowCmd::SetAlwaysOnTop {
-                        window_id,
-                        always_on_top,
-                    } => {
-                        let _ = proxy
-                            .send_event(UserEvent::WinSetAlwaysOnTop(window_id, always_on_top));
-                    }
-                    WindowCmd::SetVisible { window_id, visible } => {
-                        let _ = proxy.send_event(UserEvent::WinSetVisible(window_id, visible));
-                    }
-
-                    // State queries
-                    WindowCmd::GetState { window_id, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinGetState(window_id, respond));
-                    }
-
-                    // Dialogs
-                    WindowCmd::ShowOpenDialog { opts, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinShowOpenDialog(opts, respond));
-                    }
-                    WindowCmd::ShowSaveDialog { opts, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinShowSaveDialog(opts, respond));
-                    }
-                    WindowCmd::ShowMessageDialog { opts, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinShowMessageDialog(opts, respond));
-                    }
-
-                    // Menus
-                    WindowCmd::SetAppMenu { items, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinSetAppMenu(items, respond));
-                    }
-                    WindowCmd::ShowContextMenu {
-                        window_id,
-                        items,
-                        respond,
-                    } => {
-                        let _ = proxy
-                            .send_event(UserEvent::WinShowContextMenu(window_id, items, respond));
-                    }
-
-                    // Tray
-                    WindowCmd::CreateTray { opts, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinCreateTray(opts, respond));
-                    }
-                    WindowCmd::UpdateTray {
-                        tray_id,
-                        opts,
-                        respond,
-                    } => {
-                        let _ = proxy.send_event(UserEvent::WinUpdateTray(tray_id, opts, respond));
-                    }
-                    WindowCmd::DestroyTray { tray_id, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinDestroyTray(tray_id, respond));
-                    }
-
-                    // Native handle
-                    WindowCmd::GetNativeHandle { window_id, respond } => {
-                        let _ = proxy.send_event(UserEvent::WinGetNativeHandle(window_id, respond));
-                    }
-                }
+                let _ = proxy.send_event(UserEvent::WindowCmd(cmd));
             }
         }
     });
@@ -816,35 +663,35 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     // Clone app_dir for use in the event loop closure
     let app_dir_clone = app_dir.clone();
 
-    let mut webviews: HashMap<String, wry::WebView> = HashMap::new();
-    let mut windows: HashMap<WindowId, String> = HashMap::new();
-    let mut tao_windows: HashMap<String, tao::window::Window> = HashMap::new();
-    let mut window_channels: HashMap<String, Option<Vec<String>>> = HashMap::new();
-    let mut window_counter: u64 = 0;
-
-    // Tray icon storage (using tray-icon crate)
-    let mut trays: HashMap<String, tray_icon::TrayIcon> = HashMap::new();
-    let mut tray_counter: u64 = 0;
-
-    // App menu storage (using muda) - kept alive to prevent menu from being dropped
-    let mut app_menu: Option<muda::Menu> = None;
-
-    // Menu ID mapping: muda's internal MenuId -> (user_id, label)
-    // This is shared between the menu event thread and the main event loop
-    use std::sync::{Arc, Mutex};
-    let menu_id_map: Arc<Mutex<HashMap<muda::MenuId, (String, String)>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-
-    // Pending context menu response: (set of MenuIds for this context menu, response channel)
-    // When a menu event matches one of these IDs, we respond and clear the pending state
-    type PendingContextMenu = Option<(
-        std::collections::HashSet<muda::MenuId>,
-        tokio::sync::oneshot::Sender<Option<String>>,
-    )>;
-    let pending_ctx_menu: Arc<Mutex<PendingContextMenu>> = Arc::new(Mutex::new(None));
-
     // Get default channels from capabilities for new windows
     let default_channels = capabilities.get_default_channels();
+
+    // Create WindowManager to handle all window operations
+    use std::sync::Arc;
+    let window_manager_config = WindowManagerConfig {
+        app_dir: app_dir.clone(),
+        dev_mode,
+        app_name: manifest.app.name.clone(),
+        default_channels: default_channels.clone(),
+    };
+    let asset_provider = Arc::new(ForgeAssetProvider {
+        app_dir: app_dir.clone(),
+    });
+    let channel_checker: Option<Arc<dyn ChannelChecker>> = Some(Arc::new(ForgeChannelChecker {
+        capabilities: capabilities.clone(),
+    }));
+    let mut window_manager: WindowManager<UserEvent> = WindowManager::new(
+        window_manager_config,
+        window_events_tx.clone(),
+        to_deno_tx.clone(),
+        channel_checker,
+        preload_js().to_string(),
+        asset_provider,
+    );
+
+    // Get shared state from WindowManager for menu event thread
+    let menu_id_map = window_manager.menu_id_map();
+    let pending_ctx_menu = window_manager.pending_ctx_menu();
 
     // We'll use the runtime directly in the event loop for polling
     // The spawned tasks use the runtime context from rt.enter() in main()
@@ -954,8 +801,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     .build(event_loop_target)
                     .expect("Failed to create window");
 
-                window_counter += 1;
-                let win_id = format!("win-{}", window_counter);
+                let win_id = format!("win-{}", window_manager.next_window_id());
 
                 // Determine channel allowlist for this window
                 // Priority: window-specific opts > manifest default > None (allow all in dev)
@@ -1093,66 +939,35 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
                 let webview = builder.build(&window).expect("Failed to create webview");
 
-                // Track window ID -> win_id mapping
-                windows.insert(window.id(), win_id.clone());
-                webviews.insert(win_id.clone(), webview);
-                // Store window handle for later operations (like setTitle)
-                tao_windows.insert(win_id.clone(), window);
-                // Store channel allowlist for outgoing message filtering
-                window_channels.insert(win_id.clone(), win_channels);
+                // Track window state via WindowManager
+                window_manager.insert_webview(win_id.clone(), webview);
+                window_manager.insert_tao_window(win_id.clone(), window);
+                window_manager.insert_window_channels(win_id.clone(), win_channels);
 
                 tracing::info!("Created window {} at {}", win_id, start_url);
                 let _ = respond.send(win_id);
             }
 
             Event::UserEvent(UserEvent::ToRenderer(ToRendererCmd::Send { window_id, channel, payload })) => {
-                // Check if channel is allowed for this window (outgoing messages)
-                let win_allowed_channels = window_channels.get(&window_id).and_then(|c| c.clone());
-                let channel_check = capabilities.check_channel(
-                    &channel,
-                    win_allowed_channels.as_deref()
-                );
-
-                if channel_check.is_ok() {
-                    if let Some(wv) = webviews.get(&window_id) {
-                        let js = format!(
-                            "window.__host_dispatch && window.__host_dispatch({{channel:{:?},payload:{}}});",
-                            channel, payload
-                        );
-                        let _ = wv.evaluate_script(&js);
-                    }
-                } else {
-                    tracing::warn!(
-                        "Blocked outgoing IPC message on channel '{}' to window {} - not in allowlist",
-                        channel, window_id
-                    );
-                }
+                // Use WindowManager's send_to_renderer (handles channel filtering internally)
+                window_manager.send_to_renderer(&window_id, &channel, &payload.to_string());
             }
 
             Event::UserEvent(UserEvent::CloseWindow(window_id, respond)) => {
-                let success = if let Some(tao_id) = windows.iter()
-                    .find(|(_, v)| **v == window_id)
-                    .map(|(k, _)| *k)
-                {
-                    windows.remove(&tao_id);
-                    webviews.remove(&window_id);
-                    tao_windows.remove(&window_id);
-                    window_channels.remove(&window_id);
+                let success = window_manager.remove_window(&window_id);
+                if success {
                     tracing::info!("Window {} closed programmatically", window_id);
-                    true
-                } else {
-                    false
-                };
+                }
                 let _ = respond.send(success);
 
                 // Exit if all windows are closed
-                if webviews.is_empty() {
+                if window_manager.is_empty() {
                     *control = ControlFlow::Exit;
                 }
             }
 
             Event::UserEvent(UserEvent::SetWindowTitle(window_id, title)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
+                if let Some(window) = window_manager.get_tao_window(&window_id) {
                     window.set_title(&title);
                     tracing::debug!("Set window {} title to '{}'", window_id, title);
                 } else {
@@ -1377,7 +1192,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 {
                     use tao::platform::windows::WindowExtWindows;
                     // For Windows, attach menu to each window
-                    for window in tao_windows.values() {
+                    for window in window_manager.iter_tao_windows() {
                         unsafe {
                             let _ = menu.init_for_hwnd(window.hwnd() as isize);
                         }
@@ -1389,7 +1204,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     use gtk::prelude::*;
                     use tao::platform::unix::WindowExtUnix;
                     // For Linux, attach menu to each GTK window
-                    for window in tao_windows.values() {
+                    for window in window_manager.iter_tao_windows() {
                         let gtk_win = window.gtk_window();
                         let gtk_win_ref: &gtk::Window = gtk_win.upcast_ref();
                         let _ = menu.init_for_gtk_window(gtk_win_ref, None::<&gtk::Box>);
@@ -1398,11 +1213,12 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
                 // Keep menu alive to prevent it from being dropped
                 // Drop any previous menu first
-                if app_menu.is_some() {
+                if window_manager.app_menu().is_some() {
                     tracing::debug!("Replacing existing app menu");
                 }
-                app_menu = Some(menu);
-                tracing::info!("Set app menu with {} items (menu active: {})", items.len(), app_menu.is_some());
+                let menu_active = true;
+                window_manager.set_app_menu_raw(Some(menu));
+                tracing::info!("Set app menu with {} items (menu active: {})", items.len(), menu_active);
                 let _ = respond.send(true);
             }
 
@@ -1520,9 +1336,9 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 // Show the context menu at cursor position
                 // Use window_id to find the appropriate window, or use the first window
                 let target_tao_window = if let Some(ref wid) = window_id {
-                    tao_windows.get(wid)
+                    window_manager.get_tao_window(wid)
                 } else {
-                    tao_windows.values().next()
+                    window_manager.iter_tao_windows().next()
                 };
 
                 if let Some(tao_win) = target_tao_window {
@@ -1668,8 +1484,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     add_items_recursive(menu, items, id_map, tray_id);
                 }
 
-                tray_counter += 1;
-                let tray_id_str = format!("tray-{}", tray_counter);
+                let tray_id_str = format!("tray-{}", window_manager.next_tray_id());
 
                 // Load icon from file or use default
                 let icon = if let Some(ref icon_path) = opts.icon {
@@ -1677,7 +1492,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                     let full_path = if std::path::Path::new(icon_path).is_absolute() {
                         std::path::PathBuf::from(icon_path)
                     } else {
-                        app_dir.join(icon_path)
+                        window_manager.app_dir().join(icon_path)
                     };
 
                     match std::fs::read(&full_path) {
@@ -1739,7 +1554,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
 
                 match builder.build() {
                     Ok(tray) => {
-                        trays.insert(tray_id_str.clone(), tray);
+                        window_manager.insert_tray(tray_id_str.clone(), tray);
                         tracing::info!("Created tray icon: {}", tray_id_str);
                         let _ = respond.send(tray_id_str);
                     }
@@ -1751,7 +1566,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
             }
 
             Event::UserEvent(UserEvent::UpdateTray(tray_id, opts, respond)) => {
-                if let Some(tray) = trays.get_mut(&tray_id) {
+                if let Some(tray) = window_manager.get_tray_mut(&tray_id) {
                     if let Some(ref tooltip) = opts.tooltip {
                         let _ = tray.set_tooltip(Some(tooltip));
                     }
@@ -1764,7 +1579,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
             }
 
             Event::UserEvent(UserEvent::DestroyTray(tray_id, respond)) => {
-                if trays.remove(&tray_id).is_some() {
+                if window_manager.remove_tray(&tray_id) {
                     tracing::info!("Destroyed tray: {}", tray_id);
                     let _ = respond.send(true);
                 } else {
@@ -1779,7 +1594,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 ..
             } => {
                 // Find and remove the window
-                if let Some(win_id) = windows.remove(&window_id) {
+                if let Some(win_id) = window_manager.get_window_id(&window_id).cloned() {
                     // Send close event to Deno before removing
                     let _ = to_deno_tx.try_send(IpcEvent {
                         window_id: win_id.clone(),
@@ -1787,14 +1602,12 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                         payload: serde_json::json!({}),
                         event_type: Some("close".to_string()),
                     });
-                    webviews.remove(&win_id);
-                    tao_windows.remove(&win_id);
-                    window_channels.remove(&win_id);
+                    window_manager.remove_window(&win_id);
                     tracing::info!("Window {} closed", win_id);
                 }
 
                 // Exit if all windows are closed
-                if webviews.is_empty() {
+                if window_manager.is_empty() {
                     *control = ControlFlow::Exit;
                 }
             }
@@ -1804,7 +1617,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 window_id,
                 ..
             } => {
-                if let Some(win_id) = windows.get(&window_id) {
+                if let Some(win_id) = window_manager.get_window_id(&window_id) {
                     let event_type = if focused { "focus" } else { "blur" };
                     let _ = to_deno_tx.try_send(IpcEvent {
                         window_id: win_id.clone(),
@@ -1821,7 +1634,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 window_id,
                 ..
             } => {
-                if let Some(win_id) = windows.get(&window_id) {
+                if let Some(win_id) = window_manager.get_window_id(&window_id) {
                     let _ = to_deno_tx.try_send(IpcEvent {
                         window_id: win_id.clone(),
                         channel: "__window__".to_string(),
@@ -1840,7 +1653,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
                 window_id,
                 ..
             } => {
-                if let Some(win_id) = windows.get(&window_id) {
+                if let Some(win_id) = window_manager.get_window_id(&window_id) {
                     let _ = to_deno_tx.try_send(IpcEvent {
                         window_id: win_id.clone(),
                         channel: "__window__".to_string(),
@@ -1855,738 +1668,11 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
             }
 
             // =========================================================================
-            // ext_window event handlers (host:window)
+            // ext_window event handlers (host:window) - delegated to WindowManager
             // =========================================================================
 
-            Event::UserEvent(UserEvent::WinCreate(opts, respond)) => {
-                // Create window with tao
-                let width = opts.width.unwrap_or(800);
-                let height = opts.height.unwrap_or(600);
-                let title = opts.title.clone().unwrap_or_else(|| manifest.app.name.clone());
-
-                let mut win_builder = WindowBuilder::new()
-                    .with_title(&title)
-                    .with_inner_size(tao::dpi::LogicalSize::new(width, height));
-
-                if let (Some(x), Some(y)) = (opts.x, opts.y) {
-                    win_builder = win_builder.with_position(tao::dpi::LogicalPosition::new(x, y));
-                }
-                if let Some(resizable) = opts.resizable {
-                    win_builder = win_builder.with_resizable(resizable);
-                }
-                if let Some(decorations) = opts.decorations {
-                    win_builder = win_builder.with_decorations(decorations);
-                }
-                if let Some(visible) = opts.visible {
-                    win_builder = win_builder.with_visible(visible);
-                }
-                if let Some(transparent) = opts.transparent {
-                    win_builder = win_builder.with_transparent(transparent);
-                }
-                if let Some(always_on_top) = opts.always_on_top {
-                    win_builder = win_builder.with_always_on_top(always_on_top);
-                }
-                if let (Some(min_w), Some(min_h)) = (opts.min_width, opts.min_height) {
-                    win_builder = win_builder.with_min_inner_size(tao::dpi::LogicalSize::new(min_w, min_h));
-                }
-                if let (Some(max_w), Some(max_h)) = (opts.max_width, opts.max_height) {
-                    win_builder = win_builder.with_max_inner_size(tao::dpi::LogicalSize::new(max_w, max_h));
-                }
-
-                match win_builder.build(event_loop_target) {
-                    Ok(window) => {
-                        window_counter += 1;
-                        let win_id = format!("win-{}", window_counter);
-                        let win_channels = opts.channels.clone().or_else(|| default_channels.clone());
-
-                        // Build WebView with custom app:// protocol (same pattern as CreateWindow)
-                        let mut wv_builder = WebViewBuilder::new();
-                        wv_builder = wv_builder.with_initialization_script(preload_js());
-
-                        // IPC handler
-                        let to_deno_tx_clone = to_deno_tx.clone();
-                        let win_id_for_ipc = win_id.clone();
-                        let ipc_capabilities = capabilities.clone();
-                        let ipc_allowed_channels = win_channels.clone();
-                        wv_builder = wv_builder.with_ipc_handler(move |msg| {
-                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(msg.body()) {
-                                let channel = val.get("channel")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("unknown")
-                                    .to_string();
-
-                                let channel_check = ipc_capabilities.check_channel(
-                                    &channel,
-                                    ipc_allowed_channels.as_deref()
-                                );
-
-                                if channel_check.is_ok() {
-                                    let payload = val.get("payload")
-                                        .cloned()
-                                        .unwrap_or(serde_json::json!(null));
-                                    let _ = to_deno_tx_clone.try_send(IpcEvent {
-                                        window_id: win_id_for_ipc.clone(),
-                                        channel,
-                                        payload,
-                                        event_type: None,
-                                    });
-                                }
-                            }
-                        });
-
-                        // Custom app:// protocol handler
-                        let app_dir_for_protocol = app_dir_clone.clone();
-                        let is_dev_mode = dev_mode;
-                        wv_builder = wv_builder.with_custom_protocol("app".into(), move |_ctx, request| {
-                            let uri = request.uri().to_string();
-                            let mut path = uri
-                                .strip_prefix("app://")
-                                .unwrap_or("")
-                                .trim_start_matches('/')
-                                .trim_end_matches('/');
-
-                            if let Some(slash_pos) = path.find('/') {
-                                let first_part = &path[..slash_pos];
-                                if first_part.ends_with(".html") || first_part.ends_with(".htm") {
-                                    path = &path[slash_pos + 1..];
-                                }
-                            }
-
-                            let csp = if is_dev_mode {
-                                "default-src 'self' app:; \
-                                 script-src 'self' app: 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; \
-                                 style-src 'self' app: 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; \
-                                 connect-src 'self' app: ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:* https://*; \
-                                 img-src 'self' app: data: blob: https:; \
-                                 font-src 'self' app: data: https:;"
-                            } else {
-                                "default-src 'self' app:; \
-                                 script-src 'self' app:; \
-                                 style-src 'self' app: 'unsafe-inline'; \
-                                 img-src 'self' app: data: blob:; \
-                                 font-src 'self' app: data:; \
-                                 connect-src 'self' app:;"
-                            };
-
-                            // Try embedded assets first
-                            if ASSET_EMBEDDED {
-                                if let Some(bytes) = get_asset(path) {
-                                    return Response::builder()
-                                        .status(StatusCode::OK)
-                                        .header("Content-Type", mime_for(path))
-                                        .header("Content-Security-Policy", csp)
-                                        .header("X-Content-Type-Options", "nosniff")
-                                        .body(Cow::Owned(bytes.to_vec()))
-                                        .unwrap();
-                                }
-                            }
-
-                            // Fallback to filesystem
-                            let file_path = app_dir_for_protocol.join("web").join(path);
-                            if file_path.exists() {
-                                if let Ok(bytes) = std::fs::read(&file_path) {
-                                    return Response::builder()
-                                        .status(StatusCode::OK)
-                                        .header("Content-Type", mime_for(path))
-                                        .header("Content-Security-Policy", csp)
-                                        .header("X-Content-Type-Options", "nosniff")
-                                        .body(Cow::Owned(bytes))
-                                        .unwrap();
-                                }
-                            }
-
-                            // 404
-                            Response::builder()
-                                .status(StatusCode::NOT_FOUND)
-                                .header("Content-Type", "text/plain; charset=utf-8")
-                                .body(Cow::Owned(format!("Not found: {}", path).into_bytes()))
-                                .unwrap()
-                        });
-
-                        // Set URL
-                        let start_url = opts.url.as_deref().unwrap_or("app://index.html");
-                        wv_builder = wv_builder.with_url(start_url);
-
-                        match wv_builder.build(&window) {
-                            Ok(webview) => {
-                                let tao_window_id = window.id();
-                                windows.insert(tao_window_id, win_id.clone());
-                                webviews.insert(win_id.clone(), webview);
-                                tao_windows.insert(win_id.clone(), window);
-                                window_channels.insert(win_id.clone(), win_channels);
-
-                                let _ = window_events_tx.try_send(WindowSystemEvent {
-                                    window_id: win_id.clone(),
-                                    event_type: "create".to_string(),
-                                    payload: serde_json::json!({}),
-                                });
-
-                                tracing::info!("ext_window: Created window {} at {}", win_id, start_url);
-                                let _ = respond.send(Ok(win_id));
-                            }
-                            Err(e) => {
-                                tracing::error!("ext_window: Failed to build webview: {}", e);
-                                let _ = respond.send(Err(format!("Failed to build webview: {}", e)));
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("ext_window: Failed to create window: {}", e);
-                        let _ = respond.send(Err(format!("Failed to create window: {}", e)));
-                    }
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinClose(window_id, respond)) => {
-                if let Some(window) = tao_windows.remove(&window_id) {
-                    let tao_id = window.id();
-                    windows.remove(&tao_id);
-                    webviews.remove(&window_id);
-                    window_channels.remove(&window_id);
-
-                    let _ = window_events_tx.try_send(WindowSystemEvent {
-                        window_id: window_id.clone(),
-                        event_type: "close".to_string(),
-                        payload: serde_json::json!({}),
-                    });
-
-                    tracing::info!("ext_window: Window {} closed", window_id);
-                    let _ = respond.send(true);
-                } else {
-                    let _ = respond.send(false);
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinMinimize(window_id)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    window.set_minimized(true);
-                    let _ = window_events_tx.try_send(WindowSystemEvent {
-                        window_id: window_id.clone(),
-                        event_type: "minimize".to_string(),
-                        payload: serde_json::json!({}),
-                    });
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinMaximize(window_id)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    window.set_maximized(true);
-                    let _ = window_events_tx.try_send(WindowSystemEvent {
-                        window_id: window_id.clone(),
-                        event_type: "maximize".to_string(),
-                        payload: serde_json::json!({}),
-                    });
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinUnmaximize(window_id)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    window.set_maximized(false);
-                    let _ = window_events_tx.try_send(WindowSystemEvent {
-                        window_id: window_id.clone(),
-                        event_type: "restore".to_string(),
-                        payload: serde_json::json!({}),
-                    });
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinRestore(window_id)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    window.set_minimized(false);
-                    let _ = window_events_tx.try_send(WindowSystemEvent {
-                        window_id: window_id.clone(),
-                        event_type: "restore".to_string(),
-                        payload: serde_json::json!({}),
-                    });
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinSetFullscreen(window_id, fullscreen)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    if fullscreen {
-                        window.set_fullscreen(Some(tao::window::Fullscreen::Borderless(None)));
-                    } else {
-                        window.set_fullscreen(None);
-                    }
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinFocus(window_id)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    window.set_focus();
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinGetPosition(window_id, respond)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    let pos = window.outer_position().unwrap_or(tao::dpi::PhysicalPosition::new(0, 0));
-                    let _ = respond.send(Ok(Position { x: pos.x, y: pos.y }));
-                } else {
-                    let _ = respond.send(Err(format!("Window not found: {}", window_id)));
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinSetPosition(window_id, x, y)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    window.set_outer_position(tao::dpi::LogicalPosition::new(x, y));
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinGetSize(window_id, respond)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    let size = window.inner_size();
-                    let _ = respond.send(Ok(Size {
-                        width: size.width,
-                        height: size.height,
-                    }));
-                } else {
-                    let _ = respond.send(Err(format!("Window not found: {}", window_id)));
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinSetSize(window_id, width, height)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    window.set_inner_size(tao::dpi::LogicalSize::new(width, height));
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinGetTitle(window_id, respond)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    let title = window.title();
-                    let _ = respond.send(Ok(title));
-                } else {
-                    let _ = respond.send(Err(format!("Window not found: {}", window_id)));
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinSetTitle(window_id, title)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    window.set_title(&title);
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinSetResizable(window_id, resizable)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    window.set_resizable(resizable);
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinSetDecorations(window_id, decorations)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    window.set_decorations(decorations);
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinSetAlwaysOnTop(window_id, always_on_top)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    window.set_always_on_top(always_on_top);
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinSetVisible(window_id, visible)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    window.set_visible(visible);
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinGetState(window_id, respond)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    let state = WinWindowState {
-                        is_visible: window.is_visible(),
-                        is_focused: window.is_focused(),
-                        is_fullscreen: window.fullscreen().is_some(),
-                        is_maximized: window.is_maximized(),
-                        is_minimized: window.is_minimized(),
-                        is_resizable: window.is_resizable(),
-                        has_decorations: window.is_decorated(),
-                        is_always_on_top: window.is_always_on_top(),
-                    };
-                    let _ = respond.send(Ok(state));
-                } else {
-                    let _ = respond.send(Err(format!("Window not found: {}", window_id)));
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinShowOpenDialog(opts, respond)) => {
-                // Convert WinFileDialogOpts to ext_ui FileDialogOpts for compatibility
-                let mut dialog = rfd::FileDialog::new();
-
-                if let Some(ref title) = opts.title {
-                    dialog = dialog.set_title(title);
-                }
-                if let Some(ref default_path) = opts.default_path {
-                    dialog = dialog.set_directory(default_path);
-                }
-                if let Some(ref filters) = opts.filters {
-                    for filter in filters {
-                        let exts: Vec<&str> = filter.extensions.iter().map(|s| s.as_str()).collect();
-                        dialog = dialog.add_filter(&filter.name, &exts);
-                    }
-                }
-
-                let result = if opts.directory.unwrap_or(false) {
-                    dialog.pick_folder().map(|p| vec![p.to_string_lossy().to_string()])
-                } else if opts.multiple.unwrap_or(false) {
-                    dialog.pick_files().map(|paths| {
-                        paths.into_iter().map(|p| p.to_string_lossy().to_string()).collect()
-                    })
-                } else {
-                    dialog.pick_file().map(|p| vec![p.to_string_lossy().to_string()])
-                };
-
-                let _ = respond.send(result);
-            }
-
-            Event::UserEvent(UserEvent::WinShowSaveDialog(opts, respond)) => {
-                let mut dialog = rfd::FileDialog::new();
-
-                if let Some(ref title) = opts.title {
-                    dialog = dialog.set_title(title);
-                }
-                if let Some(ref default_path) = opts.default_path {
-                    dialog = dialog.set_file_name(default_path);
-                }
-                if let Some(ref filters) = opts.filters {
-                    for filter in filters {
-                        let exts: Vec<&str> = filter.extensions.iter().map(|s| s.as_str()).collect();
-                        dialog = dialog.add_filter(&filter.name, &exts);
-                    }
-                }
-
-                let result = dialog.save_file().map(|p| p.to_string_lossy().to_string());
-                let _ = respond.send(result);
-            }
-
-            Event::UserEvent(UserEvent::WinShowMessageDialog(opts, respond)) => {
-                let level = match opts.kind.as_deref() {
-                    Some("warning") => rfd::MessageLevel::Warning,
-                    Some("error") => rfd::MessageLevel::Error,
-                    _ => rfd::MessageLevel::Info,
-                };
-
-                // Build buttons with custom labels when provided
-                // rfd supports: Ok, OkCancel, YesNo, YesNoCancel, and custom variants
-                let buttons = if let Some(ref btns) = opts.buttons {
-                    match btns.len() {
-                        0 => rfd::MessageButtons::Ok,
-                        1 => rfd::MessageButtons::OkCustom(btns[0].clone()),
-                        2 => rfd::MessageButtons::OkCancelCustom(btns[0].clone(), btns[1].clone()),
-                        n => {
-                            if n > 3 {
-                                tracing::warn!(
-                                    "Message dialog supports at most 3 buttons, got {}. Extra buttons will be ignored.",
-                                    n
-                                );
-                            }
-                            rfd::MessageButtons::YesNoCancelCustom(
-                                btns[0].clone(),
-                                btns[1].clone(),
-                                btns.get(2).cloned().unwrap_or_else(|| "Cancel".to_string()),
-                            )
-                        }
-                    }
-                } else {
-                    rfd::MessageButtons::Ok
-                };
-
-                let dialog = rfd::MessageDialog::new()
-                    .set_level(level)
-                    .set_title(opts.title.as_deref().unwrap_or(""))
-                    .set_description(&opts.message)
-                    .set_buttons(buttons);
-
-                let result = dialog.show();
-                // Map result to button index
-                let idx = match result {
-                    rfd::MessageDialogResult::Ok => 0,
-                    rfd::MessageDialogResult::Cancel => 1,
-                    rfd::MessageDialogResult::Yes => 0,
-                    rfd::MessageDialogResult::No => 1,
-                    rfd::MessageDialogResult::Custom(_) => 0,
-                };
-                let _ = respond.send(idx);
-            }
-
-            Event::UserEvent(UserEvent::WinSetAppMenu(items, respond)) => {
-                // Convert WinMenuItem to muda menu items (similar to ext_ui implementation)
-                let menu = muda::Menu::new();
-
-                fn add_win_menu_items(
-                    menu: &muda::Menu,
-                    items: &[WinMenuItem],
-                    id_map: &mut HashMap<muda::MenuId, (String, String)>,
-                ) {
-                    for item in items {
-                        if item.item_type.as_deref() == Some("separator") {
-                            let sep = muda::PredefinedMenuItem::separator();
-                            let _ = menu.append(&sep);
-                        } else if let Some(ref submenu_items) = item.submenu {
-                            let submenu = muda::Submenu::new(&item.label, true);
-                            for sub_item in submenu_items {
-                                if sub_item.item_type.as_deref() == Some("separator") {
-                                    let sep = muda::PredefinedMenuItem::separator();
-                                    let _ = submenu.append(&sep);
-                                } else {
-                                    let menu_item = muda::MenuItem::new(
-                                        &sub_item.label,
-                                        sub_item.enabled.unwrap_or(true),
-                                        sub_item.accelerator.as_ref().and_then(|a| a.parse().ok()),
-                                    );
-                                    let user_id = sub_item.id.clone().unwrap_or_else(|| sub_item.label.clone());
-                                    id_map.insert(menu_item.id().clone(), (user_id, sub_item.label.clone()));
-                                    let _ = submenu.append(&menu_item);
-                                }
-                            }
-                            let _ = menu.append(&submenu);
-                        } else {
-                            let menu_item = muda::MenuItem::new(
-                                &item.label,
-                                item.enabled.unwrap_or(true),
-                                item.accelerator.as_ref().and_then(|a| a.parse().ok()),
-                            );
-                            let user_id = item.id.clone().unwrap_or_else(|| item.label.clone());
-                            id_map.insert(menu_item.id().clone(), (user_id, item.label.clone()));
-                            let _ = menu.append(&menu_item);
-                        }
-                    }
-                }
-
-                {
-                    let mut map = menu_id_map.lock().unwrap();
-                    add_win_menu_items(&menu, &items, &mut map);
-                }
-
-                #[cfg(target_os = "macos")]
-                {
-                    menu.init_for_nsapp();
-                }
-
-                let _ = respond.send(true);
-            }
-
-            Event::UserEvent(UserEvent::WinShowContextMenu(window_id, items, respond)) => {
-                // Similar to ext_ui context menu
-                let menu = muda::Menu::new();
-
-                fn add_win_ctx_items(
-                    menu: &muda::Menu,
-                    items: &[WinMenuItem],
-                    id_map: &mut HashMap<muda::MenuId, (String, String)>,
-                ) {
-                    for item in items {
-                        if item.item_type.as_deref() == Some("separator") {
-                            let sep = muda::PredefinedMenuItem::separator();
-                            let _ = menu.append(&sep);
-                        } else {
-                            let menu_item = muda::MenuItem::new(
-                                &item.label,
-                                item.enabled.unwrap_or(true),
-                                item.accelerator.as_ref().and_then(|a| a.parse().ok()),
-                            );
-                            let user_id = item.id.clone().unwrap_or_else(|| item.label.clone());
-                            id_map.insert(menu_item.id().clone(), (user_id.clone(), item.label.clone()));
-                            let _ = menu.append(&menu_item);
-                        }
-                    }
-                }
-
-                {
-                    let mut map = menu_id_map.lock().unwrap();
-                    add_win_ctx_items(&menu, &items, &mut map);
-                }
-
-                // Show context menu on the window if specified
-                if let Some(ref wid) = window_id {
-                    if let Some(window) = tao_windows.get(wid) {
-                        #[cfg(target_os = "macos")]
-                        {
-                            use muda::ContextMenu;
-                            use tao::platform::macos::WindowExtMacOS;
-                            unsafe {
-                                menu.show_context_menu_for_nsview(
-                                    window.ns_view() as _,
-                                    None::<muda::dpi::Position>,
-                                );
-                            }
-                        }
-                        #[cfg(target_os = "windows")]
-                        {
-                            use muda::ContextMenu;
-                            use tao::platform::windows::WindowExtWindows;
-                            unsafe {
-                                let _ = menu.show_context_menu_for_hwnd(
-                                    window.hwnd() as _,
-                                    None::<muda::dpi::Position>,
-                                );
-                            }
-                        }
-                        #[cfg(target_os = "linux")]
-                        {
-                            use gtk::prelude::*;
-                            use muda::ContextMenu;
-                            use tao::platform::unix::WindowExtUnix;
-                            let gtk_win: &gtk::Window = window.gtk_window().upcast_ref();
-                            menu.show_context_menu_for_gtk_window(
-                                gtk_win,
-                                None::<muda::dpi::Position>,
-                            );
-                        }
-                    }
-                }
-
-                // For now, return empty string (context menus use events)
-                let _ = respond.send(None);
-            }
-
-            Event::UserEvent(UserEvent::WinCreateTray(opts, respond)) => {
-                use tray_icon::{Icon, TrayIconBuilder};
-
-                // Helper function to create a default tray icon (simple gray square)
-                fn create_default_tray_icon() -> Icon {
-                    let size = 22u32;
-                    let mut rgba_data = Vec::with_capacity((size * size * 4) as usize);
-                    for _ in 0..(size * size) {
-                        // Medium gray with full opacity
-                        rgba_data.extend_from_slice(&[128, 128, 128, 255]);
-                    }
-                    Icon::from_rgba(rgba_data, size, size).expect("Failed to create default icon")
-                }
-
-                // Similar to ext_ui tray creation
-                tray_counter += 1;
-                let tray_id_str = format!("tray-{}", tray_counter);
-
-                let icon = if let Some(ref icon_path) = opts.icon {
-                    let full_path = if std::path::Path::new(icon_path).is_absolute() {
-                        std::path::PathBuf::from(icon_path)
-                    } else {
-                        app_dir.join(icon_path)
-                    };
-
-                    match std::fs::read(&full_path) {
-                        Ok(bytes) => {
-                            match image::load_from_memory(&bytes) {
-                                Ok(img) => {
-                                    let resized = img.resize_exact(22, 22, image::imageops::FilterType::Lanczos3);
-                                    let rgba = resized.to_rgba8();
-                                    let (width, height) = rgba.dimensions();
-                                    Icon::from_rgba(rgba.into_raw(), width, height)
-                                        .unwrap_or_else(|_| create_default_tray_icon())
-                                }
-                                Err(_) => create_default_tray_icon(),
-                            }
-                        }
-                        Err(_) => create_default_tray_icon(),
-                    }
-                } else {
-                    create_default_tray_icon()
-                };
-
-                let mut builder = TrayIconBuilder::new().with_icon(icon);
-
-                if let Some(ref tooltip) = opts.tooltip {
-                    builder = builder.with_tooltip(tooltip);
-                }
-
-                if let Some(ref menu_items) = opts.menu {
-                    if !menu_items.is_empty() {
-                        let menu = muda::Menu::new();
-                        // Add menu items
-                        {
-                            let mut map = menu_id_map.lock().unwrap();
-                            for item in menu_items {
-                                if item.item_type.as_deref() == Some("separator") {
-                                    let sep = muda::PredefinedMenuItem::separator();
-                                    let _ = menu.append(&sep);
-                                } else {
-                                    let menu_item = muda::MenuItem::new(
-                                        &item.label,
-                                        item.enabled.unwrap_or(true),
-                                        item.accelerator.as_ref().and_then(|a| a.parse().ok()),
-                                    );
-                                    let user_id = item.id.clone().unwrap_or_else(|| item.label.clone());
-                                    let menu_id = format!("{}:{}", tray_id_str, user_id);
-                                    map.insert(menu_item.id().clone(), (menu_id, item.label.clone()));
-                                    let _ = menu.append(&menu_item);
-                                }
-                            }
-                        }
-                        builder = builder.with_menu(Box::new(menu));
-                    }
-                }
-
-                match builder.build() {
-                    Ok(tray) => {
-                        trays.insert(tray_id_str.clone(), tray);
-                        let _ = respond.send(tray_id_str);
-                    }
-                    Err(_) => {
-                        let _ = respond.send(String::new());
-                    }
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinUpdateTray(tray_id, opts, respond)) => {
-                if let Some(tray) = trays.get_mut(&tray_id) {
-                    if let Some(ref tooltip) = opts.tooltip {
-                        let _ = tray.set_tooltip(Some(tooltip));
-                    }
-                    let _ = respond.send(true);
-                } else {
-                    let _ = respond.send(false);
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinDestroyTray(tray_id, respond)) => {
-                if trays.remove(&tray_id).is_some() {
-                    let _ = respond.send(true);
-                } else {
-                    let _ = respond.send(false);
-                }
-            }
-
-            Event::UserEvent(UserEvent::WinGetNativeHandle(window_id, respond)) => {
-                if let Some(window) = tao_windows.get(&window_id) {
-                    #[cfg(target_os = "macos")]
-                    {
-                        use tao::platform::macos::WindowExtMacOS;
-                        let handle = window.ns_view() as u64;
-                        let _ = respond.send(Ok(NativeHandle {
-                            platform: "macos".to_string(),
-                            handle,
-                        }));
-                    }
-                    #[cfg(target_os = "windows")]
-                    {
-                        use tao::platform::windows::WindowExtWindows;
-                        let handle = window.hwnd() as u64;
-                        let _ = respond.send(Ok(NativeHandle {
-                            platform: "windows".to_string(),
-                            handle,
-                        }));
-                    }
-                    #[cfg(target_os = "linux")]
-                    {
-                        use tao::platform::unix::WindowExtUnix;
-                        use gtk::prelude::*;
-                        // Get the GTK window and use its pointer as a handle identifier
-                        let gtk_window = window.gtk_window();
-                        // Get GDK window if realized, otherwise use GTK window pointer
-                        let handle = if let Some(gdk_window) = gtk_window.window() {
-                            // Use GDK window pointer as handle (unique per window)
-                            gdk_window.as_ptr() as u64
-                        } else {
-                            // Fallback to GTK window pointer
-                            gtk_window.as_ptr() as u64
-                        };
-                        let _ = respond.send(Ok(NativeHandle {
-                            platform: "linux".to_string(),
-                            handle,
-                        }));
-                    }
-                } else {
-                    let _ = respond.send(Err(format!("Window not found: {}", window_id)));
-                }
+            Event::UserEvent(UserEvent::WindowCmd(cmd)) => {
+                window_manager.handle_cmd(cmd, event_loop_target);
             }
 
             _ => {}

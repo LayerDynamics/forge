@@ -228,27 +228,76 @@ pub enum WasmValue {
     F32(f32),
     #[serde(rename = "f64")]
     F64(f64),
+    /// Function reference (null or opaque handle)
+    #[serde(rename = "funcref")]
+    FuncRef(Option<String>),
+    /// External reference (null or opaque handle)
+    #[serde(rename = "externref")]
+    ExternRef(Option<String>),
 }
 
 impl WasmValue {
-    /// Convert to wasmtime Val
-    fn to_wasmtime(&self) -> Val {
+    /// Convert to wasmtime Val, looking up handles from the instance registry
+    fn to_wasmtime(&self, instance: Option<&WasmInstance>) -> Val {
         match self {
             WasmValue::I32(v) => Val::I32(*v),
             WasmValue::I64(v) => Val::I64(*v),
             WasmValue::F32(v) => Val::F32(v.to_bits()),
             WasmValue::F64(v) => Val::F64(v.to_bits()),
+            // Reference types - look up handles from instance registry
+            WasmValue::FuncRef(None) => Val::null_func_ref(),
+            WasmValue::FuncRef(Some(handle)) => {
+                // Look up the funcref from the instance's handle registry
+                if let Some(inst) = instance {
+                    if let Some(func) = inst.get_func_ref(handle) {
+                        Val::FuncRef(Some(func.clone()))
+                    } else {
+                        // Handle not found, return null
+                        debug!(handle = %handle, "FuncRef handle not found in registry, returning null");
+                        Val::null_func_ref()
+                    }
+                } else {
+                    // No instance provided, return null
+                    Val::null_func_ref()
+                }
+            }
+            WasmValue::ExternRef(None) => Val::null_extern_ref(),
+            WasmValue::ExternRef(Some(handle)) => {
+                // ExternRef handles are tracked but cannot be reconstructed from JS
+                // since they are GC-managed references tied to the store.
+                // Log the attempt and return null.
+                debug!(handle = %handle, "ExternRef cannot be reconstructed from handle, returning null");
+                Val::null_extern_ref()
+            }
         }
     }
 
-    /// Convert from wasmtime Val
-    fn from_wasmtime(val: &Val) -> Option<Self> {
+    /// Convert from wasmtime Val, storing references in the instance registry
+    fn from_wasmtime(val: &Val, instance: &mut WasmInstance) -> Option<Self> {
         match val {
             Val::I32(v) => Some(WasmValue::I32(*v)),
             Val::I64(v) => Some(WasmValue::I64(*v)),
             Val::F32(v) => Some(WasmValue::F32(f32::from_bits(*v))),
             Val::F64(v) => Some(WasmValue::F64(f64::from_bits(*v))),
-            _ => None, // Externref, Funcref not supported in MVP
+            Val::FuncRef(func_opt) => {
+                // Store the funcref in the instance registry and return the handle
+                let handle = func_opt.as_ref().map(|func| {
+                    instance.store_func_ref(func.clone())
+                });
+                Some(WasmValue::FuncRef(handle))
+            }
+            Val::ExternRef(extern_opt) => {
+                // ExternRefs are GC-managed - we track them with an opaque handle
+                // The handle allows round-trip identification but externrefs
+                // cannot be reconstructed from JS (they exist only in WASM memory)
+                let handle = extern_opt.as_ref().map(|_| {
+                    // Generate a tracking handle for this externref
+                    instance.store_extern_ref(instance.next_extern_ref_id)
+                });
+                Some(WasmValue::ExternRef(handle))
+            }
+            // V128 and other types not yet supported
+            _ => None,
         }
     }
 
@@ -259,6 +308,8 @@ impl WasmValue {
             WasmValue::I64(_) => ValType::I64,
             WasmValue::F32(_) => ValType::F32,
             WasmValue::F64(_) => ValType::F64,
+            WasmValue::FuncRef(_) => ValType::FUNCREF,
+            WasmValue::ExternRef(_) => ValType::EXTERNREF,
         }
     }
 }
@@ -309,6 +360,43 @@ pub struct WasmInstance {
     pub store: Store<WasmStoreData>,
     pub instance: wasmtime::Instance,
     pub module_id: String,
+    /// Registry for funcref handles - maps handle ID to function
+    pub func_refs: HashMap<String, Func>,
+    /// Counter for generating unique funcref handles
+    pub next_func_ref_id: u64,
+    /// Registry for externref handles - stores the raw pointer as u64
+    /// (externrefs are GC-managed, we store identifiers to track them)
+    pub extern_ref_ids: HashMap<String, u64>,
+    /// Counter for generating unique externref handles
+    pub next_extern_ref_id: u64,
+}
+
+impl WasmInstance {
+    /// Generate a unique funcref handle and store the function
+    pub fn store_func_ref(&mut self, func: Func) -> String {
+        let handle = format!("funcref_{}", self.next_func_ref_id);
+        self.next_func_ref_id += 1;
+        self.func_refs.insert(handle.clone(), func);
+        handle
+    }
+
+    /// Retrieve a stored function by handle
+    pub fn get_func_ref(&self, handle: &str) -> Option<&Func> {
+        self.func_refs.get(handle)
+    }
+
+    /// Generate a unique externref handle
+    pub fn store_extern_ref(&mut self, id: u64) -> String {
+        let handle = format!("externref_{}", self.next_extern_ref_id);
+        self.next_extern_ref_id += 1;
+        self.extern_ref_ids.insert(handle.clone(), id);
+        handle
+    }
+
+    /// Retrieve externref ID by handle
+    pub fn get_extern_ref_id(&self, handle: &str) -> Option<u64> {
+        self.extern_ref_ids.get(handle).copied()
+    }
 }
 
 /// Main state for WASM extension
@@ -426,7 +514,18 @@ fn val_type_to_string(ty: &ValType) -> String {
         ValType::F32 => "f32".to_string(),
         ValType::F64 => "f64".to_string(),
         ValType::V128 => "v128".to_string(),
-        ValType::Ref(r) => format!("ref:{:?}", r),
+        ValType::Ref(r) => {
+            // Provide cleaner type names for common reference types
+            // Compare heap types to identify funcref and externref
+            use wasmtime::HeapType;
+            match r.heap_type() {
+                HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => {
+                    "funcref".to_string()
+                }
+                HeapType::Extern | HeapType::NoExtern => "externref".to_string(),
+                other => format!("ref:{:?}", other),
+            }
+        }
     }
 }
 
@@ -669,6 +768,10 @@ async fn op_wasm_instantiate(
                 store,
                 instance,
                 module_id: module_id.clone(),
+                func_refs: HashMap::new(),
+                next_func_ref_id: 1,
+                extern_ref_ids: HashMap::new(),
+                next_extern_ref_id: 1,
             })),
         );
     }
@@ -788,22 +891,27 @@ async fn op_wasm_call(
 
     let mut inst = instance_arc.lock().await;
 
-    // Destructure to get separate mutable borrows
-    let WasmInstance {
-        store, instance, ..
-    } = &mut *inst;
-
-    // Get the function
-    let func: Func = instance.get_func(&mut *store, &func_name).ok_or_else(|| {
-        WasmError::export_not_found(format!(
-            "Function '{}' not found in instance '{}'",
-            func_name, instance_id
-        ))
-    })?;
+    // Get the function first (need to borrow store temporarily)
+    let func: Func = {
+        let WasmInstance {
+            store, instance, ..
+        } = &mut *inst;
+        instance.get_func(&mut *store, &func_name).ok_or_else(|| {
+            WasmError::export_not_found(format!(
+                "Function '{}' not found in instance '{}'",
+                func_name, instance_id
+            ))
+        })?
+    };
 
     // Verify argument types
-    let func_ty = func.ty(&*store);
-    let expected_params: Vec<ValType> = func_ty.params().collect();
+    let (expected_params, result_count) = {
+        let WasmInstance { store, .. } = &mut *inst;
+        let func_ty = func.ty(&*store);
+        let expected_params: Vec<ValType> = func_ty.params().collect();
+        let result_count = func_ty.results().count();
+        (expected_params, result_count)
+    };
 
     if args.len() != expected_params.len() {
         return Err(WasmError::type_error(format!(
@@ -825,20 +933,25 @@ async fn op_wasm_call(
         }
     }
 
-    // Convert arguments
-    let wasm_args: Vec<Val> = args.iter().map(|a| a.to_wasmtime()).collect();
+    // Convert arguments using instance registry for reference types
+    let wasm_args: Vec<Val> = args
+        .iter()
+        .map(|a| a.to_wasmtime(Some(&*inst)))
+        .collect();
 
     // Prepare results buffer
-    let result_count = func_ty.results().count();
     let mut results = vec![Val::I32(0); result_count];
 
     // Call the function
-    func.call(&mut *store, &wasm_args, &mut results)?;
+    {
+        let WasmInstance { store, .. } = &mut *inst;
+        func.call(&mut *store, &wasm_args, &mut results)?;
+    }
 
-    // Convert results
+    // Convert results, storing any reference types in the instance registry
     let output: Vec<WasmValue> = results
         .iter()
-        .filter_map(WasmValue::from_wasmtime)
+        .filter_map(|val| WasmValue::from_wasmtime(val, &mut *inst))
         .collect();
 
     debug!(instance_id = %instance_id, func_name = %func_name, results_count = output.len(), "wasm.call complete");
@@ -1077,23 +1190,118 @@ mod tests {
 
     #[test]
     fn test_wasm_value_conversion() {
+        // Create a dummy instance for testing (primitives don't need it, but refs do)
+        let engine = Engine::default();
+        let module = Module::new(&engine, "(module)").unwrap();
+        let mut store = Store::new(&engine, WasmStoreData::default());
+        let instance = wasmtime::Instance::new(&mut store, &module, &[]).unwrap();
+        let mut wasm_inst = WasmInstance {
+            store,
+            instance,
+            module_id: "test".to_string(),
+            func_refs: HashMap::new(),
+            next_func_ref_id: 1,
+            extern_ref_ids: HashMap::new(),
+            next_extern_ref_id: 1,
+        };
+
+        // Test i32
         let val = WasmValue::I32(42);
-        let wt_val = val.to_wasmtime();
+        let wt_val = val.to_wasmtime(None);
         assert_eq!(wt_val.i32(), Some(42));
 
-        let back = WasmValue::from_wasmtime(&wt_val);
+        let back = WasmValue::from_wasmtime(&wt_val, &mut wasm_inst);
         assert!(matches!(back, Some(WasmValue::I32(42))));
 
+        // Test i64
         let val64 = WasmValue::I64(1234567890123);
-        let wt_val64 = val64.to_wasmtime();
+        let wt_val64 = val64.to_wasmtime(None);
         assert_eq!(wt_val64.i64(), Some(1234567890123));
 
+        // Test f32
         let valf32 = WasmValue::F32(std::f32::consts::PI);
-        let wt_valf32 = valf32.to_wasmtime();
-        let back_f32 = WasmValue::from_wasmtime(&wt_valf32);
+        let wt_valf32 = valf32.to_wasmtime(None);
+        let back_f32 = WasmValue::from_wasmtime(&wt_valf32, &mut wasm_inst);
         assert!(
             matches!(back_f32, Some(WasmValue::F32(f)) if (f - std::f32::consts::PI).abs() < 0.001)
         );
+    }
+
+    #[test]
+    fn test_wasm_funcref_registry() {
+        // Create instance with a module that exports a function
+        let engine = Engine::default();
+        let module = Module::new(&engine, r#"(module (func (export "test")))"#).unwrap();
+        let mut store = Store::new(&engine, WasmStoreData::default());
+        let instance = wasmtime::Instance::new(&mut store, &module, &[]).unwrap();
+        let mut wasm_inst = WasmInstance {
+            store,
+            instance,
+            module_id: "test".to_string(),
+            func_refs: HashMap::new(),
+            next_func_ref_id: 1,
+            extern_ref_ids: HashMap::new(),
+            next_extern_ref_id: 1,
+        };
+
+        // Get the exported function
+        let func = wasm_inst.instance.get_func(&mut wasm_inst.store, "test").unwrap();
+
+        // Store it in registry
+        let handle = wasm_inst.store_func_ref(func.clone());
+        assert_eq!(handle, "funcref_1");
+
+        // Retrieve it
+        let retrieved = wasm_inst.get_func_ref(&handle);
+        assert!(retrieved.is_some());
+
+        // Test round-trip through WasmValue
+        let wasm_val = WasmValue::FuncRef(Some(handle.clone()));
+        let wasmtime_val = wasm_val.to_wasmtime(Some(&wasm_inst));
+
+        // The retrieved funcref should be valid (not null)
+        assert!(wasmtime_val.func_ref().is_some());
+    }
+
+    #[test]
+    fn test_wasm_null_refs() {
+        let engine = Engine::default();
+        let module = Module::new(&engine, "(module)").unwrap();
+        let mut store = Store::new(&engine, WasmStoreData::default());
+        let instance = wasmtime::Instance::new(&mut store, &module, &[]).unwrap();
+        let mut wasm_inst = WasmInstance {
+            store,
+            instance,
+            module_id: "test".to_string(),
+            func_refs: HashMap::new(),
+            next_func_ref_id: 1,
+            extern_ref_ids: HashMap::new(),
+            next_extern_ref_id: 1,
+        };
+
+        // Test null funcref
+        // Val::func_ref() returns Option<Option<Func>> where:
+        // - outer None = not a funcref
+        // - Some(None) = null funcref
+        // - Some(Some(f)) = non-null funcref
+        let null_funcref = WasmValue::FuncRef(None);
+        let wt_null = null_funcref.to_wasmtime(Some(&wasm_inst));
+        // It IS a funcref (outer Some), but it's null (inner None)
+        assert!(matches!(wt_null.func_ref(), Some(None)));
+
+        // Convert back
+        let back = WasmValue::from_wasmtime(&wt_null, &mut wasm_inst);
+        assert!(matches!(back, Some(WasmValue::FuncRef(None))));
+
+        // Test null externref
+        // Same pattern: Some(None) = null externref
+        let null_externref = WasmValue::ExternRef(None);
+        let wt_null_ext = null_externref.to_wasmtime(Some(&wasm_inst));
+        assert!(matches!(wt_null_ext.extern_ref(), Some(None)));
+
+        // Convert back
+        let back_ext = WasmValue::from_wasmtime(&wt_null_ext, &mut wasm_inst);
+        assert!(matches!(back_ext, Some(WasmValue::ExternRef(None))));
     }
 
     #[test]

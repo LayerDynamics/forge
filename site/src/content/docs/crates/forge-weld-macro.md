@@ -170,14 +170,37 @@ pub fn op_fs_exists(
 }
 ```
 
+## Type Parser
+
+The `type_parser.rs` module provides strict Rust→TypeScript type conversion. It panics on unsupported types to ensure no `unknown` types slip through to generated TypeScript.
+
+**Supported types:**
+- **Primitives**: `u8`-`u64`, `i8`-`i64`, `f32`, `f64`, `bool`, `String`, `char`, `()`
+- **Containers**: `Option<T>`, `Vec<T>`, `Result<T, E>`, `HashMap<K, V>`, `BTreeMap<K, V>`
+- **Sets**: `HashSet<T>`, `BTreeSet<T>`
+- **Smart pointers**: `Box<T>`, `Arc<T>`, `Rc<T>`, `RefCell<T>`, `Mutex<T>`, `RwLock<T>`
+- **References**: `&T`, `&mut T`
+- **Tuples**: `(A, B, C)`
+- **Arrays/Slices**: `[T; N]`, `[T]`
+- **Special**: `serde_json::Value` → `JsonValue`, `OpState`
+- **Custom types**: Treated as struct references
+
+**Unsupported types (will panic):**
+- Bare function types (`fn(A) -> B`)
+- `impl Trait` types
+- Trait objects (`dyn Trait`)
+- Inferred types (`_`)
+- Macro types
+
 ## File Structure
 
 ```text
 crates/forge-weld-macro/
 ├── src/
-│   ├── lib.rs        # Macro entry points
-│   ├── weld_op.rs    # #[weld_op] implementation
-│   └── weld_struct.rs # #[weld_struct] and #[weld_enum] implementation
+│   ├── lib.rs         # Macro entry points
+│   ├── weld_op.rs     # #[weld_op] implementation
+│   ├── weld_struct.rs # #[weld_struct] and #[weld_enum] implementation
+│   └── type_parser.rs # Rust→WeldType conversion with strict validation
 └── Cargo.toml
 ```
 

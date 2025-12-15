@@ -13,12 +13,12 @@ Forge Weld bridges the gap between Rust `deno_core` ops and TypeScript by:
 
 ### Architecture
 
-```
+```ascii
 ┌─────────────────────────────────────────────────────────────────┐
 │                      forge-weld-macro                           │
-│  ┌──────────┐  ┌──────────────┐  ┌───────────────┐             │
-│  │ #[weld_op]│  │#[weld_struct]│  │ #[weld_enum] │              │
-│  └─────┬────┘  └──────┬───────┘  └───────┬──────┘              │
+│  ┌───────────┐  ┌──────────────┐  ┌───────────────┐             │
+│  │ #[weld_op]│  │#[weld_struct]│  │ #[weld_enum]  │             │
+│  └─────┬─────┘  └──────┬───────┘  └───────┬───────┘             │
 │        │              │                   │                     │
 │        └──────────────┴───────────────────┘                     │
 │                       │                                         │
@@ -31,32 +31,32 @@ Forge Weld bridges the gap between Rust `deno_core` ops and TypeScript by:
 ┌─────────────────────────────────────────────────────────────────┐
 │                        forge-weld                               │
 │                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                   IR (Intermediate Rep)                   │  │
-│  │  ┌─────────────┐  ┌────────────┐  ┌─────────────┐        │  │
-│  │  │  WeldType   │  │  OpSymbol  │  │ WeldStruct  │        │  │
-│  │  │ WeldPrimitive│  │  OpParam   │  │ WeldEnum    │        │  │
-│  │  └─────────────┘  └────────────┘  └─────────────┘        │  │
-│  └──────────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                   IR (Intermediate Rep)                  │   │
+│  │  ┌──────────────┐  ┌────────────┐  ┌─────────────┐       │   │
+│  │  │  WeldType    │  │  OpSymbol  │  │ WeldStruct  │       │   │
+│  │  │ WeldPrimitive│  │  OpParam   │  │ WeldEnum    │       │   │
+│  │  └──────────────┘  └────────────┘  └─────────────┘       │   │
+│  └──────────────────────────────────────────────────────────┘   │
 │                           │                                     │
-│  ┌────────────────────────┴─────────────────────────────────┐  │
-│  │                   Inventory (linkme)                      │  │
-│  │        WELD_OPS | WELD_STRUCTS | WELD_ENUMS              │  │
-│  └────────────────────────┬─────────────────────────────────┘  │
+│  ┌────────────────────────┴─────────────────────────────────┐   │
+│  │                   Inventory (linkme)                     │   │
+│  │        WELD_OPS | WELD_STRUCTS | WELD_ENUMS              │   │
+│  └────────────────────────┬─────────────────────────────────┘   │
 │                           │                                     │
-│  ┌────────────────────────┴─────────────────────────────────┐  │
-│  │                      Codegen                              │  │
-│  │  ┌──────────────┐  ┌───────────────────┐                 │  │
-│  │  │ DtsGenerator │  │ ExtensionGenerator│                 │  │
-│  │  │  (.d.ts)     │  │  (extension.rs)   │                 │  │
-│  │  └──────────────┘  └───────────────────┘                 │  │
-│  └──────────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────┴─────────────────────────────────┐   │
+│  │                      Codegen                             │   │
+│  │  ┌──────────────┐  ┌───────────────────┐                 │   │
+│  │  │ DtsGenerator │  │ ExtensionGenerator│                 │   │
+│  │  │  (.d.ts)     │  │  (extension.rs)   │                 │   │
+│  │  └──────────────┘  └───────────────────┘                 │   │
+│  └──────────────────────────────────────────────────────────┘   │
 │                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                      Build                                │  │
-│  │  ExtensionBuilder - for build.rs scripts                 │  │
-│  │  transpile_ts() - TypeScript → JavaScript                │  │
-│  └──────────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                      Build                               │   │
+│  │  ExtensionBuilder - for build.rs scripts                 │   │
+│  │  transpile_ts() - TypeScript → JavaScript                │   │
+│  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
                           │
                           ▼
@@ -111,6 +111,7 @@ pub async fn op_fs_read_text(
 ```
 
 This generates metadata capturing:
+
 - Function name → TypeScript name (`op_fs_read_text` → `readText`)
 - Parameter types (with snake_case → camelCase conversion)
 - Return type (Result<T, E> → Promise<T>)
@@ -178,6 +179,7 @@ fn main() {
 ```
 
 This will:
+
 1. Transpile `ts/init.ts` to JavaScript
 2. Generate `extension.rs` with the module initialization
 3. Generate `host.fs.d.ts` in the SDK directory

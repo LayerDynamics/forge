@@ -56,36 +56,83 @@ fn main() {
 
 ### IR (Intermediate Representation)
 
-Types for representing ops, structs, and modules:
+The IR module is organized into submodules for representing ops, structs, enums, and modules:
+
+```text
+ir/
+├── mod.rs       # Module exports and re-exports
+├── types.rs     # WeldType, WeldPrimitive definitions
+├── symbol.rs    # OpSymbol, OpParam, StructField, EnumVariant
+├── inventory.rs # WELD_OPS, WELD_STRUCTS, WELD_ENUMS distributed slices
+└── module.rs    # WeldModule builder pattern
+```
+
+**Core types:**
 
 ```rust
 // Op symbol with metadata
 struct OpSymbol {
-    name: &'static str,
+    rust_name: String,
+    ts_name: String,
     is_async: bool,
     params: Vec<OpParam>,
     return_type: WeldType,
+    doc: Option<String>,
+    op2_attrs: Op2Attrs,
+    module: Option<String>,
+}
+
+// Op parameter
+struct OpParam {
+    rust_name: String,
+    ts_name: String,
+    ty: WeldType,
+    attr: ParamAttr,
+    optional: bool,
+    doc: Option<String>,
 }
 
 // Struct definition
 struct WeldStruct {
-    name: &'static str,
-    ts_name: Option<&'static str>,
+    rust_name: String,
+    ts_name: String,
     fields: Vec<StructField>,
+    doc: Option<String>,
+    type_params: Vec<String>,
+}
+
+// Enum definition
+struct WeldEnum {
+    rust_name: String,
+    ts_name: String,
+    variants: Vec<EnumVariant>,
+    doc: Option<String>,
 }
 
 // Module containing ops and types
 struct WeldModule {
     name: String,
     specifier: String,
+    esm_entry_point: String,
     ops: Vec<OpSymbol>,
     structs: Vec<WeldStruct>,
+    enums: Vec<WeldEnum>,
 }
 ```
 
 ### Codegen
 
-Code generators for TypeScript and Rust:
+The codegen module contains generators for TypeScript and Rust code:
+
+```text
+codegen/
+├── mod.rs        # Module exports
+├── typescript.rs # TypeScript type conversion (WeldType → TS)
+├── dts.rs        # .d.ts file generator
+└── extension.rs  # deno_core::extension! macro generator
+```
+
+**TypeScript generation:**
 
 ```rust
 // Generate TypeScript declarations
@@ -95,6 +142,21 @@ let dts = generator.generate_module(&module);
 // Generate .d.ts file
 let dts_builder = DtsBuilder::new("host:fs");
 dts_builder.generate_to_file("sdk/generated/host.fs.d.ts")?;
+```
+
+**Extension macro generation:**
+
+```rust
+// Generate deno_core::extension! invocation
+let gen = ExtensionGenerator::new(&module);
+let output = gen.generate(js_source);
+// Produces:
+// deno_core::extension!(
+//     host_fs,
+//     ops = [op_fs_read_text, op_fs_write_text, ...],
+//     esm_entry_point = "ext:host_fs/init.js",
+//     esm = ["ext:host_fs/init.js" = { source = "..." }]
+// );
 ```
 
 ### Build
@@ -113,26 +175,50 @@ let js = transpile_file(Path::new("ts/init.ts"))?;
 
 ### WeldType
 
-Represents TypeScript types:
+Represents Rust types for TypeScript conversion:
 
 ```rust
 enum WeldType {
+    // Primitives
     Primitive(WeldPrimitive),
-    Array(Box<WeldType>),
-    Optional(Box<WeldType>),
-    Promise(Box<WeldType>),
-    Object(Vec<(String, WeldType)>),
-    Reference(String),
-    Union(Vec<WeldType>),
+
+    // Containers
+    Option(Box<WeldType>),
+    Vec(Box<WeldType>),
+    Result { ok: Box<WeldType>, err: Box<WeldType> },
+    HashMap { key: Box<WeldType>, value: Box<WeldType> },
+    BTreeMap { key: Box<WeldType>, value: Box<WeldType> },
+    HashSet(Box<WeldType>),
+    BTreeSet(Box<WeldType>),
+
+    // Smart pointers (transparent in TypeScript)
+    Box(Box<WeldType>),
+    Arc(Box<WeldType>),
+    Rc(Box<WeldType>),
+    RefCell(Box<WeldType>),
+    Mutex(Box<WeldType>),
+    RwLock(Box<WeldType>),
+
+    // References
+    Reference { inner: Box<WeldType>, mutable: bool },
+    Pointer { inner: Box<WeldType>, mutable: bool },
+
+    // Compound types
+    Tuple(Vec<WeldType>),
+    Struct(String),       // Named struct reference
+    Enum(String),         // Named enum reference
+
+    // Special
+    JsonValue,            // serde_json::Value → unknown
+    OpState,              // Internal Deno type (filtered out)
+    Never,                // ! type → never
 }
 
 enum WeldPrimitive {
-    String,
-    Number,
-    Boolean,
-    Void,
-    Unknown,
-    BigInt,
+    U8, U16, U32, U64, Usize,
+    I8, I16, I32, I64, Isize,
+    F32, F64,
+    Bool, String, Str, Char, Unit,
 }
 ```
 
@@ -170,10 +256,22 @@ pub static WELD_ENUMS: [fn() -> WeldEnum];
 ```text
 crates/forge-weld/
 ├── src/
-│   ├── lib.rs      # Main entry, re-exports
-│   ├── ir.rs       # Intermediate representation types
-│   ├── codegen.rs  # Code generators
-│   └── build.rs    # ExtensionBuilder and utilities
+│   ├── lib.rs              # Main entry, re-exports
+│   ├── ir/
+│   │   ├── mod.rs          # IR module exports
+│   │   ├── types.rs        # WeldType, WeldPrimitive
+│   │   ├── symbol.rs       # OpSymbol, OpParam, StructField
+│   │   ├── inventory.rs    # Distributed slices for compile-time collection
+│   │   └── module.rs       # WeldModule builder
+│   ├── codegen/
+│   │   ├── mod.rs          # Codegen module exports
+│   │   ├── typescript.rs   # WeldType → TypeScript conversion
+│   │   ├── dts.rs          # .d.ts file generation
+│   │   └── extension.rs    # deno_core::extension! macro generation
+│   └── build/
+│       ├── mod.rs          # Build utilities exports
+│       ├── extension.rs    # ExtensionBuilder
+│       └── transpile.rs    # TypeScript → JavaScript via deno_ast
 └── Cargo.toml
 ```
 

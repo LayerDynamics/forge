@@ -83,7 +83,7 @@ import { spawn } from "host:process";
 
 ## Project Structure
 
-```
+```ascii
 my-app/
 ├── manifest.app.toml   # App config & capabilities
 ├── deno.json           # Deno configuration
