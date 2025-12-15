@@ -13,8 +13,8 @@ toml = "0.8"
 tokio = { version = "1", features = ["rt", "macros", "fs", "sync", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
-deno_core = "*"   # TODO: pin
-deno_ast = { version = "*", features = ["transpiling"] }
+deno_core = "0.373"
+deno_ast = { version = "0.52", features = ["transpiling"] }
 wry = "0.46"
 tao = "0.30"
 tray-icon = "0.19"
@@ -22,6 +22,7 @@ image = "0.25"
 globset = "0.4"
 rfd = "0.14"
 muda = "0.15"
+crossbeam-channel = "0.5"
 # HMR support
 tokio-tungstenite = "0.24"
 futures-util = "0.3"
@@ -45,4 +46,4 @@ ext_wasm = { path = "../ext_wasm" }
 gtk = "0.18"
 
 [build-dependencies]
-deno_ast = { version = "*", features = ["transpiling"] }
+deno_ast = { version = "0.52", features = ["transpiling"] }

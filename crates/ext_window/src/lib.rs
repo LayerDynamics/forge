@@ -5,6 +5,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
+// Manager module with platform implementation
+pub mod manager;
+pub use manager::*;
+
 // ============================================================================
 // Error Types (6000+ range)
 // ============================================================================

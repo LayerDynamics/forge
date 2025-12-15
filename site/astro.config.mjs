@@ -25,6 +25,7 @@ export default defineConfig({
           items: [
             'getting-started',
             'architecture',
+            'roadmap',
           ],
         },
         {

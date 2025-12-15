@@ -6,8 +6,8 @@ description = "WebAssembly extension for Forge apps"
 license = "MIT"
 
 [dependencies]
-deno_core = "*"
-deno_error = "*"
+deno_core = "0.373"
+deno_error = "0.7"
 thiserror = "1"
 tokio = { version = "1", features = ["sync"] }
 serde = { version = "1", features = ["derive"] }

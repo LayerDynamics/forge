@@ -11,7 +11,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # TypeScript transpilation
-deno_ast = { version = "*", features = ["transpiling"] }
+deno_ast = { version = "0.52", features = ["transpiling"] }
 
 # Proc macro support (for parsing, not the macros themselves)
 syn = { version = "2", features = ["full", "parsing", "extra-traits"] }

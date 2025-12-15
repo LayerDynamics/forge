@@ -24,6 +24,7 @@
 
 use proc_macro::TokenStream;
 
+mod type_parser;
 mod weld_op;
 mod weld_struct;
 

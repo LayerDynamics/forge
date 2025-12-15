@@ -1,194 +1,9 @@
 //! Implementation of the #[weld_struct] and #[weld_enum] macros
 
+use crate::type_parser::rust_type_to_weld_type;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse2, Fields, GenericArgument, ItemEnum, ItemStruct, PathArguments, Type};
-
-/// Parse a Rust type into a WeldType token stream
-fn rust_type_to_weld_type(ty: &Type) -> TokenStream {
-    match ty {
-        Type::Path(type_path) => {
-            let segments: Vec<_> = type_path.path.segments.iter().collect();
-            if let Some(last_seg) = segments.last() {
-                let ident = last_seg.ident.to_string();
-
-                // Handle primitive types
-                match ident.as_str() {
-                    "u8" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::U8) }
-                    }
-                    "u16" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::U16) }
-                    }
-                    "u32" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::U32) }
-                    }
-                    "u64" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::U64) }
-                    }
-                    "usize" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::Usize) }
-                    }
-                    "i8" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::I8) }
-                    }
-                    "i16" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::I16) }
-                    }
-                    "i32" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::I32) }
-                    }
-                    "i64" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::I64) }
-                    }
-                    "isize" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::Isize) }
-                    }
-                    "f32" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::F32) }
-                    }
-                    "f64" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::F64) }
-                    }
-                    "bool" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::Bool) }
-                    }
-                    "String" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::String) }
-                    }
-                    "char" => {
-                        return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::Char) }
-                    }
-                    _ => {}
-                }
-
-                // Handle generic types
-                if let PathArguments::AngleBracketed(args) = &last_seg.arguments {
-                    let inner_types: Vec<_> = args
-                        .args
-                        .iter()
-                        .filter_map(|arg| {
-                            if let GenericArgument::Type(inner_ty) = arg {
-                                Some(rust_type_to_weld_type(inner_ty))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-
-                    match ident.as_str() {
-                        "Option" => {
-                            if let Some(inner) = inner_types.first() {
-                                return quote! { forge_weld::WeldType::Option(Box::new(#inner)) };
-                            }
-                        }
-                        "Vec" => {
-                            if let Some(inner) = inner_types.first() {
-                                return quote! { forge_weld::WeldType::Vec(Box::new(#inner)) };
-                            }
-                        }
-                        "Result" => {
-                            if inner_types.len() >= 2 {
-                                let ok_type = &inner_types[0];
-                                let err_type = &inner_types[1];
-                                return quote! {
-                                    forge_weld::WeldType::Result {
-                                        ok: Box::new(#ok_type),
-                                        err: Box::new(#err_type),
-                                    }
-                                };
-                            }
-                        }
-                        "HashMap" | "BTreeMap" => {
-                            if inner_types.len() >= 2 {
-                                let key_type = &inner_types[0];
-                                let val_type = &inner_types[1];
-                                return quote! {
-                                    forge_weld::WeldType::HashMap {
-                                        key: Box::new(#key_type),
-                                        value: Box::new(#val_type),
-                                    }
-                                };
-                            }
-                        }
-                        "HashSet" | "BTreeSet" => {
-                            if let Some(inner) = inner_types.first() {
-                                return quote! { forge_weld::WeldType::HashSet(Box::new(#inner)) };
-                            }
-                        }
-                        "Box" => {
-                            if let Some(inner) = inner_types.first() {
-                                return quote! { forge_weld::WeldType::Box(Box::new(#inner)) };
-                            }
-                        }
-                        "Arc" => {
-                            if let Some(inner) = inner_types.first() {
-                                return quote! { forge_weld::WeldType::Arc(Box::new(#inner)) };
-                            }
-                        }
-                        "Rc" => {
-                            if let Some(inner) = inner_types.first() {
-                                return quote! { forge_weld::WeldType::Rc(Box::new(#inner)) };
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-
-                // Handle serde_json::Value
-                if ident == "Value" {
-                    let path_str = segments
-                        .iter()
-                        .map(|s| s.ident.to_string())
-                        .collect::<Vec<_>>()
-                        .join("::");
-                    if path_str.contains("serde_json") || path_str == "Value" {
-                        return quote! { forge_weld::WeldType::JsonValue };
-                    }
-                }
-
-                // Default: treat as struct reference
-                return quote! { forge_weld::WeldType::Struct(#ident.to_string()) };
-            }
-        }
-        Type::Reference(type_ref) => {
-            let inner = rust_type_to_weld_type(&type_ref.elem);
-            let mutable = type_ref.mutability.is_some();
-            return quote! {
-                forge_weld::WeldType::Reference {
-                    inner: Box::new(#inner),
-                    mutable: #mutable,
-                }
-            };
-        }
-        Type::Tuple(type_tuple) => {
-            if type_tuple.elems.is_empty() {
-                return quote! { forge_weld::WeldType::Primitive(forge_weld::WeldPrimitive::Unit) };
-            }
-            let elems: Vec<_> = type_tuple
-                .elems
-                .iter()
-                .map(rust_type_to_weld_type)
-                .collect();
-            return quote! { forge_weld::WeldType::Tuple(vec![#(#elems),*]) };
-        }
-        Type::Slice(type_slice) => {
-            let inner = rust_type_to_weld_type(&type_slice.elem);
-            return quote! { forge_weld::WeldType::Vec(Box::new(#inner)) };
-        }
-        Type::Array(type_array) => {
-            let inner = rust_type_to_weld_type(&type_array.elem);
-            return quote! { forge_weld::WeldType::Vec(Box::new(#inner)) };
-        }
-        Type::Never(_) => {
-            return quote! { forge_weld::WeldType::Never };
-        }
-        _ => {}
-    }
-
-    // Fallback
-    quote! { forge_weld::WeldType::Unknown }
-}
+use syn::{parse2, Fields, ItemEnum, ItemStruct};
 
 /// Parse weld_struct attributes
 struct WeldStructAttrs {
@@ -252,7 +67,7 @@ pub fn weld_struct_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let ts_name = attrs.ts_name.unwrap_or_else(|| struct_name_str.clone());
 
     // Extract fields
-    let field_tokens: Vec<_> = match &input.fields {
+    let field_results: Vec<_> = match &input.fields {
         Fields::Named(fields) => {
             fields
                 .named
@@ -267,9 +82,12 @@ pub fn weld_struct_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let is_optional = quote!(#ty).to_string().starts_with("Option");
 
                     // Parse the type
-                    let type_tokens = rust_type_to_weld_type(ty);
+                    let type_tokens = match rust_type_to_weld_type(ty) {
+                        Ok(tokens) => tokens,
+                        Err(e) => return Some(Err(e)),
+                    };
 
-                    Some(quote! {
+                    Some(Ok(quote! {
                         forge_weld::StructField {
                             rust_name: #name_str.to_string(),
                             ts_name: #ts_field_name.to_string(),
@@ -278,11 +96,23 @@ pub fn weld_struct_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                             readonly: false,
                             doc: None,
                         }
-                    })
+                    }))
                 })
                 .collect()
         }
         _ => Vec::new(),
+    };
+
+    // Check for errors in field parsing
+    let field_tokens: Vec<_> = {
+        let mut tokens = Vec::new();
+        for result in field_results {
+            match result {
+                Ok(t) => tokens.push(t),
+                Err(e) => return e.to_compile_error(),
+            }
+        }
+        tokens
     };
 
     // Generate metadata function name
@@ -323,7 +153,7 @@ pub fn weld_enum_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let ts_name = attrs.ts_name.unwrap_or_else(|| enum_name_str.clone());
 
     // Extract variants
-    let variant_tokens: Vec<_> = input
+    let variant_results: Result<Vec<_>, syn::Error> = input
         .variants
         .iter()
         .map(|v| {
@@ -331,16 +161,18 @@ pub fn weld_enum_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             // Extract variant fields
             let field_tokens: Vec<_> = match &v.fields {
-                Fields::Named(fields) => fields
-                    .named
-                    .iter()
-                    .filter_map(|f| {
-                        let field_name = f.ident.as_ref()?;
+                Fields::Named(fields) => {
+                    let mut tokens = Vec::new();
+                    for f in fields.named.iter() {
+                        let field_name = match f.ident.as_ref() {
+                            Some(n) => n,
+                            None => continue,
+                        };
                         let field_name_str = field_name.to_string();
                         let ts_field_name = to_camel_case(&field_name_str);
-                        let type_tokens = rust_type_to_weld_type(&f.ty);
+                        let type_tokens = rust_type_to_weld_type(&f.ty)?;
 
-                        Some(quote! {
+                        tokens.push(quote! {
                             forge_weld::StructField {
                                 rust_name: #field_name_str.to_string(),
                                 ts_name: #ts_field_name.to_string(),
@@ -349,17 +181,16 @@ pub fn weld_enum_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                                 readonly: false,
                                 doc: None,
                             }
-                        })
-                    })
-                    .collect(),
-                Fields::Unnamed(fields) => fields
-                    .unnamed
-                    .iter()
-                    .enumerate()
-                    .map(|(i, f)| {
+                        });
+                    }
+                    tokens
+                }
+                Fields::Unnamed(fields) => {
+                    let mut tokens = Vec::new();
+                    for (i, f) in fields.unnamed.iter().enumerate() {
                         let field_name = format!("field{}", i);
-                        let type_tokens = rust_type_to_weld_type(&f.ty);
-                        quote! {
+                        let type_tokens = rust_type_to_weld_type(&f.ty)?;
+                        tokens.push(quote! {
                             forge_weld::StructField {
                                 rust_name: #field_name.to_string(),
                                 ts_name: #field_name.to_string(),
@@ -368,21 +199,27 @@ pub fn weld_enum_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                                 readonly: false,
                                 doc: None,
                             }
-                        }
-                    })
-                    .collect(),
+                        });
+                    }
+                    tokens
+                }
                 Fields::Unit => Vec::new(),
             };
 
-            quote! {
+            Ok(quote! {
                 forge_weld::EnumVariant {
                     name: #name.to_string(),
                     fields: vec![#(#field_tokens),*],
                     doc: None,
                 }
-            }
+            })
         })
         .collect();
+
+    let variant_tokens = match variant_results {
+        Ok(tokens) => tokens,
+        Err(e) => return e.to_compile_error(),
+    };
 
     // Generate metadata function name
     let metadata_fn_name = format_ident!("__{}_weld_metadata", enum_name);
