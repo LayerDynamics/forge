@@ -1,7 +1,7 @@
 use forge_weld::ExtensionBuilder;
 
 fn main() {
-    ExtensionBuilder::new("host_window", "host:window")
+    ExtensionBuilder::new("runtime_window", "runtime:window")
         .ts_path("ts/init.ts")
         .ops(&[
             // Window Lifecycle (10 ops)
@@ -47,18 +47,30 @@ fn main() {
             // Events & Native (2 ops)
             "op_window_events_recv",
             "op_window_get_native_handle",
+            // Enhanced Window Ops (9 ops)
+            "op_window_open_devtools",
+            "op_window_close_devtools",
+            "op_window_is_devtools_open",
+            "op_window_eval_js",
+            "op_window_inject_css",
+            "op_window_set_min_size",
+            "op_window_set_max_size",
+            "op_window_center",
+            "op_window_get_monitors",
         ])
         .generate_sdk_types("sdk")
+        .generate_sdk_module("sdk")
+        .use_inventory_types()
         .dts_generator(generate_host_window_types)
         .build()
         .expect("Failed to build host_window extension");
 }
 
 fn generate_host_window_types() -> String {
-    r#"// Auto-generated TypeScript definitions for host:window module
+    r#"// Auto-generated TypeScript definitions for runtime:window module
 // Generated from ext_window/build.rs - do not edit manually
 
-declare module "host:window" {
+declare module "runtime:window" {
   // ============================================================================
   // Window Types
   // ============================================================================

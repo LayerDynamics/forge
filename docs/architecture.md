@@ -19,7 +19,7 @@ Forge is a desktop application framework that combines:
 │  │   (src/main.ts) │ ◄─────► │   (web/index.html)      │   │
 │  └────────┬────────┘         └─────────────────────────┘   │
 │           │                                                  │
-│           │ host:* modules                                   │
+│           │ runtime:* modules                                   │
 │           ▼                                                  │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │              Forge Host Runtime (Rust)               │   │
@@ -38,7 +38,7 @@ Forge is a desktop application framework that combines:
 
 ## Runtime Components
 
-### 1. Forge Host (forge-host)
+### 1. Forge Runtime (forge-runtime)
 
 The main Rust binary that:
 - Embeds Deno runtime (JsRuntime)
@@ -47,13 +47,13 @@ The main Rust binary that:
 - Routes IPC messages
 - Enforces capability permissions
 
-Location: `crates/forge-host/`
+Location: `crates/forge-runtime/`
 
 ### 2. Deno Runtime
 
 JavaScript/TypeScript execution environment that:
 - Runs app's `src/main.ts`
-- Provides `host:*` module imports
+- Provides `runtime:*` module imports
 - Handles business logic
 - Communicates with renderers via IPC
 
@@ -68,17 +68,17 @@ System-native web views (WebKit/WebView2/WebKitGTK) that:
 
 ## Host Module System
 
-Apps access native capabilities through `host:*` module specifiers:
+Apps access native capabilities through `runtime:*` module specifiers:
 
 ```typescript
-import { openWindow } from "host:ui";
-import { readTextFile } from "host:fs";
-import { fetch } from "host:net";
+import { openWindow } from "runtime:ui";
+import { readTextFile } from "runtime:fs";
+import { fetch } from "runtime:net";
 ```
 
 ### Module Resolution
 
-1. Deno encounters `import from "host:*"`
+1. Deno encounters `import from "runtime:*"`
 2. Custom module loader intercepts
 3. Returns ESM shim from `sdk/*.ts`
 4. Shim calls `Deno.core.ops.*`
@@ -92,15 +92,15 @@ readTextFile() ──► op_fs_read_text() ──► ext_fs::read_text()
 
 ### Extensions
 
-Each `host:*` module has a Rust extension:
+Each `runtime:*` module has a Rust extension:
 
 | Module | Extension | Location |
 |--------|-----------|----------|
-| `host:ui` | `ext_ui` | `crates/ext_ui/` |
-| `host:fs` | `ext_fs` | `crates/ext_fs/` |
-| `host:net` | `ext_net` | `crates/ext_net/` |
-| `host:sys` | `ext_sys` | `crates/ext_sys/` |
-| `host:process` | `ext_process` | `crates/ext_process/` |
+| `runtime:ui` | `ext_ui` | `crates/ext_ui/` |
+| `runtime:fs` | `ext_fs` | `crates/ext_fs/` |
+| `runtime:net` | `ext_net` | `crates/ext_net/` |
+| `runtime:sys` | `ext_sys` | `crates/ext_sys/` |
+| `runtime:process` | `ext_process` | `crates/ext_process/` |
 
 ---
 
@@ -286,7 +286,7 @@ event_loop.run(move |event, target, control_flow| {
 ```bash
 forge dev my-app
     │
-    ├── Start forge-host with --dev flag
+    ├── Start forge-runtime with --dev flag
     ├── Load manifest.app.toml
     ├── Initialize Deno runtime
     ├── Execute src/main.ts
@@ -305,7 +305,7 @@ forge build my-app
 
 forge bundle my-app
     │
-    ├── Build forge-host with FORGE_EMBED_DIR
+    ├── Build forge-runtime with FORGE_EMBED_DIR
     ├── Create platform package:
     │   ├── macOS: .app bundle → DMG
     │   ├── Windows: MSIX package
@@ -330,7 +330,7 @@ Development (relaxed for HMR):
 ```
 default-src 'self' app:;
 script-src 'self' 'unsafe-inline' 'unsafe-eval' app:;
-connect-src 'self' ws://localhost:35729;
+connect-src 'self' ws://localruntime:35729;
 ```
 
 Production (strict):
@@ -345,7 +345,7 @@ style-src 'self' 'unsafe-inline' app:;
 ## Crate Dependencies
 
 ```
-forge-host
+forge-runtime
 ├── deno_core      # Deno runtime
 ├── tao            # Window management
 ├── wry            # WebView
@@ -363,7 +363,7 @@ forge-host
 ```
 forge/
 ├── crates/
-│   ├── forge-host/        # Main runtime binary
+│   ├── forge-runtime/        # Main runtime binary
 │   │   ├── src/
 │   │   │   ├── main.rs    # Entry point, event loop
 │   │   │   └── capabilities.rs  # Permission system
@@ -374,11 +374,11 @@ forge/
 │   │       ├── main.rs    # CLI commands
 │   │       └── tpl/       # App templates
 │   │
-│   ├── ext_ui/           # host:ui extension
-│   ├── ext_fs/           # host:fs extension
-│   ├── ext_net/          # host:net extension
-│   ├── ext_sys/          # host:sys extension
-│   └── ext_process/      # host:process extension
+│   ├── ext_ui/           # runtime:ui extension
+│   ├── ext_fs/           # runtime:fs extension
+│   ├── ext_net/          # runtime:net extension
+│   ├── ext_sys/          # runtime:sys extension
+│   └── ext_process/      # runtime:process extension
 │
 ├── sdk/                   # TypeScript SDK
 │   ├── host.d.ts         # Type definitions

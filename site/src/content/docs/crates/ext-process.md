@@ -1,9 +1,10 @@
 ---
 title: "ext_process"
-description: Process management extension providing the host:process module.
+description: Process management extension providing the runtime:process module.
+slug: crates/ext-process
 ---
 
-The `ext_process` crate provides child process spawning and management for Forge applications through the `host:process` module.
+The `ext_process` crate provides child process spawning and management for Forge applications through the `runtime:process` module.
 
 ## Overview
 
@@ -15,10 +16,10 @@ ext_process handles:
 - **Process lifecycle** - Wait, kill, status
 - **Capability-based security** - Command allowlisting
 
-## Module: `host:process`
+## Module: `runtime:process`
 
 ```typescript
-import { spawn } from "host:process";
+import { spawn } from "runtime:process";
 
 const proc = await spawn("ls", { args: ["-la"] });
 for await (const line of proc.stdout) {
@@ -137,6 +138,59 @@ crates/ext_process/
 └── Cargo.toml
 ```
 
+## Rust Implementation
+
+Operations are annotated with forge-weld macros for automatic TypeScript binding generation:
+
+```rust
+// src/lib.rs
+use deno_core::{op2, Extension, OpState};
+use forge_weld_macro::{weld_op, weld_struct, weld_enum};
+use serde::{Deserialize, Serialize};
+
+#[weld_enum]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum StdioConfig {
+    Inherit,
+    Piped,
+    Null,
+}
+
+#[weld_struct]
+#[derive(Debug, Serialize)]
+pub struct SpawnResult {
+    pub id: u32,
+}
+
+#[weld_op(async)]
+#[op2(async)]
+#[serde]
+pub async fn op_process_spawn(
+    state: Rc<RefCell<OpState>>,
+    #[string] command: String,
+    #[serde] opts: Option<SpawnOpts>,
+) -> Result<SpawnResult, ProcessError> {
+    // implementation
+}
+```
+
+## Build Configuration
+
+```rust
+// build.rs
+use forge_weld::ExtensionBuilder;
+
+fn main() {
+    ExtensionBuilder::new("runtime_process", "runtime:process")
+        .ts_path("ts/init.ts")
+        .ops(&["op_process_spawn", "op_process_wait", "op_process_kill", /* ... */])
+        .generate_sdk_module("sdk")
+        .use_inventory_types()
+        .build()
+        .expect("Failed to build runtime_process extension");
+}
+```
+
 ## Dependencies
 
 | Dependency | Purpose |
@@ -147,8 +201,10 @@ crates/ext_process/
 | `serde` | Serialization |
 | `tracing` | Logging |
 | `forge-weld` | Build-time code generation |
+| `forge-weld-macro` | `#[weld_op]`, `#[weld_struct]`, `#[weld_enum]` macros |
+| `linkme` | Compile-time symbol collection |
 
 ## Related
 
-- [host:process API](/docs/api/host-process) - TypeScript API documentation
-- [forge-weld](/docs/crates/forge-weld) - Build system
+- [runtime:process API](/docs/api/runtime-process) - TypeScript API documentation
+- [forge-weld](/docs/crates/forge-weld) - Code generation library

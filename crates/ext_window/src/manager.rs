@@ -4,13 +4,15 @@
 //! forge-host creates a WindowManager instance and calls its methods from the event loop.
 
 use crate::{
-    FileDialogOpts, MenuItem, MessageDialogOpts, NativeHandle, Position, Size, TrayOpts, WindowCmd,
-    WindowOpts, WindowState, WindowSystemEvent,
+    FileDialogOpts, MenuItem, MessageDialogOpts, MonitorInfo, NativeHandle, Position, Size,
+    TrayOpts, WindowCmd, WindowOpts, WindowState, WindowSystemEvent,
 };
+use deno_ast::{MediaType, ParseParams, TranspileModuleOptions, TranspileOptions};
+use deno_core::ModuleSpecifier;
 pub use ext_ipc::IpcEvent;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tao::event_loop::EventLoopWindowTarget;
@@ -270,6 +272,8 @@ impl<U: 'static> WindowManager<U> {
         event_loop_target: &EventLoopWindowTarget<U>,
         opts: WindowOpts,
     ) -> Result<String, String> {
+        tracing::debug!("create_window starting with opts: {:?}", opts);
+        println!("create_window starting");
         let width = opts.width.unwrap_or(800);
         let height = opts.height.unwrap_or(600);
         let title = opts
@@ -377,9 +381,9 @@ impl<U: 'static> WindowManager<U> {
 
             let csp = if is_dev_mode {
                 "default-src 'self' app:; \
-                 script-src 'self' app: 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; \
+                 script-src 'self' app: 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://esm.sh; \
                  style-src 'self' app: 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; \
-                 connect-src 'self' app: ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:* https://*; \
+                 connect-src 'self' app: ws://localruntime:* ws://127.0.0.1:* http://localruntime:* http://127.0.0.1:* https://*; \
                  img-src 'self' app: data: blob: https:; \
                  font-src 'self' app: data: https:;"
             } else {
@@ -393,12 +397,13 @@ impl<U: 'static> WindowManager<U> {
 
             // Try asset provider first (handles both embedded and filesystem)
             if let Some(bytes) = asset_provider.get_asset(path) {
+                let (content_type, body) = maybe_transpile_ts(path, bytes);
                 return Response::builder()
                     .status(StatusCode::OK)
-                    .header("Content-Type", mime_for(path))
+                    .header("Content-Type", content_type)
                     .header("Content-Security-Policy", csp)
                     .header("X-Content-Type-Options", "nosniff")
-                    .body(Cow::Owned(bytes))
+                    .body(Cow::Owned(body))
                     .unwrap();
             }
 
@@ -406,12 +411,13 @@ impl<U: 'static> WindowManager<U> {
             let file_path = app_dir.join("web").join(path);
             if file_path.exists() {
                 if let Ok(bytes) = std::fs::read(&file_path) {
+                    let (content_type, body) = maybe_transpile_ts(path, bytes);
                     return Response::builder()
                         .status(StatusCode::OK)
-                        .header("Content-Type", mime_for(path))
+                        .header("Content-Type", content_type)
                         .header("Content-Security-Policy", csp)
                         .header("X-Content-Type-Options", "nosniff")
-                        .body(Cow::Owned(bytes))
+                        .body(Cow::Owned(body))
                         .unwrap();
                 }
             }
@@ -437,6 +443,10 @@ impl<U: 'static> WindowManager<U> {
         self.webviews.insert(win_id.clone(), webview);
         self.tao_windows.insert(win_id.clone(), window);
         self.window_channels.insert(win_id.clone(), win_channels);
+
+        if opts.devtools.unwrap_or(false) {
+            let _ = self.open_devtools(&win_id);
+        }
 
         let _ = self.window_events_tx.try_send(WindowSystemEvent {
             window_id: win_id.clone(),
@@ -1032,6 +1042,169 @@ impl<U: 'static> WindowManager<U> {
     }
 
     // =========================================================================
+    // Enhanced Window Operations
+    // =========================================================================
+
+    /// Open developer tools for a window
+    pub fn open_devtools(&self, window_id: &str) -> Result<(), String> {
+        if let Some(webview) = self.webviews.get(window_id) {
+            #[cfg(any(debug_assertions, feature = "devtools"))]
+            {
+                webview.open_devtools();
+                Ok(())
+            }
+            #[cfg(not(any(debug_assertions, feature = "devtools")))]
+            {
+                let _ = webview;
+                Err("DevTools not supported on this platform/build".to_string())
+            }
+        } else {
+            Err(format!("Window not found: {}", window_id))
+        }
+    }
+
+    /// Close developer tools for a window
+    pub fn close_devtools(&self, window_id: &str) -> Result<(), String> {
+        if let Some(webview) = self.webviews.get(window_id) {
+            #[cfg(any(debug_assertions, feature = "devtools"))]
+            {
+                webview.close_devtools();
+                Ok(())
+            }
+            #[cfg(not(any(debug_assertions, feature = "devtools")))]
+            {
+                let _ = webview;
+                Err("DevTools not supported on this platform/build".to_string())
+            }
+        } else {
+            Err(format!("Window not found: {}", window_id))
+        }
+    }
+
+    /// Check if developer tools are open for a window
+    pub fn is_devtools_open(&self, window_id: &str) -> Result<bool, String> {
+        if let Some(webview) = self.webviews.get(window_id) {
+            #[cfg(any(debug_assertions, feature = "devtools"))]
+            {
+                Ok(webview.is_devtools_open())
+            }
+            #[cfg(not(any(debug_assertions, feature = "devtools")))]
+            {
+                let _ = webview;
+                Ok(false)
+            }
+        } else {
+            Err(format!("Window not found: {}", window_id))
+        }
+    }
+
+    /// Evaluate JavaScript in a window's WebView
+    pub fn eval_js(&self, window_id: &str, script: &str) -> Result<(), String> {
+        if let Some(webview) = self.webviews.get(window_id) {
+            webview
+                .evaluate_script(script)
+                .map_err(|e| format!("Failed to evaluate JavaScript: {}", e))?;
+            Ok(())
+        } else {
+            Err(format!("Window not found: {}", window_id))
+        }
+    }
+
+    /// Inject CSS into a window's WebView
+    pub fn inject_css(&self, window_id: &str, css: &str) -> Result<(), String> {
+        if let Some(webview) = self.webviews.get(window_id) {
+            // Use JavaScript to inject CSS
+            let escaped_css = css.replace('\\', "\\\\").replace('`', "\\`");
+            let js = format!(
+                r#"(function() {{
+                    const style = document.createElement('style');
+                    style.textContent = `{}`;
+                    document.head.appendChild(style);
+                }})();"#,
+                escaped_css
+            );
+            webview
+                .evaluate_script(&js)
+                .map_err(|e| format!("Failed to inject CSS: {}", e))?;
+            Ok(())
+        } else {
+            Err(format!("Window not found: {}", window_id))
+        }
+    }
+
+    /// Set minimum window size
+    pub fn set_min_size(&self, window_id: &str, width: u32, height: u32) -> Result<(), String> {
+        if let Some(window) = self.tao_windows.get(window_id) {
+            window.set_min_inner_size(Some(tao::dpi::LogicalSize::new(width, height)));
+            Ok(())
+        } else {
+            Err(format!("Window not found: {}", window_id))
+        }
+    }
+
+    /// Set maximum window size
+    pub fn set_max_size(&self, window_id: &str, width: u32, height: u32) -> Result<(), String> {
+        if let Some(window) = self.tao_windows.get(window_id) {
+            window.set_max_inner_size(Some(tao::dpi::LogicalSize::new(width, height)));
+            Ok(())
+        } else {
+            Err(format!("Window not found: {}", window_id))
+        }
+    }
+
+    /// Center window on screen
+    pub fn center_window(&self, window_id: &str) -> Result<(), String> {
+        if let Some(window) = self.tao_windows.get(window_id) {
+            if let Some(monitor) = window.current_monitor() {
+                let screen_size = monitor.size();
+                let window_size = window.outer_size();
+                let x = (screen_size.width as i32 - window_size.width as i32) / 2;
+                let y = (screen_size.height as i32 - window_size.height as i32) / 2;
+                let monitor_pos = monitor.position();
+                window.set_outer_position(tao::dpi::PhysicalPosition::new(
+                    monitor_pos.x + x,
+                    monitor_pos.y + y,
+                ));
+            }
+            Ok(())
+        } else {
+            Err(format!("Window not found: {}", window_id))
+        }
+    }
+
+    /// Get information about all available monitors
+    pub fn get_monitors(&self) -> Vec<MonitorInfo> {
+        // Get monitors from any available window
+        if let Some(window) = self.tao_windows.values().next() {
+            window
+                .available_monitors()
+                .map(|monitor| {
+                    let position = monitor.position();
+                    let size = monitor.size();
+                    MonitorInfo {
+                        name: monitor.name(),
+                        position: Position {
+                            x: position.x,
+                            y: position.y,
+                        },
+                        size: Size {
+                            width: size.width,
+                            height: size.height,
+                        },
+                        scale_factor: monitor.scale_factor(),
+                        is_primary: window
+                            .primary_monitor()
+                            .map(|p| p.name() == monitor.name())
+                            .unwrap_or(false),
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    // =========================================================================
     // Window Events (called from event loop)
     // =========================================================================
 
@@ -1106,14 +1279,27 @@ impl<U: 'static> WindowManager<U> {
         match cmd {
             // Window lifecycle
             WindowCmd::Create { opts, respond } => {
+                tracing::debug!(
+                    "WindowCmd::Create url={:?} size={:?}x{:?}",
+                    opts.url,
+                    opts.width,
+                    opts.height
+                );
+                println!("WindowCmd::Create received");
                 let result = self.create_window(event_loop_target, opts);
+                match &result {
+                    Ok(win_id) => tracing::info!("WindowManager created window {}", win_id),
+                    Err(err) => tracing::error!("WindowManager failed to create window: {}", err),
+                }
                 let _ = respond.send(result);
             }
             WindowCmd::Close { window_id, respond } => {
+                tracing::debug!("WindowCmd::Close {}", window_id);
                 let result = self.close_window(&window_id);
                 let _ = respond.send(result);
             }
             WindowCmd::Minimize { window_id } => {
+                tracing::debug!("WindowCmd::Minimize {}", window_id);
                 self.minimize_window(&window_id);
             }
             WindowCmd::Maximize { window_id } => {
@@ -1239,6 +1425,57 @@ impl<U: 'static> WindowManager<U> {
                 let result = self.get_native_handle(&window_id);
                 let _ = respond.send(result);
             }
+
+            // Enhanced Window Operations
+            WindowCmd::OpenDevTools { window_id, respond } => {
+                let result = self.open_devtools(&window_id);
+                let _ = respond.send(result);
+            }
+            WindowCmd::CloseDevTools { window_id, respond } => {
+                let result = self.close_devtools(&window_id);
+                let _ = respond.send(result);
+            }
+            WindowCmd::IsDevToolsOpen { window_id, respond } => {
+                let result = self.is_devtools_open(&window_id);
+                let _ = respond.send(result);
+            }
+            WindowCmd::EvalJs {
+                window_id,
+                script,
+                respond,
+            } => {
+                let result = self.eval_js(&window_id, &script);
+                let _ = respond.send(result);
+            }
+            WindowCmd::InjectCss {
+                window_id,
+                css,
+                respond,
+            } => {
+                let result = self.inject_css(&window_id, &css);
+                let _ = respond.send(result);
+            }
+            WindowCmd::SetMinSize {
+                window_id,
+                width,
+                height,
+            } => {
+                let _ = self.set_min_size(&window_id, width, height);
+            }
+            WindowCmd::SetMaxSize {
+                window_id,
+                width,
+                height,
+            } => {
+                let _ = self.set_max_size(&window_id, width, height);
+            }
+            WindowCmd::Center { window_id } => {
+                let _ = self.center_window(&window_id);
+            }
+            WindowCmd::GetMonitors { respond } => {
+                let result = self.get_monitors();
+                let _ = respond.send(result);
+            }
         }
     }
 }
@@ -1246,6 +1483,60 @@ impl<U: 'static> WindowManager<U> {
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+fn is_ts_path(path: &str) -> bool {
+    matches!(
+        Path::new(path)
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default(),
+        "ts" | "tsx" | "mts" | "cts"
+    )
+}
+
+fn transpile_ts_to_js(path: &str, source: String) -> Result<String, String> {
+    let specifier = ModuleSpecifier::parse(&format!("app://{}", path))
+        .map_err(|e| format!("Invalid specifier: {e}"))?;
+    let media_type = MediaType::from_path(Path::new(path));
+
+    let parsed = deno_ast::parse_module(ParseParams {
+        specifier,
+        text: source.into(),
+        media_type,
+        capture_tokens: false,
+        scope_analysis: false,
+        maybe_syntax: None,
+    })
+    .map_err(|e| e.to_string())?;
+
+    parsed
+        .transpile(
+            &TranspileOptions::default(),
+            &TranspileModuleOptions::default(),
+            &deno_ast::EmitOptions::default(),
+        )
+        .map_err(|e| e.to_string())
+        .map(|output| output.into_source().text)
+}
+
+fn maybe_transpile_ts(path: &str, bytes: Vec<u8>) -> (String, Vec<u8>) {
+    let content_type = mime_for(path).to_string();
+
+    if !is_ts_path(path) {
+        return (content_type, bytes);
+    }
+
+    match String::from_utf8(bytes.clone()) {
+        Ok(source) => match transpile_ts_to_js(path, source.clone()) {
+            Ok(js) => (
+                "text/javascript; charset=utf-8".to_string(),
+                js.into_bytes(),
+            ),
+            Err(_) => (content_type, source.into_bytes()),
+        },
+        Err(_) => (content_type, bytes),
+    }
+}
 
 /// Get MIME type for a file path based on extension
 pub fn mime_for(path: &str) -> &'static str {
@@ -1272,7 +1563,8 @@ pub fn mime_for(path: &str) -> &'static str {
     }
 }
 
-fn create_default_tray_icon() -> tray_icon::Icon {
+/// Create a default gray tray icon (22x22 pixels)
+pub fn create_default_tray_icon() -> tray_icon::Icon {
     let size = 22u32;
     let mut rgba_data = Vec::with_capacity((size * size * 4) as usize);
     for _ in 0..(size * size) {
@@ -1281,7 +1573,8 @@ fn create_default_tray_icon() -> tray_icon::Icon {
     tray_icon::Icon::from_rgba(rgba_data, size, size).expect("Failed to create default icon")
 }
 
-fn add_menu_items_with_tracking(
+/// Add menu items to a Menu and track their IDs for event handling
+pub fn add_menu_items_with_tracking(
     menu: &muda::Menu,
     items: &[MenuItem],
     id_map: &mut HashMap<muda::MenuId, (String, String)>,
@@ -1316,7 +1609,8 @@ fn add_menu_items_with_tracking(
     }
 }
 
-fn add_submenu_items_with_tracking(
+/// Add menu items to a Submenu and track their IDs for event handling
+pub fn add_submenu_items_with_tracking(
     submenu: &muda::Submenu,
     items: &[MenuItem],
     id_map: &mut HashMap<muda::MenuId, (String, String)>,
@@ -1351,7 +1645,8 @@ fn add_submenu_items_with_tracking(
     }
 }
 
-fn add_context_menu_items(
+/// Add context menu items and track their IDs for event handling
+pub fn add_context_menu_items(
     menu: &muda::Menu,
     items: &[MenuItem],
     id_map: &mut HashMap<muda::MenuId, (String, String)>,
@@ -1389,7 +1684,8 @@ fn add_context_menu_items(
     }
 }
 
-fn add_context_submenu_items(
+/// Add context menu submenu items and track their IDs for event handling
+pub fn add_context_submenu_items(
     submenu: &muda::Submenu,
     items: &[MenuItem],
     id_map: &mut HashMap<muda::MenuId, (String, String)>,
@@ -1427,7 +1723,8 @@ fn add_context_submenu_items(
     }
 }
 
-fn add_tray_menu_items(
+/// Add tray menu items and track their IDs for event handling
+pub fn add_tray_menu_items(
     menu: &muda::Menu,
     items: &[MenuItem],
     id_map: &mut HashMap<muda::MenuId, (String, String)>,
@@ -1465,7 +1762,8 @@ fn add_tray_menu_items(
     }
 }
 
-fn add_tray_submenu_items(
+/// Add tray submenu items and track their IDs for event handling
+pub fn add_tray_submenu_items(
     submenu: &muda::Submenu,
     items: &[MenuItem],
     id_map: &mut HashMap<muda::MenuId, (String, String)>,

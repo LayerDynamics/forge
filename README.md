@@ -8,7 +8,7 @@ Forge is an Electron-like desktop application framework using **Rust** and **Den
 
 ## Features
 
-- **Native Performance** - Rust host runtime with system WebViews (not Chromium)
+- **Native Performance** - Rust runtime runtime with system WebViews (not Chromium)
 - **TypeScript First** - Write app logic in TypeScript with full type support
 - **Capability Security** - Explicit permission model for system access
 - **Cross-Platform** - Build for macOS, Windows, and Linux from one codebase
@@ -41,8 +41,8 @@ export PATH="$HOME/.forge/bin:$PATH"
 ### From Source (for contributors)
 
 ```bash
-cargo install --path crates/forge
-cargo install --path crates/forge-host
+cargo install --path crates/forge_cli
+cargo install --path crates/forge-runtime
 ```
 
 ## Quick Start
@@ -62,23 +62,23 @@ forge bundle .
 
 ## Host Modules
 
-Access native capabilities through `host:*` imports:
+Access native capabilities through `runtime:*` imports:
 
 ```typescript
 // Window management
-import { openWindow, dialog, createTray } from "host:ui";
+import { openWindow, dialog, createTray } from "runtime:ui";
 
 // File system
-import { readTextFile, writeTextFile, watch } from "host:fs";
+import { readTextFile, writeTextFile, watch } from "runtime:fs";
 
 // Networking
-import { fetchJson } from "host:net";
+import { fetchJson } from "runtime:net";
 
 // System operations
-import { clipboard, notify, info } from "host:sys";
+import { clipboard, notify, info } from "runtime:sys";
 
 // Process management
-import { spawn } from "host:process";
+import { spawn } from "runtime:process";
 ```
 
 ## Project Structure
@@ -98,7 +98,7 @@ my-app/
 **src/main.ts:**
 
 ```typescript
-import { openWindow, windowEvents } from "host:ui";
+import { openWindow, windowEvents } from "runtime:ui";
 
 const win = await openWindow({
   url: "app://index.html",
@@ -146,7 +146,7 @@ for await (const event of windowEvents()) {
 
 | Crate | Description |
 |-------|-------------|
-| `forge-host` | Main runtime binary |
+| `forge-runtime` | Main runtime binary |
 | `forge` | CLI tool |
 | `ext_ui` | Window management extension |
 | `ext_fs` | File system extension |
@@ -167,7 +167,7 @@ cargo build --workspace
 cargo test --workspace
 
 # Run the example app
-cargo run -p forge -- dev examples/example-deno-app
+cargo run -p forge_cli -- dev examples/example-deno-app
 
 # Build with release optimizations
 cargo build --workspace --release

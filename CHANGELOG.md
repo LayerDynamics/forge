@@ -14,12 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial Forge CLI with `init`, `dev`, `build`, and `bundle` commands
 - Deno runtime embedding via `deno_core`
 - Basic window creation with tao/wry
-- `host:*` module loader for native capability access
+- `runtime:*` module loader for native capability access
 - Static HTML serving in development mode
 
 #### M1 - UI & Bridge
 
-- `host:ui` module with window management (open, close, send, events)
+- `runtime:window` module with window management (open, close, send, events)
 - Preload script for renderer-side `window.host` API
 - `app://` custom protocol handler for asset loading
 - Asset embedding for production builds via `FORGE_EMBED_DIR`
@@ -31,21 +31,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### M2 - Core Operations
 
-- `host:fs` module with 14 file system operations
+- `runtime:fs` module with 14 file system operations
   - Read/write text and binary files
   - Directory operations (readDir, mkdir, remove)
   - File operations (stat, exists, copy, rename)
   - File watching with async iterators
-- `host:net` module with HTTP fetch capabilities
+- `runtime:net` module with HTTP fetch capabilities
   - Text and binary response support
   - JSON convenience methods (fetchJson, postJson)
-- `host:sys` module with 11 system operations
+- `runtime:sys` module with 11 system operations
   - System info (OS, arch, hostname, CPU count)
   - Environment variables (get, set, cwd, homeDir, tempDir)
   - Clipboard read/write
   - System notifications
   - Battery/power information
-- `host:process` module with 7 process operations
+- `runtime:process` module with 7 process operations
   - Process spawning with piped I/O
   - Async iterators for stdout/stderr
   - Process control (kill, wait, status)
@@ -79,7 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - System Monitor - System info, multi-window
 - Comprehensive documentation:
   - Getting Started guide
-  - API Reference for all host modules
+  - API Reference for all runtime modules
   - Architecture overview
   - Manifest schema reference
 - Default-deny channel allowlists for security
@@ -96,7 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `tracing` with `env-filter` for configurable logging via `FORGE_LOG`
 - Structured error messages with capability context
-- TypeScript type definitions for all host modules
+- TypeScript type definitions for all runtime modules
 - Multiple framework template options
 
 ## [Unreleased]

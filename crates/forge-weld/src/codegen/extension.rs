@@ -23,8 +23,8 @@ impl<'a> ExtensionGenerator<'a> {
     /// deno_core::extension!(
     ///     host_fs,
     ///     ops = [op_fs_read_text, op_fs_write_text, ...],
-    ///     esm_entry_point = "ext:host_fs/init.js",
-    ///     esm = ["ext:host_fs/init.js" = { source = "..." }]
+    ///     esm_entry_point = "ext:runtime_fs/init.js",
+    ///     esm = ["ext:runtime_fs/init.js" = { source = "..." }]
     /// );
     /// ```
     pub fn generate(&self, js_source: &str) -> String {

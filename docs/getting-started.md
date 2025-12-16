@@ -17,7 +17,7 @@ Before getting started, ensure you have:
 curl -fsSL https://forge-deno.com/install.sh | sh
 ```
 
-This installs both `forge` and `forge-host` to `~/.forge/bin/`.
+This installs both `forge` and `forge-runtime` to `~/.forge/bin/`.
 
 ### Manual Download
 
@@ -42,8 +42,8 @@ If you're contributing to Forge itself, you'll need Rust 1.70+:
 git clone https://github.com/LayerDynamics/forge.git
 cd forge
 cargo build --workspace --release
-cargo install --path crates/forge
-cargo install --path crates/forge-host
+cargo install --path crates/forge_cli
+cargo install --path crates/forge-runtime
 ```
 
 ## Create Your First App
@@ -104,7 +104,7 @@ allowed = ["*"]
 The main Deno entry point handles app logic:
 
 ```typescript
-import { openWindow, windowEvents } from "host:ui";
+import { openWindow, windowEvents } from "runtime:ui";
 
 // Open the main window
 const win = await openWindow({
@@ -163,12 +163,12 @@ This starts the Forge runtime with:
 
 ## Host Modules
 
-Forge provides native capabilities through `host:*` modules:
+Forge provides native capabilities through `runtime:*` modules:
 
-### host:ui - Window Management
+### runtime:ui - Window Management
 
 ```typescript
-import { openWindow, dialog, createTray } from "host:ui";
+import { openWindow, dialog, createTray } from "runtime:ui";
 
 // Open a window
 const win = await openWindow({ url: "app://index.html" });
@@ -180,10 +180,10 @@ const path = await dialog.open({ title: "Select File" });
 const tray = await createTray({ tooltip: "My App" });
 ```
 
-### host:fs - File System
+### runtime:fs - File System
 
 ```typescript
-import { readTextFile, writeTextFile, watch } from "host:fs";
+import { readTextFile, writeTextFile, watch } from "runtime:fs";
 
 // Read a file
 const content = await readTextFile("./config.json");
@@ -198,18 +198,18 @@ for await (const event of watcher) {
 }
 ```
 
-### host:net - Networking
+### runtime:net - Networking
 
 ```typescript
-import { fetchJson } from "host:net";
+import { fetchJson } from "runtime:net";
 
 const data = await fetchJson("https://api.example.com/data");
 ```
 
-### host:sys - System Operations
+### runtime:sys - System Operations
 
 ```typescript
-import { clipboard, notify, info } from "host:sys";
+import { clipboard, notify, info } from "runtime:sys";
 
 // System info
 const sysInfo = info();
@@ -223,10 +223,10 @@ const text = await clipboard.read();
 await notify("Title", "Body text");
 ```
 
-### host:process - Process Management
+### runtime:process - Process Management
 
 ```typescript
-import { spawn } from "host:process";
+import { spawn } from "runtime:process";
 
 const proc = await spawn("ls", { args: ["-la"] });
 for await (const line of proc.stdout) {

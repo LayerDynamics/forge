@@ -1,6 +1,7 @@
 ---
 title: Getting Started
 description: Learn how to build your first Forge desktop app with TypeScript and Deno.
+slug: getting-started
 ---
 
 Forge is an Electron-like desktop application framework using Rust and Deno. Build cross-platform desktop apps with TypeScript/JavaScript while leveraging native system capabilities through a secure, capability-based API.
@@ -80,8 +81,8 @@ allowed = ["*"]
 The main Deno entry point handles app logic:
 
 ```typescript
-import { createWindow, dialog, menu } from "host:window";
-import { onChannel, sendToWindow } from "host:ipc";
+import { createWindow, dialog, menu } from "runtime:window";
+import { onChannel, sendToWindow } from "runtime:ipc";
 
 // Create the main window
 const win = await createWindow({
@@ -133,10 +134,10 @@ The UI is standard HTML/CSS/JS served via the `app://` protocol:
   <h1>Hello, Forge!</h1>
   <script>
     // Send message to Deno backend
-    window.host.send("hello", { message: "Hi from renderer!" });
+    window.runtime.send("hello", { message: "Hi from renderer!" });
 
     // Listen for messages from backend
-    window.host.on("reply", (data) => {
+    window.runtime.on("reply", (data) => {
       console.log("Received:", data);
     });
   </script>
@@ -157,16 +158,16 @@ This starts the Forge runtime with:
 - Development-friendly CSP settings
 - Console output in terminal
 
-## Host Modules
+## Runtime Modules
 
-Forge provides native capabilities through `host:*` modules:
+Forge provides native capabilities through `runtime:*` modules. TypeScript types are auto-generated from Rust via [forge-weld](/docs/crates/forge-weld):
 
-### host:window - Window Management
+### runtime:window - Window Management
 
 Full window control including position, size, state, dialogs, menus, and system tray:
 
 ```typescript
-import { createWindow, dialog, menu, tray } from "host:window";
+import { createWindow, dialog, menu, tray } from "runtime:window";
 
 // Create a window with full control
 const win = await createWindow({
@@ -210,12 +211,12 @@ const trayIcon = await tray.create({
 });
 ```
 
-### host:ipc - Inter-Process Communication
+### runtime:ipc - Inter-Process Communication
 
 Bidirectional messaging between Deno and WebView renderers:
 
 ```typescript
-import { sendToWindow, onChannel, windowEvents, broadcast } from "host:ipc";
+import { sendToWindow, onChannel, windowEvents, broadcast } from "runtime:ipc";
 
 // Send to a specific window
 await sendToWindow("main", "update", { count: 42 });
@@ -234,32 +235,10 @@ for await (const event of windowEvents()) {
 await broadcast(["main", "settings"], "theme-changed", { theme: "dark" });
 ```
 
-### host:ui - Basic Window Operations
-
-Simplified window creation for common use cases:
+### runtime:fs - File System
 
 ```typescript
-import { openWindow, dialog, createTray } from "host:ui";
-
-// Open a window with basic options
-const win = await openWindow({
-  url: "app://index.html",
-  title: "Simple Window",
-  width: 800,
-  height: 600,
-});
-
-// Show a dialog
-await dialog.alert("Operation completed!");
-
-// Create a tray icon
-const tray = await createTray({ tooltip: "My App" });
-```
-
-### host:fs - File System
-
-```typescript
-import { readTextFile, writeTextFile, watch } from "host:fs";
+import { readTextFile, writeTextFile, watch } from "runtime:fs";
 
 // Read a file
 const content = await readTextFile("./config.json");
@@ -274,18 +253,18 @@ for await (const event of watcher) {
 }
 ```
 
-### host:net - Networking
+### runtime:net - Networking
 
 ```typescript
-import { fetchJson } from "host:net";
+import { fetchJson } from "runtime:net";
 
 const data = await fetchJson("https://api.example.com/data");
 ```
 
-### host:sys - System Operations
+### runtime:sys - System Operations
 
 ```typescript
-import { clipboard, notify, info } from "host:sys";
+import { clipboard, notify, info } from "runtime:sys";
 
 // System info
 const sysInfo = info();
@@ -299,10 +278,10 @@ const text = await clipboard.read();
 await notify("Title", "Body text");
 ```
 
-### host:process - Process Management
+### runtime:process - Process Management
 
 ```typescript
-import { spawn } from "host:process";
+import { spawn } from "runtime:process";
 
 const proc = await spawn("ls", { args: ["-la"] });
 for await (const line of proc.stdout) {
@@ -311,13 +290,33 @@ for await (const line of proc.stdout) {
 await proc.wait();
 ```
 
-### host:wasm - WebAssembly
+### runtime:wasm - WebAssembly
 
 ```typescript
-import { compileFile, instantiate } from "host:wasm";
+import { compileFile, instantiate, types } from "runtime:wasm";
 
-const module = await compileFile("./module.wasm");
-const instance = await instantiate(module, {});
+// Compile and instantiate a WASM module
+const moduleId = await compileFile("./module.wasm");
+const instance = await instantiate(moduleId);
+
+// Call exported functions
+const [result] = await instance.call("add", 2, 3);
+console.log(result); // 5
+
+// With explicit types for large integers
+const [bigResult] = await instance.call(
+  "multiply",
+  types.i64(9007199254740992n),
+  types.i64(2n)
+);
+
+// WASI support for system access
+const wasiInstance = await instantiate(moduleId, {
+  preopens: { "/data": "./app-data" },
+  args: ["app", "--verbose"],
+  inheritStdout: true,
+});
+await wasiInstance.call("_start");
 ```
 
 ## IPC Communication
@@ -328,14 +327,14 @@ Forge uses a message-passing model for communication between Deno and the render
 
 ```javascript
 // In web/index.html
-window.host.send("channel-name", { data: "value" });
+window.runtime.send("channel-name", { data: "value" });
 ```
 
 ### From Deno to Renderer
 
 ```typescript
 // In src/main.ts
-import { sendToWindow } from "host:ipc";
+import { sendToWindow } from "runtime:ipc";
 
 await sendToWindow("window-id", "channel-name", { data: "value" });
 ```
@@ -344,14 +343,14 @@ await sendToWindow("window-id", "channel-name", { data: "value" });
 
 ```typescript
 // In Deno - callback-based
-import { onChannel } from "host:ipc";
+import { onChannel } from "runtime:ipc";
 
 onChannel("user-action", (payload, windowId) => {
   console.log(`Action from ${windowId}:`, payload);
 });
 
 // In Deno - async generator
-import { windowEvents } from "host:ipc";
+import { windowEvents } from "runtime:ipc";
 
 for await (const event of windowEvents()) {
   if (event.channel === "user-action") {
@@ -360,7 +359,7 @@ for await (const event of windowEvents()) {
 }
 
 // In renderer - listen for specific channel
-window.host.on("update", (data) => {
+window.runtime.on("update", (data) => {
   // Handle update
 });
 ```
@@ -396,5 +395,6 @@ Check out the example apps in the `examples/` directory:
 ## Next Steps
 
 - Read the [Architecture Overview](/docs/architecture)
-- Explore the [API Reference](/docs/api/host-window)
+- Explore the [API Reference](/docs/api/runtime-window)
 - Check the [Example Apps](https://github.com/LayerDynamics/forge/tree/main/examples)
+- For contributors: Learn about [forge-weld](/docs/crates/forge-weld) for building extensions

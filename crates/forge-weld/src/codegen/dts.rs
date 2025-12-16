@@ -1,7 +1,7 @@
 //! TypeScript declaration file (.d.ts) generator
 //!
 //! Generates TypeScript declaration files for ambient module declarations
-//! (e.g., `declare module "host:fs" { ... }`).
+//! (e.g., `declare module "runtime:fs" { ... }`).
 
 use crate::ir::{OpSymbol, WeldEnum, WeldModule, WeldStruct, WeldType};
 
@@ -364,19 +364,19 @@ mod tests {
         let gen = DtsGenerator::new(&module);
         let output = gen.generate();
 
-        assert!(output.contains("declare module \"host:fs\""));
+        assert!(output.contains("declare module \"runtime:fs\""));
         assert!(output.contains("export interface FileStat"));
         assert!(output.contains("export function readTextFile"));
     }
 
     #[test]
     fn test_dts_builder() {
-        let dts = DtsBuilder::new("host:test")
+        let dts = DtsBuilder::new("runtime:test")
             .section("Types", "  export interface Foo { bar: string; }\n")
             .section("Functions", "  export function test(): void;\n")
             .build();
 
-        assert!(dts.contains("declare module \"host:test\""));
+        assert!(dts.contains("declare module \"runtime:test\""));
         assert!(dts.contains("Types"));
         assert!(dts.contains("Functions"));
         assert!(dts.contains("export interface Foo"));

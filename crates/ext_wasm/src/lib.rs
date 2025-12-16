@@ -1,9 +1,10 @@
-//! host:wasm extension - WebAssembly support for Forge apps
+//! runtime:wasm extension - WebAssembly support for Forge apps
 //!
 //! Provides WASM module loading, instantiation, function calls, memory access,
 //! and WASI support with capability-based security.
 
 use deno_core::{op2, Extension, OpState};
+use forge_weld_macro::{weld_op, weld_struct};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -328,6 +329,7 @@ pub struct WasiConfig {
 }
 
 /// Export information
+#[weld_struct]
 #[derive(Debug, Clone, Serialize)]
 pub struct ExportInfo {
     pub name: String,
@@ -512,6 +514,7 @@ fn val_type_to_string(ty: &ValType) -> String {
 // ============================================================================
 
 /// Compile WASM bytes to a module
+#[weld_op(async)]
 #[op2(async)]
 #[string]
 async fn op_wasm_compile(
@@ -549,6 +552,7 @@ async fn op_wasm_compile(
 }
 
 /// Compile WASM from file path
+#[weld_op(async)]
 #[op2(async)]
 #[string]
 async fn op_wasm_compile_file(
@@ -600,6 +604,7 @@ async fn op_wasm_compile_file(
 }
 
 /// Drop a compiled module
+#[weld_op(async)]
 #[op2(async)]
 async fn op_wasm_drop_module(
     state: Rc<RefCell<OpState>>,
@@ -628,6 +633,7 @@ async fn op_wasm_drop_module(
 // ============================================================================
 
 /// Instantiate a module, optionally with WASI
+#[weld_op(async)]
 #[op2(async)]
 #[string]
 async fn op_wasm_instantiate(
@@ -757,6 +763,7 @@ async fn op_wasm_instantiate(
 }
 
 /// Drop an instance
+#[weld_op(async)]
 #[op2(async)]
 async fn op_wasm_drop_instance(
     state: Rc<RefCell<OpState>>,
@@ -781,6 +788,7 @@ async fn op_wasm_drop_instance(
 }
 
 /// Get list of exports from an instance
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_wasm_get_exports(
@@ -845,6 +853,7 @@ async fn op_wasm_get_exports(
 // ============================================================================
 
 /// Call an exported function
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_wasm_call(
@@ -977,6 +986,7 @@ async fn get_instance_memory(
 }
 
 /// Read bytes from instance memory
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_wasm_memory_read(
@@ -1017,6 +1027,7 @@ async fn op_wasm_memory_read(
 }
 
 /// Write bytes to instance memory
+#[weld_op(async)]
 #[op2(async)]
 async fn op_wasm_memory_write(
     state: Rc<RefCell<OpState>>,
@@ -1056,6 +1067,7 @@ async fn op_wasm_memory_write(
 }
 
 /// Get memory size in pages (64KB each)
+#[weld_op(async)]
 #[op2(async)]
 async fn op_wasm_memory_size(
     state: Rc<RefCell<OpState>>,
@@ -1080,6 +1092,7 @@ async fn op_wasm_memory_size(
 }
 
 /// Grow memory by specified pages
+#[weld_op(async)]
 #[op2(async)]
 async fn op_wasm_memory_grow(
     state: Rc<RefCell<OpState>>,
@@ -1131,7 +1144,7 @@ pub fn init_wasm_state(
 include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 pub fn wasm_extension() -> Extension {
-    host_wasm::ext()
+    runtime_wasm::ext()
 }
 
 // ============================================================================
@@ -1220,7 +1233,7 @@ mod tests {
             .unwrap();
 
         // Store it in registry
-        let handle = wasm_inst.store_func_ref(func.clone());
+        let handle = wasm_inst.store_func_ref(func);
         assert_eq!(handle, "funcref_1");
 
         // Retrieve it

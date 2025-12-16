@@ -1,16 +1,10 @@
 // Forge Text Editor - Main Deno entry point
-// Demonstrates: Full host:fs, dialogs, context menus, clipboard, file watching
+// Demonstrates: Full runtime:fs, dialogs, context menus, clipboard, file watching
 
-import {
-  openWindow,
-  setAppMenu,
-  showContextMenu,
-  onMenu,
-  dialog,
-  windowEvents,
-} from "host:ui";
-import { readTextFile, writeTextFile, watch, exists } from "host:fs";
-import { clipboard, notify } from "host:sys";
+import { createWindow, menu, dialog } from "runtime:window";
+import { ipcEvents, sendToWindow } from "runtime:ipc";
+import { readTextFile, writeTextFile, watch, exists } from "runtime:fs";
+import { clipboard, notify } from "runtime:sys";
 
 interface EditorState {
   filePath: string | null;
@@ -48,7 +42,7 @@ async function main() {
 
   // Set up application menu
   async function updateMenu() {
-    await setAppMenu([
+    await menu.setAppMenu([
       {
         label: "File",
         submenu: [
@@ -93,7 +87,7 @@ async function main() {
   await updateMenu();
 
   // Open main window
-  const win = await openWindow({
+  const win = await createWindow({
     url: "app://index.html",
     width: 800,
     height: 600,
@@ -109,7 +103,7 @@ async function main() {
 
   // Send state to renderer
   function sendState() {
-    win.send("state", {
+    sendToWindow(win.id, "state", {
       content: state.content,
       filePath: state.filePath,
       modified: state.modified,
@@ -261,7 +255,7 @@ async function main() {
   }
 
   // Handle menu events
-  onMenu(async (event) => {
+  menu.onMenu(async (event) => {
     console.log("Menu event:", event.itemId);
 
     // Handle recent files
@@ -316,18 +310,18 @@ async function main() {
       case "redo":
       case "find":
       case "replace":
-        win.send("editor-command", event.itemId);
+        sendToWindow(win.id, "editor-command", event.itemId);
         break;
 
       case "word-wrap":
       case "line-numbers":
-        win.send("toggle-option", event.itemId);
+        sendToWindow(win.id, "toggle-option", event.itemId);
         break;
     }
   });
 
   // Handle window events
-  for await (const event of windowEvents()) {
+  for await (const event of ipcEvents()) {
     console.log("Window event:", event.channel);
 
     switch (event.channel) {
@@ -343,7 +337,7 @@ async function main() {
       }
 
       case "context-menu": {
-        const result = await showContextMenu([
+        const result = await menu.showContextMenu([
           { id: "cut", label: "Cut", accelerator: "CmdOrCtrl+X" },
           { id: "copy", label: "Copy", accelerator: "CmdOrCtrl+C" },
           { id: "paste", label: "Paste", accelerator: "CmdOrCtrl+V" },
@@ -351,14 +345,14 @@ async function main() {
           { id: "select-all", label: "Select All", accelerator: "CmdOrCtrl+A" },
         ], win.id);
         if (result) {
-          win.send("editor-command", result);
+          sendToWindow(win.id, "editor-command", result);
         }
         break;
       }
 
       case "request-paste": {
         const text = await clipboard.read();
-        win.send("paste-content", text);
+        sendToWindow(win.id, "paste-content", text);
         break;
       }
 

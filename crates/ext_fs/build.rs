@@ -1,7 +1,7 @@
 use forge_weld::ExtensionBuilder;
 
 fn main() {
-    ExtensionBuilder::new("host_fs", "host:fs")
+    ExtensionBuilder::new("runtime_fs", "runtime:fs")
         .ts_path("ts/init.ts")
         .ops(&[
             "op_fs_read_text",
@@ -18,7 +18,18 @@ fn main() {
             "op_fs_watch",
             "op_fs_watch_next",
             "op_fs_watch_close",
+            // New enhanced operations
+            "op_fs_symlink",
+            "op_fs_read_link",
+            "op_fs_append_text",
+            "op_fs_append_bytes",
+            "op_fs_metadata",
+            "op_fs_real_path",
+            "op_fs_temp_file",
+            "op_fs_temp_dir",
         ])
+        .generate_sdk_module("sdk")
+        .use_inventory_types()
         .build()
         .expect("Failed to build host_fs extension");
 }

@@ -1,0 +1,17 @@
+[package]
+name = "ext_os_compat"
+version = "0.1.0-alpha.1"
+edition = "2021"
+publish = false
+build = "build.rs"
+
+[dependencies]
+deno_core = "0.373"
+serde = { version = "1", features = ["derive"] }
+dirs = "5"
+forge-weld = { path = "../forge-weld" }
+forge-weld-macro = { path = "../forge-weld-macro" }
+linkme = "0.3"
+
+[build-dependencies]
+forge-weld = { path = "../forge-weld" }

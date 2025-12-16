@@ -1,0 +1,19 @@
+[package]
+name = "ext_devtools"
+version = "0.1.0-alpha.1"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+deno_core = "0.373"
+deno_error = "0.7"
+thiserror = "1"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["sync"] }
+ext_window = { path = "../ext_window" }
+forge-weld = { path = "../forge-weld" }
+forge-weld-macro = { path = "../forge-weld-macro" }
+linkme = "0.3"
+
+[build-dependencies]
+forge-weld = { path = "../forge-weld" }

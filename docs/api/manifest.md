@@ -170,7 +170,7 @@ write = [
 fetch = [
   "https://api.example.com/*",      # HTTPS API
   "https://cdn.example.com/**",     # CDN with subpaths
-  "http://localhost:*"              # Local development
+  "http://localruntime:*"              # Local development
 ]
 ```
 

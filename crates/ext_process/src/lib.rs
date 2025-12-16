@@ -1,9 +1,10 @@
-//! host:process extension - Process spawning for Forge apps
+//! runtime:process extension - Process spawning for Forge apps
 //!
 //! Provides child process spawning, I/O, and management
 //! with capability-based security.
 
 use deno_core::{op2, Extension, OpState};
+use forge_weld_macro::{weld_op, weld_struct};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -188,6 +189,7 @@ pub struct SpawnOpts {
 }
 
 /// Result of spawning a process
+#[weld_struct]
 #[derive(Debug, Clone, Serialize)]
 pub struct SpawnResult {
     pub id: String,
@@ -195,6 +197,7 @@ pub struct SpawnResult {
 }
 
 /// Process status information
+#[weld_struct]
 #[derive(Debug, Clone, Serialize)]
 pub struct ProcessStatus {
     pub running: bool,
@@ -203,6 +206,7 @@ pub struct ProcessStatus {
 }
 
 /// Output from reading stdout/stderr
+#[weld_struct]
 #[derive(Debug, Clone, Serialize)]
 pub struct ProcessOutput {
     pub data: Option<String>,
@@ -326,6 +330,7 @@ fn parse_stdio(s: Option<&String>) -> Stdio {
 // ============================================================================
 
 /// Spawn a new child process
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_process_spawn(
@@ -477,6 +482,7 @@ async fn op_process_spawn(
 }
 
 /// Kill a process
+#[weld_op(async)]
 #[op2(async)]
 async fn op_process_kill(
     state: Rc<RefCell<OpState>>,
@@ -538,6 +544,7 @@ async fn op_process_kill(
 }
 
 /// Wait for a process to exit
+#[weld_op(async)]
 #[op2(async)]
 async fn op_process_wait(
     state: Rc<RefCell<OpState>>,
@@ -579,6 +586,7 @@ async fn op_process_wait(
 }
 
 /// Get process status
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_process_status(
@@ -657,6 +665,7 @@ async fn op_process_status(
 }
 
 /// Write to process stdin
+#[weld_op(async)]
 #[op2(async)]
 async fn op_process_write_stdin(
     state: Rc<RefCell<OpState>>,
@@ -693,6 +702,7 @@ async fn op_process_write_stdin(
 }
 
 /// Read a line from process stdout
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_process_read_stdout(
@@ -746,6 +756,7 @@ async fn op_process_read_stdout(
 }
 
 /// Read a line from process stderr
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_process_read_stderr(
@@ -822,7 +833,7 @@ pub fn init_process_state(
 include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 pub fn process_extension() -> Extension {
-    host_process::ext()
+    runtime_process::ext()
 }
 
 // ============================================================================

@@ -1,9 +1,10 @@
 ---
 title: "forge"
 description: Command-line interface for scaffolding, building, and bundling Forge apps.
+slug: crates/forge
 ---
 
-The `forge` crate is the command-line interface (CLI) for Forge. It provides commands for creating, developing, building, and distributing Forge applications.
+The `forge` CLI (crate name `forge_cli`, binary `forge`, path `crates/forge_cli`) is the command-line interface for Forge. It provides commands for creating, developing, building, and distributing Forge applications.
 
 ## Overview
 
@@ -118,7 +119,7 @@ enum Framework {
 ## File Structure
 
 ```text
-crates/forge/
+crates/forge_cli/
 ├── src/
 │   ├── main.rs         # CLI entry point and commands
 │   └── bundler/        # Platform bundling logic
@@ -142,5 +143,5 @@ crates/forge/
 
 ## Related
 
-- [forge-host](/docs/crates/forge-host) - Runtime binary launched by `forge dev`
+- [forge-runtime](/docs/crates/forge-runtime) - Runtime binary launched by `forge dev`
 - [Getting Started](/docs/getting-started) - User guide for CLI usage

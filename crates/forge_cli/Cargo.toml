@@ -1,0 +1,22 @@
+[package]
+name = "forge_cli"
+version = "0.1.0-alpha.1"
+edition = "2021"
+build = "build.rs"
+
+[[bin]]
+name = "forge"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+# Bundling dependencies
+zip = "2.0"           # MSIX/archive creation
+image = "0.25"        # Icon processing and resizing
+walkdir = "2"         # Directory traversal
+chrono = "0.4"        # Timestamps for Info.plist
+dirs = "5"            # Cache directory resolution
+which = "7.0"         # Find forge-host binary in PATH

@@ -1,4 +1,4 @@
-// host:sys module - TypeScript wrapper for Deno core ops
+// runtime:sys module - TypeScript wrapper for Deno core ops
 
 declare const Deno: {
   core: {
@@ -14,6 +14,11 @@ declare const Deno: {
       op_sys_notify(title: string, body: string): Promise<void>;
       op_sys_notify_ext(opts: NotifyOptions): Promise<void>;
       op_sys_power_info(): Promise<PowerInfo>;
+      // Enhanced operations
+      op_sys_env_all(): Record<string, string>;
+      op_sys_env_delete(key: string): void;
+      op_sys_locale(): LocaleInfoResult;
+      op_sys_app_paths(): AppPathsResult;
     };
   };
 };
@@ -45,6 +50,53 @@ interface PowerInfo {
   percentage: number | null;
   timeToFull: number | null;
   timeToEmpty: number | null;
+}
+
+// Enhanced types
+interface LocaleInfoResult {
+  language: string;
+  country: string | null;
+  locale: string;
+}
+
+interface AppPathsResult {
+  home: string | null;
+  documents: string | null;
+  downloads: string | null;
+  desktop: string | null;
+  music: string | null;
+  pictures: string | null;
+  videos: string | null;
+  data: string | null;
+  config: string | null;
+  cache: string | null;
+  runtime: string | null;
+}
+
+/**
+ * System locale information
+ */
+export interface LocaleInfo {
+  language: string;
+  country: string | null;
+  locale: string;
+}
+
+/**
+ * Standard application paths
+ */
+export interface AppPaths {
+  home: string | null;
+  documents: string | null;
+  downloads: string | null;
+  desktop: string | null;
+  music: string | null;
+  pictures: string | null;
+  videos: string | null;
+  data: string | null;
+  config: string | null;
+  cache: string | null;
+  runtime: string | null;
 }
 
 const core = Deno.core;
@@ -100,3 +152,45 @@ export async function notifyExt(opts: NotifyOptions): Promise<void> {
 export async function powerInfo(): Promise<PowerInfo> {
   return await core.ops.op_sys_power_info();
 }
+
+// ============================================================================
+// Enhanced Operations
+// ============================================================================
+
+/**
+ * Get all environment variables.
+ * @returns Object with all environment variables
+ */
+export function getAllEnv(): Record<string, string> {
+  return core.ops.op_sys_env_all();
+}
+
+/**
+ * Delete an environment variable.
+ * @param key - The environment variable key to delete
+ */
+export function deleteEnv(key: string): void {
+  return core.ops.op_sys_env_delete(key);
+}
+
+/**
+ * Get system locale information.
+ * @returns Locale information including language and country codes
+ */
+export function locale(): LocaleInfo {
+  return core.ops.op_sys_locale();
+}
+
+/**
+ * Get standard application paths.
+ * @returns Object with standard directory paths
+ */
+export function appPaths(): AppPaths {
+  return core.ops.op_sys_app_paths();
+}
+
+// Convenience aliases
+export { getAllEnv as envAll };
+export { deleteEnv as envDelete };
+export { locale as getLocale };
+export { appPaths as getPaths };

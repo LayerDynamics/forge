@@ -1,6 +1,7 @@
 ---
 title: App Icons Guide
 description: Create and manage app icons for your Forge application across all platforms.
+slug: guides/icons
 ---
 
 Every Forge app needs an icon for bundling. This guide covers icon requirements, CLI tools, and platform-specific details.

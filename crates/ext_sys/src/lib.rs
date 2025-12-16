@@ -1,9 +1,10 @@
-//! host:sys extension - System operations for Forge apps
+//! runtime:sys extension - System operations for Forge apps
 //!
 //! Provides clipboard, notifications, system info, and environment access
 //! with capability-based security.
 
 use deno_core::{op2, Extension, OpState};
+use forge_weld_macro::{weld_op, weld_struct};
 use serde::Serialize;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -121,6 +122,7 @@ impl From<arboard::Error> for SysError {
 // ============================================================================
 
 /// System information
+#[weld_struct]
 #[derive(Debug, Clone, Serialize)]
 pub struct SystemInfo {
     pub os: String,
@@ -140,6 +142,7 @@ pub struct NotifyOpts {
 }
 
 /// Power/battery information
+#[weld_struct]
 #[derive(Debug, Clone, Serialize)]
 pub struct PowerInfo {
     pub has_battery: bool,
@@ -148,6 +151,7 @@ pub struct PowerInfo {
 }
 
 /// Information about a single battery
+#[weld_struct]
 #[derive(Debug, Clone, Serialize)]
 pub struct BatteryInfo {
     pub charge_percent: f32,
@@ -157,6 +161,32 @@ pub struct BatteryInfo {
     pub health_percent: Option<f32>,
     pub cycle_count: Option<u32>,
     pub temperature_celsius: Option<f32>,
+}
+
+/// Locale information
+#[weld_struct]
+#[derive(Debug, Clone, Serialize)]
+pub struct LocaleInfo {
+    pub language: String,
+    pub country: Option<String>,
+    pub locale: String,
+}
+
+/// Standard application paths
+#[weld_struct]
+#[derive(Debug, Clone, Serialize)]
+pub struct AppPaths {
+    pub home: Option<String>,
+    pub documents: Option<String>,
+    pub downloads: Option<String>,
+    pub desktop: Option<String>,
+    pub music: Option<String>,
+    pub pictures: Option<String>,
+    pub videos: Option<String>,
+    pub data: Option<String>,
+    pub config: Option<String>,
+    pub cache: Option<String>,
+    pub runtime: Option<String>,
 }
 
 // ============================================================================
@@ -304,6 +334,7 @@ fn get_system_info() -> SystemInfo {
 }
 
 /// Get system information
+#[weld_op]
 #[op2]
 #[serde]
 fn op_sys_info() -> SystemInfo {
@@ -312,6 +343,7 @@ fn op_sys_info() -> SystemInfo {
 }
 
 /// Get environment variable
+#[weld_op]
 #[op2]
 #[string]
 fn op_sys_env_get(state: &OpState, #[string] key: String) -> Result<Option<String>, SysError> {
@@ -321,6 +353,7 @@ fn op_sys_env_get(state: &OpState, #[string] key: String) -> Result<Option<Strin
 }
 
 /// Set environment variable
+#[weld_op]
 #[op2(fast)]
 fn op_sys_env_set(
     state: &OpState,
@@ -336,6 +369,7 @@ fn op_sys_env_set(
 }
 
 /// Get current working directory
+#[weld_op]
 #[op2]
 #[string]
 fn op_sys_cwd() -> Result<String, SysError> {
@@ -346,6 +380,7 @@ fn op_sys_cwd() -> Result<String, SysError> {
 }
 
 /// Get home directory
+#[weld_op]
 #[op2]
 #[string]
 fn op_sys_home_dir() -> Option<String> {
@@ -354,6 +389,7 @@ fn op_sys_home_dir() -> Option<String> {
 }
 
 /// Get temp directory
+#[weld_op]
 #[op2]
 #[string]
 fn op_sys_temp_dir() -> String {
@@ -362,6 +398,7 @@ fn op_sys_temp_dir() -> String {
 }
 
 /// Read clipboard text
+#[weld_op(async)]
 #[op2(async)]
 #[string]
 async fn op_sys_clipboard_read(state: Rc<RefCell<OpState>>) -> Result<String, SysError> {
@@ -382,6 +419,7 @@ async fn op_sys_clipboard_read(state: Rc<RefCell<OpState>>) -> Result<String, Sy
 }
 
 /// Write clipboard text
+#[weld_op(async)]
 #[op2(async)]
 async fn op_sys_clipboard_write(
     state: Rc<RefCell<OpState>>,
@@ -404,6 +442,7 @@ async fn op_sys_clipboard_write(
 }
 
 /// Show desktop notification
+#[weld_op(async)]
 #[op2(async)]
 async fn op_sys_notify(
     state: Rc<RefCell<OpState>>,
@@ -444,6 +483,7 @@ async fn op_sys_notify(
 }
 
 /// Show desktop notification with more options
+#[weld_op(async)]
 #[op2(async)]
 async fn op_sys_notify_ext(
     state: Rc<RefCell<OpState>>,
@@ -503,6 +543,7 @@ async fn op_sys_notify_ext(
 }
 
 /// Get power/battery information
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_sys_power_info(state: Rc<RefCell<OpState>>) -> Result<PowerInfo, SysError> {
@@ -590,6 +631,73 @@ async fn op_sys_power_info(state: Rc<RefCell<OpState>>) -> Result<PowerInfo, Sys
 }
 
 // ============================================================================
+// Enhanced Operations
+// ============================================================================
+
+/// Get all environment variables
+#[weld_op]
+#[op2]
+#[serde]
+fn op_sys_env_all(state: &OpState) -> Result<std::collections::HashMap<String, String>, SysError> {
+    // Check env capability for wildcard
+    check_env(state, "*")?;
+    debug!("sys.env_all");
+    Ok(std::env::vars().collect())
+}
+
+/// Delete/unset an environment variable
+#[weld_op]
+#[op2(fast)]
+fn op_sys_env_delete(state: &OpState, #[string] key: &str) -> Result<(), SysError> {
+    check_env_write(state, key)?;
+    debug!(key = %key, "sys.env_delete");
+    // SAFETY: We have verified permission to write this env var.
+    // The caller is responsible for ensuring no concurrent reads.
+    unsafe { std::env::remove_var(key) };
+    Ok(())
+}
+
+/// Get system locale information
+#[weld_op]
+#[op2]
+#[serde]
+fn op_sys_locale() -> LocaleInfo {
+    debug!("sys.locale");
+    let locale = sys_locale::get_locale().unwrap_or_else(|| "en-US".to_string());
+
+    let parts: Vec<&str> = locale.split('-').collect();
+    let language = parts.first().map(|s| s.to_string()).unwrap_or_else(|| "en".to_string());
+    let country = parts.get(1).map(|s| s.to_string());
+
+    LocaleInfo {
+        language,
+        country,
+        locale,
+    }
+}
+
+/// Get standard application paths
+#[weld_op]
+#[op2]
+#[serde]
+fn op_sys_app_paths() -> AppPaths {
+    debug!("sys.app_paths");
+    AppPaths {
+        home: dirs::home_dir().map(|p| p.to_string_lossy().to_string()),
+        documents: dirs::document_dir().map(|p| p.to_string_lossy().to_string()),
+        downloads: dirs::download_dir().map(|p| p.to_string_lossy().to_string()),
+        desktop: dirs::desktop_dir().map(|p| p.to_string_lossy().to_string()),
+        music: dirs::audio_dir().map(|p| p.to_string_lossy().to_string()),
+        pictures: dirs::picture_dir().map(|p| p.to_string_lossy().to_string()),
+        videos: dirs::video_dir().map(|p| p.to_string_lossy().to_string()),
+        data: dirs::data_dir().map(|p| p.to_string_lossy().to_string()),
+        config: dirs::config_dir().map(|p| p.to_string_lossy().to_string()),
+        cache: dirs::cache_dir().map(|p| p.to_string_lossy().to_string()),
+        runtime: dirs::runtime_dir().map(|p| p.to_string_lossy().to_string()),
+    }
+}
+
+// ============================================================================
 // State Initialization
 // ============================================================================
 
@@ -608,7 +716,7 @@ pub fn init_sys_state(op_state: &mut OpState, capabilities: Option<Arc<dyn SysCa
 include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 pub fn sys_extension() -> Extension {
-    host_sys::ext()
+    runtime_sys::ext()
 }
 
 // ============================================================================

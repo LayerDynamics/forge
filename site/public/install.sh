@@ -159,14 +159,14 @@ main() {
 
     # Make binaries executable
     chmod +x "$INSTALL_DIR/forge" 2>/dev/null || true
-    chmod +x "$INSTALL_DIR/forge-host" 2>/dev/null || true
+    chmod +x "$INSTALL_DIR/forge-runtime" 2>/dev/null || true
 
     # Verify installation
     if [ ! -f "$INSTALL_DIR/forge" ]; then
         error "Installation failed: forge binary not found"
     fi
-    if [ ! -f "$INSTALL_DIR/forge-host" ]; then
-        error "Installation failed: forge-host binary not found"
+    if [ ! -f "$INSTALL_DIR/forge-runtime" ]; then
+        error "Installation failed: forge-runtime binary not found"
     fi
 
     # Add to PATH
@@ -180,7 +180,7 @@ main() {
     echo ""
     echo "  Installed:"
     echo "    - $INSTALL_DIR/forge"
-    echo "    - $INSTALL_DIR/forge-host"
+    echo "    - $INSTALL_DIR/forge-runtime"
     echo ""
     echo "  To get started, restart your terminal or run:"
     echo ""

@@ -1,4 +1,4 @@
-// host:fs module - TypeScript wrapper for Deno core ops
+// runtime:fs module - TypeScript wrapper for Deno core ops
 
 // Deno.core type declaration
 declare const Deno: {
@@ -18,6 +18,15 @@ declare const Deno: {
       op_fs_watch(path: string): Promise<number>;
       op_fs_watch_next(watchId: number): Promise<WatchEvent | null>;
       op_fs_watch_close(watchId: number): Promise<void>;
+      // Enhanced operations
+      op_fs_symlink(target: string, path: string): Promise<void>;
+      op_fs_read_link(path: string): Promise<string>;
+      op_fs_append_text(path: string, content: string): Promise<void>;
+      op_fs_append_bytes(path: string, content: number[]): Promise<void>;
+      op_fs_metadata(path: string): Promise<FileMetadataResult>;
+      op_fs_real_path(path: string): Promise<string>;
+      op_fs_temp_file(prefix: string | null, suffix: string | null): Promise<TempFileResult>;
+      op_fs_temp_dir(prefix: string | null): Promise<TempDirResult>;
     };
   };
 };
@@ -58,6 +67,56 @@ interface Watcher {
   next(): Promise<WatchEvent | null>;
   [Symbol.asyncIterator](): AsyncGenerator<WatchEvent, void, unknown>;
   close(): Promise<void>;
+}
+
+// Enhanced types
+interface FileMetadataResult {
+  is_file: boolean;
+  is_dir: boolean;
+  is_symlink: boolean;
+  size: number;
+  readonly: boolean;
+  created_at: number | null;
+  modified_at: number | null;
+  accessed_at: number | null;
+  permissions: number | null;
+}
+
+interface TempFileResult {
+  path: string;
+}
+
+interface TempDirResult {
+  path: string;
+}
+
+/**
+ * Extended file metadata with timestamps
+ */
+export interface FileMetadata {
+  isFile: boolean;
+  isDir: boolean;
+  isSymlink: boolean;
+  size: number;
+  readonly: boolean;
+  createdAt: number | null;
+  modifiedAt: number | null;
+  accessedAt: number | null;
+  permissions: number | null;
+}
+
+/**
+ * Temporary file information
+ */
+export interface TempFileInfo {
+  path: string;
+}
+
+/**
+ * Temporary directory information
+ */
+export interface TempDirInfo {
+  path: string;
 }
 
 const core = Deno.core;
@@ -127,7 +186,99 @@ export async function watch(path: string): Promise<Watcher> {
   };
 }
 
+// ============================================================================
+// Enhanced Operations
+// ============================================================================
+
+/**
+ * Create a symbolic link.
+ * @param target - The target path the symlink points to
+ * @param path - The path where the symlink will be created
+ */
+export async function symlink(target: string, path: string): Promise<void> {
+  return await core.ops.op_fs_symlink(target, path);
+}
+
+/**
+ * Read the target of a symbolic link.
+ * @param path - Path to the symbolic link
+ * @returns The target path the symlink points to
+ */
+export async function readLink(path: string): Promise<string> {
+  return await core.ops.op_fs_read_link(path);
+}
+
+/**
+ * Append text to a file. Creates the file if it doesn't exist.
+ * @param path - The file path to append to
+ * @param content - The text content to append
+ */
+export async function appendTextFile(path: string, content: string): Promise<void> {
+  return await core.ops.op_fs_append_text(path, content);
+}
+
+/**
+ * Append bytes to a file. Creates the file if it doesn't exist.
+ * @param path - The file path to append to
+ * @param content - The bytes to append
+ */
+export async function appendBytes(path: string, content: Uint8Array): Promise<void> {
+  return await core.ops.op_fs_append_bytes(path, Array.from(content));
+}
+
+/**
+ * Get extended file metadata including timestamps.
+ * @param path - The path to get metadata for
+ * @returns Extended metadata including creation/modification times
+ */
+export async function metadata(path: string): Promise<FileMetadata> {
+  const result = await core.ops.op_fs_metadata(path);
+  return {
+    isFile: result.is_file,
+    isDir: result.is_dir,
+    isSymlink: result.is_symlink,
+    size: result.size,
+    readonly: result.readonly,
+    createdAt: result.created_at,
+    modifiedAt: result.modified_at,
+    accessedAt: result.accessed_at,
+    permissions: result.permissions,
+  };
+}
+
+/**
+ * Resolve a path to its canonical, absolute form (resolving symlinks).
+ * @param path - The path to resolve
+ * @returns The canonical absolute path
+ */
+export async function realPath(path: string): Promise<string> {
+  return await core.ops.op_fs_real_path(path);
+}
+
+/**
+ * Create a temporary file that persists until explicitly deleted.
+ * @param prefix - Optional prefix for the file name
+ * @param suffix - Optional suffix for the file name
+ * @returns Information about the created temp file
+ */
+export async function tempFile(prefix?: string, suffix?: string): Promise<TempFileInfo> {
+  const result = await core.ops.op_fs_temp_file(prefix ?? null, suffix ?? null);
+  return { path: result.path };
+}
+
+/**
+ * Create a temporary directory that persists until explicitly deleted.
+ * @param prefix - Optional prefix for the directory name
+ * @returns Information about the created temp directory
+ */
+export async function tempDir(prefix?: string): Promise<TempDirInfo> {
+  const result = await core.ops.op_fs_temp_dir(prefix ?? null);
+  return { path: result.path };
+}
+
 // Legacy aliases
 export const readFile = readBytes;
 export const writeFile = writeBytes;
 export const watchFile = watch;
+export const appendFile = appendBytes;
+export const createSymlink = symlink;

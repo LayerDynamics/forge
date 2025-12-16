@@ -1,7 +1,7 @@
 use forge_weld::ExtensionBuilder;
 
 fn main() {
-    ExtensionBuilder::new("host_process", "host:process")
+    ExtensionBuilder::new("runtime_process", "runtime:process")
         .ts_path("ts/init.ts")
         .ops(&[
             "op_process_spawn",
@@ -12,6 +12,8 @@ fn main() {
             "op_process_read_stdout",
             "op_process_read_stderr",
         ])
+        .generate_sdk_module("sdk")
+        .use_inventory_types()
         .build()
         .expect("Failed to build host_process extension");
 }

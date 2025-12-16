@@ -1,9 +1,10 @@
 // Forge Weather App - Main Deno entry point
-// Demonstrates: host:net HTTP fetch, host:sys notifications, host:ui tray icons
+// Demonstrates: runtime:net HTTP fetch, runtime:sys notifications, runtime:window tray icons
 
-import { openWindow, createTray, onMenu, windowEvents } from "host:ui";
-import { fetchJson } from "host:net";
-import { notify, clipboard } from "host:sys";
+import { createWindow, tray, menu } from "runtime:window";
+import { ipcEvents, sendToWindow } from "runtime:ipc";
+import { fetchJson } from "runtime:net";
+import { notify, clipboard } from "runtime:sys";
 
 // Types for Open-Meteo API
 interface GeocodingResult {
@@ -113,7 +114,7 @@ async function main() {
   };
 
   // Create tray icon
-  const tray = await createTray({
+  const trayIcon = await tray.create({
     tooltip: "Forge Weather",
     menu: [
       { id: "refresh", label: "Refresh" },
@@ -123,7 +124,7 @@ async function main() {
   });
 
   // Open main window
-  const win = await openWindow({
+  const win = await createWindow({
     url: "app://index.html",
     width: 400,
     height: 500,
@@ -138,7 +139,7 @@ async function main() {
       ? getWeatherInfo(state.weather.current.weather_code)
       : null;
 
-    win.send("state", {
+    sendToWindow(win.id, "state", {
       ...state,
       weatherDescription: weatherInfo?.description,
       weatherIcon: weatherInfo?.icon,
@@ -149,7 +150,7 @@ async function main() {
   function updateTray() {
     if (state.weather?.current) {
       const temp = Math.round(state.weather.current.temperature_2m);
-      tray.update({
+      trayIcon.update({
         tooltip: `${state.location?.name}: ${temp}°C`,
         menu: [
           { id: "temp", label: `${temp}°C - ${getWeatherInfo(state.weather.current.weather_code).description}`, enabled: false },
@@ -192,7 +193,7 @@ async function main() {
   }
 
   // Handle menu events
-  onMenu(async (event) => {
+  menu.onMenu(async (event) => {
     console.log("Menu event:", event);
 
     switch (event.itemId) {
@@ -200,7 +201,7 @@ async function main() {
         await refreshWeather();
         break;
       case "quit":
-        tray.destroy();
+        trayIcon.destroy();
         win.close();
         Deno.exit(0);
         break;
@@ -208,7 +209,7 @@ async function main() {
   });
 
   // Handle window events
-  for await (const event of windowEvents()) {
+  for await (const event of ipcEvents()) {
     console.log("Window event:", event.channel, event.payload);
 
     switch (event.channel) {
@@ -226,7 +227,7 @@ async function main() {
 
         try {
           const locations = await geocodeLocation(query);
-          win.send("search-results", locations);
+          sendToWindow(win.id, "search-results", locations);
         } catch (e) {
           state.error = `Search failed: ${e}`;
         } finally {

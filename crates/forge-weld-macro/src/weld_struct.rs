@@ -52,6 +52,31 @@ fn to_camel_case(s: &str) -> String {
     result
 }
 
+/// Convert PascalCase to camelCase (first letter lowercase)
+fn to_camel_case_first_lower(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(first) => first.to_lowercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
+/// Convert PascalCase to snake_case
+fn to_snake_case(s: &str) -> String {
+    let mut result = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if c.is_uppercase() {
+            if i > 0 {
+                result.push('_');
+            }
+            result.extend(c.to_lowercase());
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 pub fn weld_struct_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input: ItemStruct = match parse2(item.clone()) {
         Ok(input) => input,
@@ -115,11 +140,17 @@ pub fn weld_struct_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         tokens
     };
 
-    // Generate metadata function name
-    let metadata_fn_name = format_ident!("__{}_weld_metadata", struct_name);
+    // Generate metadata function name (snake_case to avoid warnings)
+    let snake_case_name = to_snake_case(&struct_name_str);
+    let metadata_fn_name = format_ident!("__{}_weld_metadata", snake_case_name);
+
+    let mut stripped = input.clone();
+    stripped
+        .attrs
+        .retain(|a| !a.path().is_ident("weld_struct") && !a.path().is_ident("weld_enum"));
 
     let expanded = quote! {
-        #input
+        #stripped
 
         #[doc(hidden)]
         fn #metadata_fn_name() -> forge_weld::WeldStruct {
@@ -128,6 +159,7 @@ pub fn weld_struct_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                 ts_name: #ts_name.to_string(),
                 fields: vec![#(#field_tokens),*],
                 doc: None,
+                is_type_alias: false,
                 type_params: Vec::new(),
             }
         }
@@ -158,58 +190,24 @@ pub fn weld_enum_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         .iter()
         .map(|v| {
             let name = v.ident.to_string();
+            // Convert to camelCase for the value (matches serde rename_all = "camelCase")
+            let value = to_camel_case_first_lower(&name);
 
-            // Extract variant fields
-            let field_tokens: Vec<_> = match &v.fields {
-                Fields::Named(fields) => {
-                    let mut tokens = Vec::new();
-                    for f in fields.named.iter() {
-                        let field_name = match f.ident.as_ref() {
-                            Some(n) => n,
-                            None => continue,
-                        };
-                        let field_name_str = field_name.to_string();
-                        let ts_field_name = to_camel_case(&field_name_str);
-                        let type_tokens = rust_type_to_weld_type(&f.ty)?;
-
-                        tokens.push(quote! {
-                            forge_weld::StructField {
-                                rust_name: #field_name_str.to_string(),
-                                ts_name: #ts_field_name.to_string(),
-                                ty: #type_tokens,
-                                optional: false,
-                                readonly: false,
-                                doc: None,
-                            }
-                        });
-                    }
-                    tokens
+            // Determine if variant has associated data
+            let data_tokens = match &v.fields {
+                Fields::Named(_) | Fields::Unnamed(_) => {
+                    // For now, treat complex variants as having unknown data
+                    // A more complete implementation would parse the field types
+                    quote! { None }
                 }
-                Fields::Unnamed(fields) => {
-                    let mut tokens = Vec::new();
-                    for (i, f) in fields.unnamed.iter().enumerate() {
-                        let field_name = format!("field{}", i);
-                        let type_tokens = rust_type_to_weld_type(&f.ty)?;
-                        tokens.push(quote! {
-                            forge_weld::StructField {
-                                rust_name: #field_name.to_string(),
-                                ts_name: #field_name.to_string(),
-                                ty: #type_tokens,
-                                optional: false,
-                                readonly: false,
-                                doc: None,
-                            }
-                        });
-                    }
-                    tokens
-                }
-                Fields::Unit => Vec::new(),
+                Fields::Unit => quote! { None },
             };
 
             Ok(quote! {
                 forge_weld::EnumVariant {
                     name: #name.to_string(),
-                    fields: vec![#(#field_tokens),*],
+                    value: Some(#value.to_string()),
+                    data: #data_tokens,
                     doc: None,
                 }
             })
@@ -221,11 +219,17 @@ pub fn weld_enum_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error(),
     };
 
-    // Generate metadata function name
-    let metadata_fn_name = format_ident!("__{}_weld_metadata", enum_name);
+    // Generate metadata function name (snake_case to avoid warnings)
+    let snake_case_name = to_snake_case(&enum_name_str);
+    let metadata_fn_name = format_ident!("__{}_weld_metadata", snake_case_name);
+
+    let mut stripped = input.clone();
+    stripped
+        .attrs
+        .retain(|a| !a.path().is_ident("weld_struct") && !a.path().is_ident("weld_enum"));
 
     let expanded = quote! {
-        #input
+        #stripped
 
         #[doc(hidden)]
         fn #metadata_fn_name() -> forge_weld::WeldEnum {

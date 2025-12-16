@@ -1,9 +1,10 @@
 ---
 title: "ext_wasm"
-description: WebAssembly runtime extension providing the host:wasm module.
+description: WebAssembly runtime extension providing the runtime:wasm module.
+slug: crates/ext-wasm
 ---
 
-The `ext_wasm` crate provides WebAssembly module loading, instantiation, and execution for Forge applications through the `host:wasm` module.
+The `ext_wasm` crate provides WebAssembly module loading, instantiation, and execution for Forge applications through the `runtime:wasm` module.
 
 ## Overview
 
@@ -16,14 +17,14 @@ ext_wasm handles:
 - **Memory access** - Read/write WASM memory
 - **Capability-based security** - Module loading permissions
 
-## Module: `host:wasm`
+## Module: `runtime:wasm`
 
 ```typescript
 import {
   compileFile,
   compile,
   instantiate
-} from "host:wasm";
+} from "runtime:wasm";
 
 const module = await compileFile("./module.wasm");
 const instance = await instantiate(module, {});
@@ -159,6 +160,60 @@ crates/ext_wasm/
 └── Cargo.toml
 ```
 
+## Rust Implementation
+
+Operations are annotated with forge-weld macros for automatic TypeScript binding generation:
+
+```rust
+// src/lib.rs
+use deno_core::{op2, Extension, OpState};
+use forge_weld_macro::{weld_op, weld_struct, weld_enum};
+use serde::{Deserialize, Serialize};
+
+#[weld_enum]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ExportKind {
+    Function,
+    Memory,
+    Global,
+    Table,
+}
+
+#[weld_struct]
+#[derive(Debug, Serialize)]
+pub struct WasmModule {
+    pub id: u32,
+    pub exports: Vec<ExportInfo>,
+}
+
+#[weld_op(async)]
+#[op2(async)]
+#[serde]
+pub async fn op_wasm_compile(
+    state: Rc<RefCell<OpState>>,
+    #[buffer] bytes: &[u8],
+) -> Result<WasmModule, WasmError> {
+    // implementation
+}
+```
+
+## Build Configuration
+
+```rust
+// build.rs
+use forge_weld::ExtensionBuilder;
+
+fn main() {
+    ExtensionBuilder::new("runtime_wasm", "runtime:wasm")
+        .ts_path("ts/init.ts")
+        .ops(&["op_wasm_compile", "op_wasm_instantiate", "op_wasm_call", /* ... */])
+        .generate_sdk_module("sdk")
+        .use_inventory_types()
+        .build()
+        .expect("Failed to build runtime_wasm extension");
+}
+```
+
 ## Dependencies
 
 | Dependency | Purpose |
@@ -170,8 +225,10 @@ crates/ext_wasm/
 | `serde` | Serialization |
 | `tracing` | Logging |
 | `forge-weld` | Build-time code generation |
+| `forge-weld-macro` | `#[weld_op]`, `#[weld_struct]`, `#[weld_enum]` macros |
+| `linkme` | Compile-time symbol collection |
 
 ## Related
 
-- [host:wasm API](/docs/api/host-wasm) - TypeScript API documentation
-- [forge-weld](/docs/crates/forge-weld) - Build system
+- [runtime:wasm API](/docs/api/runtime-wasm) - TypeScript API documentation
+- [forge-weld](/docs/crates/forge-weld) - Code generation library

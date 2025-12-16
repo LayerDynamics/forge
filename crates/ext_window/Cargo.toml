@@ -4,13 +4,21 @@ version = "0.1.0-alpha.1"
 edition = "2021"
 build = "build.rs"
 
+[features]
+default = []
+devtools = ["wry/devtools"]
+
 [build-dependencies]
 forge-weld = { path = "../forge-weld" }
 
 [dependencies]
+forge-weld = { path = "../forge-weld" }
+forge-weld-macro = { path = "../forge-weld-macro" }
+linkme = "0.3"
 anyhow = "1"
 deno_core = "0.373"
 deno_error = "0.7"
+deno_ast = { version = "0.52", features = ["transpiling"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"

@@ -1,7 +1,7 @@
 use forge_weld::ExtensionBuilder;
 
 fn main() {
-    ExtensionBuilder::new("host_wasm", "host:wasm")
+    ExtensionBuilder::new("runtime_wasm", "runtime:wasm")
         .ts_path("ts/init.ts")
         .ops(&[
             "op_wasm_compile",
@@ -16,6 +16,8 @@ fn main() {
             "op_wasm_memory_size",
             "op_wasm_memory_grow",
         ])
+        .generate_sdk_module("sdk")
+        .use_inventory_types()
         .build()
         .expect("Failed to build host_wasm extension");
 }

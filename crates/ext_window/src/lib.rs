@@ -1,9 +1,11 @@
 use deno_core::{op2, Extension, OpState};
+use forge_weld_macro::{weld_op, weld_struct};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::time::Duration;
 
 // Manager module with platform implementation
 pub mod manager;
@@ -47,6 +49,14 @@ pub enum WindowErrorCode {
     FullscreenNotSupported = 6013,
     /// Native handle unavailable
     NativeHandleUnavailable = 6014,
+    /// DevTools not supported
+    DevToolsNotSupported = 6015,
+    /// JavaScript evaluation error
+    JsEvalError = 6016,
+    /// CSS injection error
+    CssInjectionError = 6017,
+    /// Monitor info unavailable
+    MonitorUnavailable = 6018,
 }
 
 /// Custom error type for window operations
@@ -107,6 +117,22 @@ pub enum WindowError {
     #[error("[{code}] Native handle unavailable")]
     #[class(generic)]
     NativeHandleUnavailable { code: u32 },
+
+    #[error("[{code}] DevTools not supported: {message}")]
+    #[class(generic)]
+    DevToolsNotSupported { code: u32, message: String },
+
+    #[error("[{code}] JavaScript evaluation error: {message}")]
+    #[class(generic)]
+    JsEvalError { code: u32, message: String },
+
+    #[error("[{code}] CSS injection error: {message}")]
+    #[class(generic)]
+    CssInjectionError { code: u32, message: String },
+
+    #[error("[{code}] Monitor info unavailable")]
+    #[class(generic)]
+    MonitorUnavailable { code: u32 },
 }
 
 impl WindowError {
@@ -157,6 +183,33 @@ impl WindowError {
             code: WindowErrorCode::NativeHandleUnavailable as u32,
         }
     }
+
+    pub fn devtools_not_supported(message: impl Into<String>) -> Self {
+        Self::DevToolsNotSupported {
+            code: WindowErrorCode::DevToolsNotSupported as u32,
+            message: message.into(),
+        }
+    }
+
+    pub fn js_eval_error(message: impl Into<String>) -> Self {
+        Self::JsEvalError {
+            code: WindowErrorCode::JsEvalError as u32,
+            message: message.into(),
+        }
+    }
+
+    pub fn css_injection_error(message: impl Into<String>) -> Self {
+        Self::CssInjectionError {
+            code: WindowErrorCode::CssInjectionError as u32,
+            message: message.into(),
+        }
+    }
+
+    pub fn monitor_unavailable() -> Self {
+        Self::MonitorUnavailable {
+            code: WindowErrorCode::MonitorUnavailable as u32,
+        }
+    }
 }
 
 // ============================================================================
@@ -175,6 +228,7 @@ pub struct WindowOpts {
     pub visible: Option<bool>,
     pub transparent: Option<bool>,
     pub always_on_top: Option<bool>,
+    pub devtools: Option<bool>,
     pub x: Option<i32>,
     pub y: Option<i32>,
     pub min_width: Option<u32>,
@@ -186,6 +240,7 @@ pub struct WindowOpts {
 }
 
 /// Window position
+#[weld_struct]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Position {
     pub x: i32,
@@ -193,6 +248,7 @@ pub struct Position {
 }
 
 /// Window size
+#[weld_struct]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Size {
     pub width: u32,
@@ -200,6 +256,7 @@ pub struct Size {
 }
 
 /// Native window handle (platform-specific)
+#[weld_struct]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NativeHandle {
     /// Platform type: "windows", "macos", "linux-x11", "linux-wayland"
@@ -209,6 +266,7 @@ pub struct NativeHandle {
 }
 
 /// Window system event (sent from Host to Deno)
+#[weld_struct]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowSystemEvent {
     pub window_id: String,
@@ -277,6 +335,7 @@ pub struct TrayOpts {
 }
 
 /// Menu event sent when a menu item is clicked
+#[weld_struct]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MenuEvent {
     /// Source of the menu event: "app" for app menu, "context" for context menu, "tray" for tray menu
@@ -285,6 +344,22 @@ pub struct MenuEvent {
     pub item_id: String,
     /// The label of the menu item
     pub label: String,
+}
+
+/// Monitor information
+#[weld_struct]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MonitorInfo {
+    /// Monitor name (if available)
+    pub name: Option<String>,
+    /// Position on virtual screen
+    pub position: Position,
+    /// Physical size in pixels
+    pub size: Size,
+    /// Scale factor (DPI scaling)
+    pub scale_factor: f64,
+    /// Whether this is the primary monitor
+    pub is_primary: bool,
 }
 
 // ============================================================================
@@ -418,6 +493,46 @@ pub enum WindowCmd {
         window_id: String,
         respond: tokio::sync::oneshot::Sender<Result<NativeHandle, String>>,
     },
+
+    // === Enhanced Operations ===
+    OpenDevTools {
+        window_id: String,
+        respond: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
+    CloseDevTools {
+        window_id: String,
+        respond: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
+    IsDevToolsOpen {
+        window_id: String,
+        respond: tokio::sync::oneshot::Sender<Result<bool, String>>,
+    },
+    EvalJs {
+        window_id: String,
+        script: String,
+        respond: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
+    InjectCss {
+        window_id: String,
+        css: String,
+        respond: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
+    SetMinSize {
+        window_id: String,
+        width: u32,
+        height: u32,
+    },
+    SetMaxSize {
+        window_id: String,
+        width: u32,
+        height: u32,
+    },
+    Center {
+        window_id: String,
+    },
+    GetMonitors {
+        respond: tokio::sync::oneshot::Sender<Vec<MonitorInfo>>,
+    },
 }
 
 // ============================================================================
@@ -534,6 +649,7 @@ fn check_native_handle_capability(state: &OpState) -> Result<(), WindowError> {
 // ============================================================================
 
 /// Create a new window
+#[weld_op(async)]
 #[op2(async)]
 #[string]
 async fn op_window_create(
@@ -552,6 +668,8 @@ async fn op_window_create(
     };
 
     let (respond_tx, respond_rx) = tokio::sync::oneshot::channel();
+    tracing::debug!("op_window_create: sending WindowCmd::Create");
+    println!("op_window_create: send create command");
     cmd_tx
         .send(WindowCmd::Create {
             opts,
@@ -559,14 +677,30 @@ async fn op_window_create(
         })
         .await
         .map_err(|e| WindowError::channel_send(e.to_string()))?;
-
-    respond_rx
+    tracing::debug!("op_window_create: waiting for WindowCmd::Create response");
+    println!("op_window_create: waiting for response");
+    let result = tokio::time::timeout(Duration::from_secs(5), respond_rx)
         .await
-        .map_err(|e| WindowError::channel_recv(e.to_string()))?
-        .map_err(WindowError::create_failed)
+        .map_err(|_| WindowError::create_failed("Timed out waiting for window creation response"))?
+        .map_err(|e| WindowError::channel_recv(e.to_string()))?;
+
+    match result {
+        Ok(win_id) => {
+            tracing::info!(
+                "op_window_create: window manager returned win_id={}",
+                win_id
+            );
+            Ok(win_id)
+        }
+        Err(err_msg) => {
+            tracing::error!("op_window_create: window manager failed: {}", err_msg);
+            Err(WindowError::create_failed(err_msg))
+        }
+    }
 }
 
 /// Close a window by ID
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_close(
     state: Rc<RefCell<OpState>>,
@@ -593,6 +727,7 @@ async fn op_window_close(
 }
 
 /// Minimize a window
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_minimize(
     state: Rc<RefCell<OpState>>,
@@ -611,6 +746,7 @@ async fn op_window_minimize(
 }
 
 /// Maximize a window
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_maximize(
     state: Rc<RefCell<OpState>>,
@@ -629,6 +765,7 @@ async fn op_window_maximize(
 }
 
 /// Unmaximize (restore from maximized)
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_unmaximize(
     state: Rc<RefCell<OpState>>,
@@ -647,6 +784,7 @@ async fn op_window_unmaximize(
 }
 
 /// Restore from minimized
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_restore(
     state: Rc<RefCell<OpState>>,
@@ -665,6 +803,7 @@ async fn op_window_restore(
 }
 
 /// Set fullscreen mode
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_set_fullscreen(
     state: Rc<RefCell<OpState>>,
@@ -687,6 +826,7 @@ async fn op_window_set_fullscreen(
 }
 
 /// Check if window is fullscreen
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_is_fullscreen(
     state: Rc<RefCell<OpState>>,
@@ -716,6 +856,7 @@ async fn op_window_is_fullscreen(
 }
 
 /// Focus a window
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_focus(
     state: Rc<RefCell<OpState>>,
@@ -734,6 +875,7 @@ async fn op_window_focus(
 }
 
 /// Check if window is focused
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_is_focused(
     state: Rc<RefCell<OpState>>,
@@ -767,6 +909,7 @@ async fn op_window_is_focused(
 // ============================================================================
 
 /// Get window position
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_window_get_position(
@@ -795,6 +938,7 @@ async fn op_window_get_position(
 }
 
 /// Set window position
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_set_position(
     state: Rc<RefCell<OpState>>,
@@ -815,6 +959,7 @@ async fn op_window_set_position(
 }
 
 /// Get window size
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_window_get_size(
@@ -843,6 +988,7 @@ async fn op_window_get_size(
 }
 
 /// Set window size
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_set_size(
     state: Rc<RefCell<OpState>>,
@@ -867,6 +1013,7 @@ async fn op_window_set_size(
 }
 
 /// Get window title
+#[weld_op(async)]
 #[op2(async)]
 #[string]
 async fn op_window_get_title(
@@ -895,6 +1042,7 @@ async fn op_window_get_title(
 }
 
 /// Set window title
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_set_title(
     state: Rc<RefCell<OpState>>,
@@ -914,6 +1062,7 @@ async fn op_window_set_title(
 }
 
 /// Set window resizable
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_set_resizable(
     state: Rc<RefCell<OpState>>,
@@ -936,6 +1085,7 @@ async fn op_window_set_resizable(
 }
 
 /// Check if window is resizable
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_is_resizable(
     state: Rc<RefCell<OpState>>,
@@ -965,6 +1115,7 @@ async fn op_window_is_resizable(
 }
 
 /// Set window decorations
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_set_decorations(
     state: Rc<RefCell<OpState>>,
@@ -987,6 +1138,7 @@ async fn op_window_set_decorations(
 }
 
 /// Check if window has decorations
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_has_decorations(
     state: Rc<RefCell<OpState>>,
@@ -1016,6 +1168,7 @@ async fn op_window_has_decorations(
 }
 
 /// Set always on top
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_set_always_on_top(
     state: Rc<RefCell<OpState>>,
@@ -1038,6 +1191,7 @@ async fn op_window_set_always_on_top(
 }
 
 /// Check if always on top
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_is_always_on_top(
     state: Rc<RefCell<OpState>>,
@@ -1067,6 +1221,7 @@ async fn op_window_is_always_on_top(
 }
 
 /// Set window visibility
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_set_visible(
     state: Rc<RefCell<OpState>>,
@@ -1086,6 +1241,7 @@ async fn op_window_set_visible(
 }
 
 /// Check if window is visible
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_is_visible(
     state: Rc<RefCell<OpState>>,
@@ -1115,6 +1271,7 @@ async fn op_window_is_visible(
 }
 
 /// Check if window is maximized
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_is_maximized(
     state: Rc<RefCell<OpState>>,
@@ -1144,6 +1301,7 @@ async fn op_window_is_maximized(
 }
 
 /// Check if window is minimized
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_is_minimized(
     state: Rc<RefCell<OpState>>,
@@ -1177,6 +1335,7 @@ async fn op_window_is_minimized(
 // ============================================================================
 
 /// Show file open dialog
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_window_dialog_open(
@@ -1209,6 +1368,7 @@ async fn op_window_dialog_open(
 }
 
 /// Show file save dialog
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_window_dialog_save(
@@ -1245,6 +1405,7 @@ async fn op_window_dialog_save(
 }
 
 /// Show message dialog
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_dialog_message(
     state: Rc<RefCell<OpState>>,
@@ -1282,6 +1443,7 @@ async fn op_window_dialog_message(
 // ============================================================================
 
 /// Set the application menu bar
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_set_app_menu(
     state: Rc<RefCell<OpState>>,
@@ -1313,6 +1475,7 @@ async fn op_window_set_app_menu(
 }
 
 /// Show a context menu
+#[weld_op(async)]
 #[op2(async)]
 #[string]
 async fn op_window_show_context_menu(
@@ -1349,6 +1512,7 @@ async fn op_window_show_context_menu(
 }
 
 /// Receive menu events
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_window_menu_recv(
@@ -1387,6 +1551,7 @@ async fn op_window_menu_recv(
 // ============================================================================
 
 /// Create a system tray icon
+#[weld_op(async)]
 #[op2(async)]
 #[string]
 async fn op_window_create_tray(
@@ -1419,6 +1584,7 @@ async fn op_window_create_tray(
 }
 
 /// Update an existing tray icon
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_update_tray(
     state: Rc<RefCell<OpState>>,
@@ -1452,6 +1618,7 @@ async fn op_window_update_tray(
 }
 
 /// Destroy a tray icon
+#[weld_op(async)]
 #[op2(async)]
 async fn op_window_destroy_tray(
     state: Rc<RefCell<OpState>>,
@@ -1487,6 +1654,7 @@ async fn op_window_destroy_tray(
 // ============================================================================
 
 /// Receive window system events
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_window_events_recv(
@@ -1516,6 +1684,7 @@ async fn op_window_events_recv(
 }
 
 /// Get native window handle
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_window_get_native_handle(
@@ -1549,6 +1718,249 @@ async fn op_window_get_native_handle(
 }
 
 // ============================================================================
+// Enhanced Window Ops (9)
+// ============================================================================
+
+/// Open developer tools for a window
+#[weld_op(async)]
+#[op2(async)]
+async fn op_window_open_devtools(
+    state: Rc<RefCell<OpState>>,
+    #[string] window_id: String,
+) -> Result<(), WindowError> {
+    let cmd_tx = {
+        let s = state.borrow();
+        let win_state = s.borrow::<WindowRuntimeState>();
+        win_state.cmd_tx.clone()
+    };
+
+    let (respond_tx, respond_rx) = tokio::sync::oneshot::channel();
+    cmd_tx
+        .send(WindowCmd::OpenDevTools {
+            window_id,
+            respond: respond_tx,
+        })
+        .await
+        .map_err(|e| WindowError::channel_send(e.to_string()))?;
+
+    respond_rx
+        .await
+        .map_err(|e| WindowError::channel_recv(e.to_string()))?
+        .map_err(WindowError::devtools_not_supported)
+}
+
+/// Close developer tools for a window
+#[weld_op(async)]
+#[op2(async)]
+async fn op_window_close_devtools(
+    state: Rc<RefCell<OpState>>,
+    #[string] window_id: String,
+) -> Result<(), WindowError> {
+    let cmd_tx = {
+        let s = state.borrow();
+        let win_state = s.borrow::<WindowRuntimeState>();
+        win_state.cmd_tx.clone()
+    };
+
+    let (respond_tx, respond_rx) = tokio::sync::oneshot::channel();
+    cmd_tx
+        .send(WindowCmd::CloseDevTools {
+            window_id,
+            respond: respond_tx,
+        })
+        .await
+        .map_err(|e| WindowError::channel_send(e.to_string()))?;
+
+    respond_rx
+        .await
+        .map_err(|e| WindowError::channel_recv(e.to_string()))?
+        .map_err(WindowError::devtools_not_supported)
+}
+
+/// Check if developer tools are open for a window
+#[weld_op(async)]
+#[op2(async)]
+async fn op_window_is_devtools_open(
+    state: Rc<RefCell<OpState>>,
+    #[string] window_id: String,
+) -> Result<bool, WindowError> {
+    let cmd_tx = {
+        let s = state.borrow();
+        let win_state = s.borrow::<WindowRuntimeState>();
+        win_state.cmd_tx.clone()
+    };
+
+    let (respond_tx, respond_rx) = tokio::sync::oneshot::channel();
+    cmd_tx
+        .send(WindowCmd::IsDevToolsOpen {
+            window_id,
+            respond: respond_tx,
+        })
+        .await
+        .map_err(|e| WindowError::channel_send(e.to_string()))?;
+
+    respond_rx
+        .await
+        .map_err(|e| WindowError::channel_recv(e.to_string()))?
+        .map_err(WindowError::devtools_not_supported)
+}
+
+/// Evaluate JavaScript in a window's WebView
+#[weld_op(async)]
+#[op2(async)]
+async fn op_window_eval_js(
+    state: Rc<RefCell<OpState>>,
+    #[string] window_id: String,
+    #[string] script: String,
+) -> Result<(), WindowError> {
+    let cmd_tx = {
+        let s = state.borrow();
+        let win_state = s.borrow::<WindowRuntimeState>();
+        win_state.cmd_tx.clone()
+    };
+
+    let (respond_tx, respond_rx) = tokio::sync::oneshot::channel();
+    cmd_tx
+        .send(WindowCmd::EvalJs {
+            window_id,
+            script,
+            respond: respond_tx,
+        })
+        .await
+        .map_err(|e| WindowError::channel_send(e.to_string()))?;
+
+    respond_rx
+        .await
+        .map_err(|e| WindowError::channel_recv(e.to_string()))?
+        .map_err(WindowError::js_eval_error)
+}
+
+/// Inject CSS into a window's WebView
+#[weld_op(async)]
+#[op2(async)]
+async fn op_window_inject_css(
+    state: Rc<RefCell<OpState>>,
+    #[string] window_id: String,
+    #[string] css: String,
+) -> Result<(), WindowError> {
+    let cmd_tx = {
+        let s = state.borrow();
+        let win_state = s.borrow::<WindowRuntimeState>();
+        win_state.cmd_tx.clone()
+    };
+
+    let (respond_tx, respond_rx) = tokio::sync::oneshot::channel();
+    cmd_tx
+        .send(WindowCmd::InjectCss {
+            window_id,
+            css,
+            respond: respond_tx,
+        })
+        .await
+        .map_err(|e| WindowError::channel_send(e.to_string()))?;
+
+    respond_rx
+        .await
+        .map_err(|e| WindowError::channel_recv(e.to_string()))?
+        .map_err(WindowError::css_injection_error)
+}
+
+/// Set minimum window size
+#[weld_op(async)]
+#[op2(async)]
+async fn op_window_set_min_size(
+    state: Rc<RefCell<OpState>>,
+    #[string] window_id: String,
+    width: u32,
+    height: u32,
+) -> Result<(), WindowError> {
+    let cmd_tx = {
+        let s = state.borrow();
+        let win_state = s.borrow::<WindowRuntimeState>();
+        win_state.cmd_tx.clone()
+    };
+
+    cmd_tx
+        .send(WindowCmd::SetMinSize {
+            window_id,
+            width,
+            height,
+        })
+        .await
+        .map_err(|e| WindowError::channel_send(e.to_string()))
+}
+
+/// Set maximum window size
+#[weld_op(async)]
+#[op2(async)]
+async fn op_window_set_max_size(
+    state: Rc<RefCell<OpState>>,
+    #[string] window_id: String,
+    width: u32,
+    height: u32,
+) -> Result<(), WindowError> {
+    let cmd_tx = {
+        let s = state.borrow();
+        let win_state = s.borrow::<WindowRuntimeState>();
+        win_state.cmd_tx.clone()
+    };
+
+    cmd_tx
+        .send(WindowCmd::SetMaxSize {
+            window_id,
+            width,
+            height,
+        })
+        .await
+        .map_err(|e| WindowError::channel_send(e.to_string()))
+}
+
+/// Center window on the screen
+#[weld_op(async)]
+#[op2(async)]
+async fn op_window_center(
+    state: Rc<RefCell<OpState>>,
+    #[string] window_id: String,
+) -> Result<(), WindowError> {
+    let cmd_tx = {
+        let s = state.borrow();
+        let win_state = s.borrow::<WindowRuntimeState>();
+        win_state.cmd_tx.clone()
+    };
+
+    cmd_tx
+        .send(WindowCmd::Center { window_id })
+        .await
+        .map_err(|e| WindowError::channel_send(e.to_string()))
+}
+
+/// Get information about all connected monitors
+#[weld_op(async)]
+#[op2(async)]
+#[serde]
+async fn op_window_get_monitors(
+    state: Rc<RefCell<OpState>>,
+) -> Result<Vec<MonitorInfo>, WindowError> {
+    let cmd_tx = {
+        let s = state.borrow();
+        let win_state = s.borrow::<WindowRuntimeState>();
+        win_state.cmd_tx.clone()
+    };
+
+    let (respond_tx, respond_rx) = tokio::sync::oneshot::channel();
+    cmd_tx
+        .send(WindowCmd::GetMonitors {
+            respond: respond_tx,
+        })
+        .await
+        .map_err(|e| WindowError::channel_send(e.to_string()))?;
+
+    respond_rx
+        .await
+        .map_err(|e| WindowError::channel_recv(e.to_string()))
+}
+
+// ============================================================================
 // Extension Registration
 // ============================================================================
 
@@ -1557,7 +1969,7 @@ include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 /// Build the window extension
 pub fn window_extension() -> Extension {
-    host_window::ext()
+    runtime_window::ext()
 }
 
 /// Initialize window state in OpState - must be called after creating JsRuntime

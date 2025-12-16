@@ -1,9 +1,10 @@
 // Forge Todo App - Main Deno entry point
-// Demonstrates: host:fs persistence, host:ui windows/menus, IPC patterns
+// Demonstrates: runtime:fs persistence, runtime:window windows/menus/dialogs, IPC patterns
 
-import { openWindow, setAppMenu, onMenu, dialog, windowEvents } from "host:ui";
-import { readTextFile, writeTextFile, exists } from "host:fs";
-import { homeDir } from "host:sys";
+import { createWindow, menu, dialog } from "runtime:window";
+import { ipcEvents, sendToWindow } from "runtime:ipc";
+import { readTextFile, writeTextFile, exists } from "runtime:fs";
+import { homeDir } from "runtime:sys";
 
 // Types
 interface Todo {
@@ -66,7 +67,7 @@ async function main() {
   };
 
   // Set up application menu
-  await setAppMenu([
+  await menu.setAppMenu([
     {
       label: "File",
       submenu: [
@@ -88,7 +89,7 @@ async function main() {
   ]);
 
   // Open main window
-  const win = await openWindow({
+  const win = await createWindow({
     url: "app://index.html",
     width: 480,
     height: 640,
@@ -105,7 +106,7 @@ async function main() {
       return true;
     });
 
-    win.send("state", {
+    sendToWindow(win.id, "state", {
       todos: filteredTodos,
       allTodos: state.todos,
       filter: state.filter,
@@ -118,12 +119,12 @@ async function main() {
   }
 
   // Handle menu events
-  onMenu(async (event) => {
+  menu.onMenu(async (event) => {
     console.log("Menu event:", event);
 
     switch (event.itemId) {
       case "new-todo":
-        win.send("focus-input");
+        sendToWindow(win.id, "focus-input");
         break;
       case "clear-completed":
         state.todos = state.todos.filter(t => !t.completed);
@@ -156,7 +157,7 @@ async function main() {
   });
 
   // Handle window/IPC events
-  for await (const event of windowEvents()) {
+  for await (const event of ipcEvents()) {
     console.log("Window event:", event.channel, event.payload);
 
     switch (event.channel) {

@@ -1,20 +1,22 @@
 use forge_weld::ExtensionBuilder;
 
 fn main() {
-    ExtensionBuilder::new("host_ipc", "host:ipc")
+    ExtensionBuilder::new("runtime_ipc", "runtime:ipc")
         .ts_path("ts/init.ts")
         .ops(&["op_ipc_send", "op_ipc_recv"])
         .generate_sdk_types("sdk")
+        .generate_sdk_module("sdk")
+        .use_inventory_types()
         .dts_generator(generate_host_ipc_types)
         .build()
         .expect("Failed to build host_ipc extension");
 }
 
 fn generate_host_ipc_types() -> String {
-    r#"// Auto-generated TypeScript definitions for host:ipc module
+    r#"// Auto-generated TypeScript definitions for runtime:ipc module
 // Generated from ext_ipc/build.rs - do not edit manually
 
-declare module "host:ipc" {
+declare module "runtime:ipc" {
   // ============================================================================
   // Event Types
   // ============================================================================

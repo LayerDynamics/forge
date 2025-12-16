@@ -1,6 +1,7 @@
 ---
 title: Manifest Reference
 description: The manifest.app.toml file defines your Forge application's metadata, window configuration, and capability declarations.
+slug: api/manifest
 ---
 
 The manifest file defines your Forge application's metadata, window configuration, and capability declarations.
@@ -173,7 +174,7 @@ write = [
 fetch = [
   "https://api.example.com/*",      # HTTPS API
   "https://cdn.example.com/**",     # CDN with subpaths
-  "http://localhost:*"              # Local development
+  "http://localruntime:*"              # Local development
 ]
 ```
 

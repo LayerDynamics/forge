@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Forge is an Electron-like desktop application framework using Rust + Deno. It embeds Deno for app logic (TypeScript/JavaScript) and uses system WebViews (via wry/tao) for UI rendering. Apps are 100% Deno—no per-app Rust required.
 
+**Status:** Alpha (0.1.0-alpha.1)
+
 ## User Commands (after installation)
 
 ```bash
@@ -29,95 +31,152 @@ forge icon create my-app/assets/icon.png
 forge icon validate my-app
 ```
 
-## Development Commands (for Forge contributors only)
-
-**Note:** End users building apps with Forge do NOT need Rust or cargo. They install Forge via the install script (`curl -fsSL https://forge-deno.com/install.sh | sh`) and use only the `forge` CLI commands above.
-
-These cargo commands are only for developers contributing to the Forge framework itself:
+## Development Commands (for Forge contributors)
 
 ```bash
-# Build the CLI and host runtime
-cargo build -p forge
-cargo build -p forge-host
+# Build the CLI and runtime
+cargo build -p forge_cli
+cargo build -p forge-runtime
 
 # Run sample app via cargo (development)
-cargo run -p forge -- dev examples/example-deno-app
+cargo run -p forge_cli -- dev examples/example-deno-app
 
 # Run tests
 cargo test
+
+# Run tests for a specific crate
+cargo test -p ext_fs
+
+# Build everything in release mode
+cargo build --workspace --release
 ```
 
 ## Architecture
 
-### Crate Structure
+### Core Crates
 
-- **`crates/forge-host`**: Main runtime binary. Embeds Deno JsRuntime, creates windows via tao/wry, handles IPC between Deno and WebView renderers. Contains `build.rs` for asset embedding.
-- **`crates/forge`**: CLI tool (`forge dev/build/bundle`). Orchestrates forge-host for app development.
-- **`crates/ext_fs`**: Rust extension providing `host:fs` module (file operations exposed to Deno).
-- **`crates/ext_ui`**: Rust extension providing `host:ui` module (window management, IPC bridge).
+| Crate | Purpose |
+|-------|---------|
+| `forge-runtime` | Main runtime binary. Embeds Deno JsRuntime, creates windows via tao/wry, handles IPC, event loop |
+| `forge_cli` | CLI tool (`forge dev/build/bundle/sign/icon`). Contains bundler for all platforms |
+| `forge-weld` | Macro system for generating TypeScript bindings from Rust ops |
+| `forge-weld-macro` | Proc macros (`#[weld_op]`, `#[weld_struct]`, `#[weld_enum]`) |
+
+### Extension Crates (runtime:* modules)
+
+Each `ext_*` crate provides a `runtime:*` module accessible from TypeScript:
+
+| Extension | Module | Purpose |
+|-----------|--------|---------|
+| `ext_fs` | `runtime:fs` | File operations (read, write, watch, stat) |
+| `ext_window` | `runtime:window` | Window management, menus, trays, dialogs |
+| `ext_ipc` | `runtime:ipc` | Deno ↔ Renderer communication |
+| `ext_net` | `runtime:net` | HTTP fetch, network operations |
+| `ext_sys` | `runtime:sys` | System info, clipboard, notifications |
+| `ext_process` | `runtime:process` | Spawn child processes |
+| `ext_wasm` | `runtime:wasm` | WebAssembly module loading |
+| `ext_app` | `runtime:app` | App lifecycle, info |
+| `ext_crypto` | `runtime:crypto` | Cryptographic operations |
+| `ext_storage` | `runtime:storage` | Persistent key-value storage |
+| `ext_shell` | `runtime:shell` | Shell command execution |
+| `ext_database` | `runtime:database` | Database operations |
+| `ext_webview` | `runtime:webview` | WebView manipulation |
+| `ext_devtools` | `runtime:devtools` | Developer tools |
+| `ext_timers` | `runtime:timers` | setTimeout/setInterval |
+| `ext_shortcuts` | `runtime:shortcuts` | Global keyboard shortcuts |
+| `ext_signals` | `runtime:signals` | OS signal handling |
+| `ext_updater` | `runtime:updater` | Auto-update functionality |
+| `ext_monitor` | `runtime:monitor` | Display/monitor info |
+| `ext_display` | `runtime:display` | Display management |
+| `ext_log` | `runtime:log` | Logging infrastructure |
+| `ext_trace` | `runtime:trace` | Tracing/telemetry |
+| `ext_lock` | `runtime:lock` | File/resource locking |
+| `ext_path` | `runtime:path` | Path manipulation |
+| `ext_protocol` | `runtime:protocol` | Custom protocol handlers |
+| `ext_os_compat` | `runtime:os_compat` | OS compatibility layer |
+| `ext_debugger` | `runtime:debugger` | Debugging support |
 
 ### Runtime Flow
 
-1. `forge-host` parses `manifest.app.toml` from app directory
-2. Creates Deno JsRuntime with `ext_fs` and `ext_ui` extensions
-3. Executes app's `src/main.ts` which calls `host:ui` to open windows
-4. Windows load `app://` URLs served from `web/` directory (filesystem in dev, embedded in release)
-5. Renderer communicates with Deno via `window.host.send()/on()` bridge (IPC through wry)
+1. `forge-runtime` parses `manifest.app.toml` from app directory
+2. Creates Deno JsRuntime with all `ext_*` extensions registered
+3. Executes app's `src/main.ts` which imports from `runtime:*` modules
+4. Windows load `app://` URLs served from `web/` directory
+5. Renderer communicates with Deno via `window.host.send()/on()` bridge
 
-### Host Module System
+### Forge Weld (Binding System)
 
-Apps import native capabilities from `host:*` specifiers:
+The `forge-weld` system generates TypeScript bindings from Rust:
 
-```typescript
-import { readTextFile } from "host:fs";
-import { openWindow, sendToWindow, windowEvents } from "host:ui";
+```rust
+// In ext_fs/src/lib.rs - annotate ops for TypeScript generation
+#[weld_op(async)]
+#[op2(async)]
+pub async fn op_fs_read_text(#[string] path: String) -> Result<String, FsError> { ... }
+
+// In ext_fs/build.rs - configure code generation
+ExtensionBuilder::new("runtime_fs", "runtime:fs")
+    .ts_path("ts/init.ts")
+    .ops(&["op_fs_read_text", ...])
+    .generate_sdk_module("sdk")
+    .use_inventory_types()
+    .build()
 ```
 
-These resolve to ESM shims in `crates/ext_*/js/*.js` that call Rust ops via `Deno.core.ops.*`.
+This generates:
+- `sdk/runtime.fs.ts` - TypeScript SDK module with full types
+- `ts/init.ts` → `init.js` - JavaScript shim loaded by Deno
 
-### IPC Channels (ext_ui)
+### IPC Communication
 
-- **Deno → Renderer**: `sendToWindow(windowId, channel, payload)` triggers `window.__host_dispatch`
-- **Renderer → Deno**: `window.host.send(channel, payload)` posts to IPC handler
-- **Event loop**: `windowEvents()` async generator yields incoming renderer messages
+**Renderer → Deno:**
+```
+window.host.send(channel, data) → WebView IPC → mpsc channel → windowEvents()
+```
+
+**Deno → Renderer:**
+```
+sendToWindow(windowId, channel, data) → evaluate_script() → window.__host_dispatch()
+```
 
 ### Asset Embedding
 
-`build.rs` checks `FORGE_EMBED_DIR` env var:
-
-- **Set**: Embeds all files from that directory into binary via generated `assets.rs`
+Build with `FORGE_EMBED_DIR` env var to embed web assets into the binary:
 - **Unset**: Dev mode, assets served from filesystem
+- **Set**: Assets embedded via generated `assets.rs`
+
+## SDK Structure
+
+TypeScript SDK files in `sdk/`:
+- `runtime.*.ts` - Generated SDK modules (one per extension)
+- `generated/*.d.ts` - Type declarations
+
+Apps import from `runtime:*` specifiers which resolve to extension modules.
 
 ## App Structure
 
-```text
-examples/example-deno-app/
+```
+my-app/
 ├── manifest.app.toml   # App metadata, window config, permissions
-├── deno.json           # Deno config
-├── src/main.ts         # Deno entry point (calls host:ui, host:fs)
+├── deno.json           # Deno configuration
+├── src/main.ts         # Deno entry point
 └── web/                # Static assets served via app:// protocol
     └── index.html
 ```
 
-## Key Files
+## Key Implementation Files
 
-- `crates/forge-host/src/main.rs`: Runtime entry, event loop, WebView creation
-- `crates/ext_ui/src/lib.rs`: Window ops (`op_ui_open_window`, `op_ui_window_send/recv`)
-- `crates/ext_ui/js/preload.js`: Injected into WebView, provides `window.host` API
-- `crates/ext_fs/src/lib.rs`: File ops (`op_fs_read_text`)
+- `crates/forge-runtime/src/main.rs` - Runtime entry, event loop, module loader
+- `crates/forge-runtime/src/capabilities.rs` - Permission system
+- `crates/forge_cli/src/main.rs` - CLI commands
+- `crates/forge_cli/src/bundler/` - Platform bundling (macos.rs, windows.rs, linux.rs)
+- `crates/ext_window/src/manager.rs` - WindowManager implementation
+- `crates/forge-weld/src/build/extension.rs` - ExtensionBuilder for code generation
 
-## Current State
+## Adding a New Extension
 
-Implemented features:
-- Window creation and `app://` loading
-- Example apps for React, Next.js-style, Svelte, and vanilla TypeScript
-- `forge dev` for development mode
-- `forge build` for web asset bundling (esbuild via Deno)
-- `forge bundle` for platform packaging (macOS .app/.dmg, Windows .msix, Linux AppImage)
-- `forge sign` for code signing
-- `forge icon` for icon management
-
-Planned features:
-- Permissions/capabilities system
-- Additional host modules (host:net, host:sys, host:process)
-- Hot reload during dev
+1. Create `crates/ext_<name>/` with `Cargo.toml`, `src/lib.rs`, `build.rs`, `ts/init.ts`
+2. Use `#[weld_op]`, `#[weld_struct]`, `#[weld_enum]` macros on Rust types
+3. Configure `ExtensionBuilder` in `build.rs` to generate SDK
+4. Register extension in `forge-runtime/src/main.rs`
+5. Initialize state in the runtime's op_state setup

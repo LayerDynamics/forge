@@ -1,6 +1,7 @@
 ---
 title: "forge-weld-macro"
 description: Procedural macros for annotating Rust ops and structs with TypeScript metadata.
+slug: crates/forge-weld-macro
 ---
 
 The `forge-weld-macro` crate provides procedural macros for annotating Rust code with metadata used for TypeScript code generation.
@@ -116,16 +117,50 @@ When you use `#[weld_op]`:
 #[op2(async)]
 pub async fn op_fs_read_text(path: String) -> Result<String, FsError> { ... }
 
-// Generated (simplified)
-#[linkme::distributed_slice(forge_weld::WELD_OPS)]
-fn __weld_op_fs_read_text() -> OpSymbol {
+// Generated (simplified) - uses snake_case for Rust naming conventions
+#[doc(hidden)]
+fn __op_fs_read_text_weld_metadata() -> OpSymbol {
     OpSymbol {
-        name: "op_fs_read_text",
+        rust_name: "op_fs_read_text".to_string(),
+        ts_name: "readText".to_string(),  // Auto-converted to camelCase
         is_async: true,
-        params: vec![OpParam { name: "path", ty: WeldType::String }],
-        return_type: WeldType::Promise(Box::new(WeldType::String)),
+        params: vec![OpParam {
+            rust_name: "path".to_string(),
+            ts_name: "path".to_string(),
+            ty: WeldType::Primitive(WeldPrimitive::String),
+            // ...
+        }],
+        return_type: WeldType::Result {
+            ok: Box::new(WeldType::Primitive(WeldPrimitive::String)),
+            err: Box::new(WeldType::Struct("FsError".to_string())),
+        },
+        // ...
     }
 }
+
+forge_weld::register_op!(__op_fs_read_text_weld_metadata());
+```
+
+Similarly for `#[weld_struct]`:
+
+```rust
+// Your code
+#[weld_struct]
+#[derive(Serialize)]
+pub struct FileInfo { pub path: String, pub size: u64 }
+
+// Generated - snake_case function name from PascalCase struct
+#[doc(hidden)]
+fn __file_info_weld_metadata() -> WeldStruct {
+    WeldStruct {
+        rust_name: "FileInfo".to_string(),
+        ts_name: "FileInfo".to_string(),
+        fields: vec![/* ... */],
+        // ...
+    }
+}
+
+forge_weld::register_struct!(__file_info_weld_metadata());
 ```
 
 ## Usage Example

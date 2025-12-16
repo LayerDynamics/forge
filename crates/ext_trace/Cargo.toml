@@ -1,0 +1,20 @@
+[package]
+name = "ext_trace"
+version = "0.1.0-alpha.1"
+edition = "2021"
+publish = false
+build = "build.rs"
+
+[dependencies]
+deno_core = "0.373"
+deno_error = "*"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+once_cell = "1"
+forge-weld = { path = "../forge-weld" }
+forge-weld-macro = { path = "../forge-weld-macro" }
+linkme = "0.3"
+
+[build-dependencies]
+forge-weld = { path = "../forge-weld" }

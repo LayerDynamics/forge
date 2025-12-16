@@ -72,11 +72,13 @@ impl<'a> TypeScriptGenerator<'a> {
         }
 
         // Interface declaration with optional type parameters
+        let export_kw = "export ";
         if s.type_params.is_empty() {
-            output.push_str(&format!("interface {} {{\n", s.ts_name));
+            output.push_str(&format!("{}interface {} {{\n", export_kw, s.ts_name));
         } else {
             output.push_str(&format!(
-                "interface {}<{}> {{\n",
+                "{}interface {}<{}> {{\n",
+                export_kw,
                 s.ts_name,
                 s.type_params.join(", ")
             ));
@@ -131,7 +133,11 @@ impl<'a> TypeScriptGenerator<'a> {
                     format!("\"{}\"", value)
                 })
                 .collect();
-            output.push_str(&format!("type {} = {};\n", e.ts_name, variants.join(" | ")));
+            output.push_str(&format!(
+                "export type {} = {};\n",
+                e.ts_name,
+                variants.join(" | ")
+            ));
         } else {
             // Generate as discriminated union with interfaces
             let mut variant_types = Vec::new();
@@ -139,7 +145,7 @@ impl<'a> TypeScriptGenerator<'a> {
             for variant in &e.variants {
                 let variant_type_name = format!("{}_{}", e.ts_name, variant.name);
 
-                output.push_str(&format!("interface {} {{\n", variant_type_name));
+                output.push_str(&format!("export interface {} {{\n", variant_type_name));
                 output.push_str(&format!("  type: \"{}\";\n", variant.name));
 
                 if let Some(ref data) = variant.data {
@@ -150,11 +156,7 @@ impl<'a> TypeScriptGenerator<'a> {
                 variant_types.push(variant_type_name);
             }
 
-            output.push_str(&format!(
-                "type {} = {};\n",
-                e.ts_name,
-                variant_types.join(" | ")
-            ));
+            output.push_str(&format!("export type {} = {};\n", e.ts_name, variant_types.join(" | ")));
         }
 
         output
@@ -218,7 +220,7 @@ impl<'a> TypeScriptGenerator<'a> {
         let mut output = String::new();
 
         for (name, ty) in aliases {
-            output.push_str(&format!("type {} = {};\n", name, ty.to_typescript()));
+            output.push_str(&format!("export type {} = {};\n", name, ty.to_typescript()));
         }
 
         output

@@ -1,9 +1,10 @@
 ---
 title: "ext_fs"
-description: Filesystem operations extension providing the host:fs module.
+description: Filesystem operations extension providing the runtime:fs module.
+slug: crates/ext-fs
 ---
 
-The `ext_fs` crate provides filesystem operations for Forge applications through the `host:fs` module.
+The `ext_fs` crate provides filesystem operations for Forge applications through the `runtime:fs` module.
 
 ## Overview
 
@@ -15,7 +16,7 @@ ext_fs handles:
 - **File metadata** - Size, modification time, file type
 - **Capability-based security** - Path-based permission checks
 
-## Module: `host:fs`
+## Module: `runtime:fs`
 
 ```typescript
 import {
@@ -23,7 +24,7 @@ import {
   writeTextFile,
   readDir,
   watch
-} from "host:fs";
+} from "runtime:fs";
 ```
 
 ## Key Types
@@ -123,6 +124,39 @@ crates/ext_fs/
 └── Cargo.toml
 ```
 
+## Rust Implementation
+
+Operations are annotated with forge-weld macros for automatic TypeScript binding generation:
+
+```rust
+// src/lib.rs
+use deno_core::{op2, Extension, OpState};
+use forge_weld_macro::{weld_op, weld_struct};
+use serde::{Deserialize, Serialize};
+
+// Annotate structs for TypeScript interface generation
+#[weld_struct]
+#[derive(Debug, Serialize)]
+pub struct FileStat {
+    pub is_file: bool,
+    pub is_directory: bool,
+    pub size: u64,
+    pub modified: Option<u64>,
+}
+
+// Annotate ops for TypeScript function generation
+// Note: #[weld_op] must come BEFORE #[op2]
+#[weld_op(async)]
+#[op2(async)]
+#[string]
+pub async fn op_fs_read_text(
+    state: Rc<RefCell<OpState>>,
+    #[string] path: String,
+) -> Result<String, FsError> {
+    // implementation
+}
+```
+
 ## Build Configuration
 
 ```rust
@@ -130,7 +164,7 @@ crates/ext_fs/
 use forge_weld::ExtensionBuilder;
 
 fn main() {
-    ExtensionBuilder::new("host_fs", "host:fs")
+    ExtensionBuilder::new("runtime_fs", "runtime:fs")
         .ts_path("ts/init.ts")
         .ops(&[
             "op_fs_read_text",
@@ -138,10 +172,10 @@ fn main() {
             "op_fs_read_dir",
             // ...
         ])
-        .generate_sdk_types("sdk")
-        .dts_generator(generate_host_fs_types)
+        .generate_sdk_module("sdk")   // Generates sdk/runtime.fs.ts
+        .use_inventory_types()         // Reads #[weld_*] annotations
         .build()
-        .expect("Failed to build host_fs extension");
+        .expect("Failed to build runtime_fs extension");
 }
 ```
 
@@ -155,8 +189,10 @@ fn main() {
 | `globset` | Pattern matching for capabilities |
 | `tracing` | Logging |
 | `forge-weld` | Build-time code generation |
+| `forge-weld-macro` | `#[weld_op]`, `#[weld_struct]` macros |
+| `linkme` | Compile-time symbol collection |
 
 ## Related
 
-- [host:fs API](/docs/api/host-fs) - TypeScript API documentation
+- [runtime:fs API](/docs/api/runtime-fs) - TypeScript API documentation
 - [forge-weld](/docs/crates/forge-weld) - Build system

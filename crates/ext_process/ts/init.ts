@@ -1,4 +1,4 @@
-// host:process module - TypeScript wrapper for Deno core ops
+// runtime:process module - TypeScript wrapper for Deno core ops
 
 declare const Deno: {
   core: {

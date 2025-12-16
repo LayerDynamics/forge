@@ -1,6 +1,7 @@
-import { openWindow, windowEvents } from "host:ui";
-import { compile, instantiate, types } from "host:wasm";
-import { readBytes } from "host:fs";
+import { createWindow } from "runtime:window";
+import { ipcEventsFor, sendToWindow } from "runtime:ipc";
+import { compile, instantiate, types } from "runtime:wasm";
+import { readBytes } from "runtime:fs";
 
 console.log("WASM Forge Example booting...");
 
@@ -275,7 +276,7 @@ async function runWasmDemo(): Promise<WasmResult[]> {
 }
 
 // Open the window
-const win = await openWindow({
+const win = await createWindow({
   url: "app://index.html",
   width: 800,
   height: 600,
@@ -285,20 +286,20 @@ const win = await openWindow({
 console.log("Window opened, waiting for ready signal...");
 
 // Handle window events
-for await (const event of win.events()) {
+for await (const event of ipcEventsFor(win.id)) {
   console.log(`Received event: ${event.channel}`, event.payload);
 
   if (event.channel === "ready") {
     // Run WASM demo and send results to window
     console.log("Running WASM demo...");
     const results = await runWasmDemo();
-    await win.send("wasm-results", results);
+    await sendToWindow(win.id, "wasm-results", results);
   }
 
   if (event.channel === "run-demo") {
     // Re-run demo on request
     console.log("Re-running WASM demo...");
     const results = await runWasmDemo();
-    await win.send("wasm-results", results);
+    await sendToWindow(win.id, "wasm-results", results);
   }
 }

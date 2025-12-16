@@ -5,6 +5,9 @@ edition = "2021"
 
 [dependencies]
 deno_core = "0.373"
+forge-weld = { path = "../forge-weld" }
+forge-weld-macro = { path = "../forge-weld-macro" }
+linkme = "0.3"
 deno_error = "0.7"
 thiserror = "1"
 serde = { version = "1", features = ["derive"] }
@@ -15,6 +18,7 @@ tracing = "0.1"
 dirs = "5"
 tokio = { version = "1", features = ["rt", "sync"] }
 battery = "0.7"
+sys-locale = "0.3"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 notify-rust = "4"

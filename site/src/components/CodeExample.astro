@@ -1,7 +1,7 @@
 ---
 const mainTsCode = `<span class="comment">// Your app's entry point</span>
-<span class="keyword">import</span> &#123; openWindow, windowEvents &#125; <span class="keyword">from</span> <span class="string">"host:ui"</span>;
-<span class="keyword">import</span> &#123; readTextFile &#125; <span class="keyword">from</span> <span class="string">"host:fs"</span>;
+<span class="keyword">import</span> &#123; openWindow, windowEvents &#125; <span class="keyword">from</span> <span class="string">"runtime:ui"</span>;
+<span class="keyword">import</span> &#123; readTextFile &#125; <span class="keyword">from</span> <span class="string">"runtime:fs"</span>;
 
 <span class="comment">// Open a window with native WebView</span>
 <span class="keyword">const</span> win = <span class="keyword">await</span> openWindow(&#123;
@@ -21,10 +21,10 @@ const mainTsCode = `<span class="comment">// Your app's entry point</span>
 
 const indexHtmlCode = `<span class="tag">&lt;script&gt;</span>
   <span class="comment">// Send messages to Deno runtime</span>
-  window.host.send(<span class="string">"load-file"</span>, <span class="string">"/path/to/file"</span>);
+  window.runtime.send(<span class="string">"load-file"</span>, <span class="string">"/path/to/file"</span>);
 
   <span class="comment">// Receive responses</span>
-  window.host.on(<span class="string">"file-loaded"</span>, (content) =&gt; &#123;
+  window.runtime.on(<span class="string">"file-loaded"</span>, (content) =&gt; &#123;
     document.getElementById(<span class="string">"editor"</span>).value = content;
   &#125;);
 <span class="tag">&lt;/script&gt;</span>
@@ -64,24 +64,24 @@ const indexHtmlCode = `<span class="tag">&lt;script&gt;</span>
     <div class="host-modules">
       <h3>Host Modules</h3>
       <div class="modules-grid">
-        <a href="/api/host-ui/" class="module-badge">
-          <code>host:ui</code>
+        <a href="/api/runtime-ui/" class="module-badge">
+          <code>runtime:ui</code>
           <span>Windows, Dialogs, Menus</span>
         </a>
-        <a href="/api/host-fs/" class="module-badge">
-          <code>host:fs</code>
+        <a href="/api/runtime-fs/" class="module-badge">
+          <code>runtime:fs</code>
           <span>File System Access</span>
         </a>
-        <a href="/api/host-net/" class="module-badge">
-          <code>host:net</code>
+        <a href="/api/runtime-net/" class="module-badge">
+          <code>runtime:net</code>
           <span>HTTP Requests</span>
         </a>
-        <a href="/api/host-sys/" class="module-badge">
-          <code>host:sys</code>
+        <a href="/api/runtime-sys/" class="module-badge">
+          <code>runtime:sys</code>
           <span>System Info, Clipboard</span>
         </a>
-        <a href="/api/host-process/" class="module-badge">
-          <code>host:process</code>
+        <a href="/api/runtime-process/" class="module-badge">
+          <code>runtime:process</code>
           <span>Spawn Processes</span>
         </a>
       </div>

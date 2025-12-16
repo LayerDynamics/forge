@@ -1,9 +1,10 @@
 ---
 title: "ext_window"
-description: Advanced window management extension providing the host:window module.
+description: Advanced window management extension providing the runtime:window module.
+slug: crates/ext-window
 ---
 
-The `ext_window` crate provides comprehensive window management for Forge applications through the `host:window` module. It offers full control over windows, dialogs, menus, and system tray.
+The `ext_window` crate provides comprehensive window management for Forge applications through the `runtime:window` module. It offers full control over windows, dialogs, menus, and system tray.
 
 ## Overview
 
@@ -18,7 +19,7 @@ ext_window handles:
 - **Native handles** - Platform-specific window handles
 - **Window events** - Close, resize, move, focus
 
-## Module: `host:window`
+## Module: `runtime:window`
 
 ```typescript
 import {
@@ -27,7 +28,7 @@ import {
   dialog,
   menu,
   tray
-} from "host:window";
+} from "runtime:window";
 ```
 
 ## Key Types
@@ -243,10 +244,61 @@ crates/ext_window/
 | `image` | Icon processing |
 | `tokio` | Async runtime |
 | `forge-weld` | Build-time code generation |
+| `forge-weld-macro` | `#[weld_op]`, `#[weld_struct]` macros |
+| `linkme` | Compile-time symbol collection |
+
+## Rust Implementation
+
+Operations are annotated with forge-weld macros for automatic TypeScript binding generation:
+
+```rust
+// src/lib.rs
+use deno_core::{op2, Extension, OpState};
+use forge_weld_macro::{weld_op, weld_struct};
+use serde::{Deserialize, Serialize};
+
+#[weld_struct]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WindowOpts {
+    pub title: Option<String>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub resizable: Option<bool>,
+    // ...
+}
+
+#[weld_op(async)]
+#[op2(async)]
+#[serde]
+pub async fn op_window_create(
+    state: Rc<RefCell<OpState>>,
+    #[serde] opts: WindowOpts,
+) -> Result<String, WindowError> {
+    // implementation
+}
+```
+
+## Build Configuration
+
+```rust
+// build.rs
+use forge_weld::ExtensionBuilder;
+
+fn main() {
+    ExtensionBuilder::new("runtime_window", "runtime:window")
+        .ts_path("ts/init.ts")
+        .ops(&["op_window_create", "op_window_close", /* ... */])
+        .generate_sdk_module("sdk")
+        .use_inventory_types()
+        .build()
+        .expect("Failed to build runtime_window extension");
+}
+```
 
 ## Related
 
-- [host:window API](/docs/api/host-window) - TypeScript API documentation
+- [runtime:window API](/docs/api/runtime-window) - TypeScript API documentation
 - [ext_ipc](/docs/crates/ext-ipc) - IPC extension
-- [ext_ui](/docs/crates/ext-ui) - Basic UI operations
-- [forge-host](/docs/crates/forge-host) - Runtime that manages windows
+- [ext_webview](/docs/crates/ext-webview) - WebView operations
+- [forge-runtime](/docs/crates/forge-runtime) - Runtime that manages windows
+- [forge-weld](/docs/crates/forge-weld) - Code generation library

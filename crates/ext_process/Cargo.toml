@@ -7,6 +7,9 @@ edition = "2021"
 deno_core = "0.373"
 deno_error = "0.7"
 thiserror = "1"
+forge-weld = { path = "../forge-weld" }
+forge-weld-macro = { path = "../forge-weld-macro" }
+linkme = "0.3"
 tokio = { version = "1", features = ["process", "io-util", "sync", "time"] }
 serde = { version = "1", features = ["derive"] }
 tracing = "0.1"

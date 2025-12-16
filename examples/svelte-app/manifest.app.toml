@@ -1,13 +1,32 @@
 [app]
-name = "SvelteApp"
-identifier = "com.example.svelte-app"
-version = "0.1.0"
+name = "Secure Vault"
+identifier = "com.forge.secure-vault"
+version = "1.0.0"
+description = "Privacy-focused personal vault for encrypted notes and files"
 
 [windows]
-width = 1024
-height = 768
+width = 1200
+height = 800
 resizable = true
+title = "Secure Vault"
+minWidth = 900
+minHeight = 600
 
 # Capability declarations
 [capabilities.channels]
-allowed = ["*"]  # Allow all IPC channels
+allowed = ["*"]  # Allow all IPC channels for vault operations
+
+[capabilities.fs]
+read = ["~/*", "./*"]
+write = ["~/*", "./*"]
+
+[capabilities.sys]
+clipboard = true
+notifications = true
+info = true
+
+[capabilities.storage]
+enabled = true
+
+[capabilities.shell]
+open = true

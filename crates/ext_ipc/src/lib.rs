@@ -1,4 +1,5 @@
 use deno_core::{op2, Extension, OpState};
+use forge_weld_macro::{weld_op, weld_struct};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -78,6 +79,7 @@ impl IpcError {
 // ============================================================================
 
 /// Event sent from renderer (WebView) to Deno
+#[weld_struct]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IpcEvent {
     pub window_id: String,
@@ -169,6 +171,7 @@ fn check_ipc_capability(state: &OpState, channel: &str) -> Result<(), IpcError> 
 /// Note: Channel permissions are enforced symmetrically - both outgoing messages from Deno
 /// and incoming messages from the renderer are subject to the capability checker. The host
 /// may perform additional per-window channel filtering when delivering the message.
+#[weld_op(async)]
 #[op2(async)]
 async fn op_ipc_send(
     state: Rc<RefCell<OpState>>,
@@ -207,6 +210,7 @@ async fn op_ipc_send(
 }
 
 /// Receive the next event from any window (blocking)
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_ipc_recv(state: Rc<RefCell<OpState>>) -> Result<Option<serde_json::Value>, IpcError> {
@@ -262,7 +266,7 @@ include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 /// Build the IPC extension
 pub fn ipc_extension() -> Extension {
-    host_ipc::ext()
+    runtime_ipc::ext()
 }
 
 /// Initialize IPC state in OpState - must be called after creating JsRuntime

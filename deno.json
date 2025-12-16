@@ -4,9 +4,27 @@
     "lib": ["deno.window", "dom"]
   },
   "imports": {
-    "host:fs": "./sdk/host.fs.ts",
-    "host:ui": "./sdk/host.ui.ts",
-    "host:net": "./sdk/host.net.ts",
-    "host:sys": "./sdk/host.sys.ts"
-  }
+    "runtime:types": "./sdk/runtime.d.ts",
+    "runtime:fs": "./sdk/runtime.fs.ts",
+    "runtime:net": "./sdk/runtime.net.ts",
+    "runtime:sys": "./sdk/runtime.sys.ts",
+    "runtime:ipc": "./sdk/runtime.ipc.ts",
+    "runtime:wasm": "./sdk/runtime.wasm.ts",
+    "runtime:window": "./sdk/runtime.window.ts",
+    "runtime:database": "./sdk/runtime.database.ts",
+    "runtime:debugger": "./sdk/runtime.debugger.ts",
+    "runtime:display": "./sdk/runtime.display.ts",
+    "runtime:log": "./sdk/runtime.log.ts",
+    "runtime:monitor": "./sdk/runtime.monitor.ts",
+    "runtime:protocol": "./sdk/runtime.protocol.ts",
+    "runtime:shortcuts": "./sdk/runtime.shortcuts.ts",
+    "runtime:updater": "./sdk/runtime.updater.ts",
+    "runtime:lock": "./sdk/runtime.lock.ts",
+    "runtime:os_compat": "./sdk/runtime.os_compat.ts",
+    "runtime:trace": "./sdk/runtime.trace.ts",
+    "runtime:path": "./sdk/runtime.path.ts"
+  },
+  "exclude": [
+    "sdk/generated/"
+  ]
 }

@@ -1,5 +1,5 @@
-// host:ipc module - TypeScript wrapper for IPC operations
-// This is the single source of truth for the host:ipc SDK
+// runtime:ipc module - TypeScript wrapper for IPC operations
+// This is the single source of truth for the runtime:ipc SDK
 
 // Deno.core type declaration
 declare const Deno: {
@@ -52,7 +52,7 @@ const core = Deno.core;
  *
  * @example
  * ```ts
- * import { sendToWindow } from "host:ipc";
+ * import { sendToWindow } from "runtime:ipc";
  *
  * // Send data to a specific window
  * await sendToWindow("main-window", "update", { count: 42 });
@@ -77,7 +77,7 @@ export async function sendToWindow(
  *
  * @example
  * ```ts
- * import { recvWindowEvent } from "host:ipc";
+ * import { recvWindowEvent } from "runtime:ipc";
  *
  * const event = await recvWindowEvent();
  * if (event) {
@@ -99,7 +99,7 @@ export async function recvWindowEvent(): Promise<IpcEvent | null> {
  *
  * @example
  * ```ts
- * import { windowEvents } from "host:ipc";
+ * import { windowEvents } from "runtime:ipc";
  *
  * for await (const event of windowEvents()) {
  *   console.log(`[${event.windowId}] ${event.channel}:`, event.payload);
@@ -126,7 +126,7 @@ export async function* windowEvents(): AsyncGenerator<IpcEvent, void, unknown> {
  *
  * @example
  * ```ts
- * import { windowEventsFor } from "host:ipc";
+ * import { windowEventsFor } from "runtime:ipc";
  *
  * // Only process events from the main window
  * for await (const event of windowEventsFor("main")) {
@@ -151,7 +151,7 @@ export async function* windowEventsFor(
  *
  * @example
  * ```ts
- * import { channelEvents } from "host:ipc";
+ * import { channelEvents } from "runtime:ipc";
  *
  * // Only process "button-click" events
  * for await (const event of channelEvents("button-click")) {
@@ -186,7 +186,7 @@ const channelCallbacks: Map<string, ChannelCallback[]> = new Map();
  *
  * @example
  * ```ts
- * import { onEvent } from "host:ipc";
+ * import { onEvent } from "runtime:ipc";
  *
  * const unsubscribe = onEvent((event) => {
  *   console.log(`Event: ${event.channel} from ${event.windowId}`);
@@ -218,7 +218,7 @@ export function onEvent(callback: IpcEventCallback): () => void {
  *
  * @example
  * ```ts
- * import { onChannel } from "host:ipc";
+ * import { onChannel } from "runtime:ipc";
  *
  * const unsubscribe = onChannel("user-action", (payload, windowId) => {
  *   console.log(`User action from ${windowId}:`, payload);
@@ -294,7 +294,7 @@ function startEventLoop(): void {
  *
  * @example
  * ```ts
- * import { broadcast } from "host:ipc";
+ * import { broadcast } from "runtime:ipc";
  *
  * // Send to multiple windows
  * await broadcast(["main", "settings", "preview"], "theme-changed", { theme: "dark" });

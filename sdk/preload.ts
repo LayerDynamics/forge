@@ -70,14 +70,14 @@ interface HostBridge {
           }
         }
         // Also send to Deno backend
-        if (window.ipc) {
+        if (globalThis.ipc) {
           window.ipc.postMessage(JSON.stringify({ channel, payload }));
         }
       },
 
       send(channel: string, payload?: unknown) {
-        if (window.ipc) {
-          window.ipc.postMessage(JSON.stringify({ channel, payload }));
+        if (globalThis.ipc) {
+          globalThis.ipc.postMessage(JSON.stringify({ channel, payload }));
         } else {
           console.warn("[host.send] IPC not available");
         }

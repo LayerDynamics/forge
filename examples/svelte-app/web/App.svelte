@@ -1,216 +1,385 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import LockScreen from './components/LockScreen.svelte';
+  import Sidebar from './components/Sidebar.svelte';
+  import NoteList from './components/NoteList.svelte';
+  import NoteEditor from './components/NoteEditor.svelte';
+  import PasswordGenerator from './components/PasswordGenerator.svelte';
 
-  interface Todo {
-    id: number;
-    text: string;
-    done: boolean;
+  // Types
+  interface Note {
+    id: string;
+    title: string;
+    content: string;
+    category: string;
+    createdAt: string;
+    modifiedAt: string;
   }
 
-  let todos: Todo[] = [];
-  let newTodoText = '';
-  let status = '';
+  type Category = 'all' | 'personal' | 'work' | 'financial' | 'medical' | 'passwords' | 'other';
+  type View = 'notes' | 'generator';
 
+  // Declare window.host interface
   declare global {
     interface Window {
-      host: {
+      runtime: {
         send: (channel: string, data?: unknown) => void;
         on: (channel: string, callback: (data: unknown) => void) => void;
       };
     }
   }
 
-  onMount(() => {
-    // Listen for todos from backend
-    window.host.on('todos-loaded', (data: unknown) => {
-      const { todos: loadedTodos } = data as { todos: Todo[] };
-      todos = loadedTodos;
-      status = 'Todos loaded from backend';
-    });
+  // State
+  let isUnlocked = false;
+  let isFirstTime = true;
+  let isLoading = true;
+  let error = '';
+  let toast: { message: string; type: 'success' | 'error' | 'warning' } | null = null;
 
-    window.host.on('todos-saved', (data: unknown) => {
-      const { success } = data as { success: boolean };
-      status = success ? 'Todos saved!' : 'Failed to save todos';
-    });
+  // Vault state
+  let notes: Note[] = [];
+  let selectedNoteId: string | null = null;
+  let selectedNoteContent: Note | null = null;  // Full note with content
+  let selectedCategory: Category = 'all';
+  let searchQuery = '';
+  let currentView: View = 'notes';
 
-    // Request initial todos
-    window.host.send('get-todos');
+  // Activity tracking for auto-lock
+  let activityInterval: number;
+
+  // Computed - use full content if available, otherwise fall back to list item
+  $: selectedNote = selectedNoteContent && selectedNoteContent.id === selectedNoteId
+    ? selectedNoteContent
+    : notes.find(n => n.id === selectedNoteId) || null;
+  $: filteredNotes = notes.filter(note => {
+    const matchesCategory = selectedCategory === 'all' || note.category === selectedCategory;
+    const matchesSearch = !searchQuery ||
+      note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      note.content.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
   });
 
-  function addTodo() {
-    if (!newTodoText.trim()) return;
+  onMount(() => {
+    setupEventListeners();
+    checkVaultStatus();
+    startActivityTracking();
+  });
 
-    const newTodo: Todo = {
-      id: Date.now(),
-      text: newTodoText.trim(),
-      done: false
+  onDestroy(() => {
+    if (activityInterval) {
+      clearInterval(activityInterval);
+    }
+  });
+
+  function setupEventListeners() {
+    // Vault state events
+    window.host.on('vault:state', (data: unknown) => {
+      const { unlocked, firstTime } = data as { unlocked: boolean; firstTime: boolean };
+      isUnlocked = unlocked;
+      isFirstTime = firstTime;
+      isLoading = false;
+      if (unlocked) {
+        loadNotes();
+      }
+    });
+
+    window.host.on('vault:unlock-result', (data: unknown) => {
+      const { success, error: err, firstTime } = data as { success: boolean; error?: string; firstTime?: boolean };
+      isLoading = false;
+      if (success) {
+        isUnlocked = true;
+        isFirstTime = firstTime ?? false;
+        loadNotes();
+        showToast('Vault unlocked', 'success');
+      } else {
+        error = err || 'Failed to unlock vault';
+        showToast(error, 'error');
+      }
+    });
+
+    // Note events
+    window.host.on('note:list-result', (data: unknown) => {
+      const { notes: loadedNotes } = data as { notes: Note[] };
+      notes = loadedNotes || [];
+    });
+
+    window.host.on('note:saved', (data: unknown) => {
+      const { success, note } = data as { success: boolean; note?: Note };
+      if (success && note) {
+        const index = notes.findIndex(n => n.id === note.id);
+        if (index >= 0) {
+          notes[index] = note;
+          notes = [...notes];
+        } else {
+          notes = [...notes, note];
+        }
+        showToast('Note saved', 'success');
+      }
+    });
+
+    window.host.on('note:deleted', (data: unknown) => {
+      const { success, noteId } = data as { success: boolean; noteId: string };
+      if (success) {
+        notes = notes.filter(n => n.id !== noteId);
+        if (selectedNoteId === noteId) {
+          selectedNoteId = null;
+          selectedNoteContent = null;
+        }
+        showToast('Note deleted', 'success');
+      }
+    });
+
+    // Handle full note content response
+    window.host.on('note:get-result', (data: unknown) => {
+      const { note } = data as { note: Note | null };
+      if (note) {
+        selectedNoteContent = note;
+      }
+    });
+
+    // Auto-lock warning
+    window.host.on('auto-lock:warning', () => {
+      showToast('Vault will lock in 30 seconds due to inactivity', 'warning');
+    });
+
+    // Clipboard events
+    window.host.on('clipboard:copied', (data: unknown) => {
+      const { success } = data as { success: boolean };
+      if (success) {
+        showToast('Copied to clipboard', 'success');
+      }
+    });
+
+    // Export/Import events
+    window.host.on('export:result', (data: unknown) => {
+      const { success, error: err } = data as { success: boolean; error?: string };
+      if (success) {
+        showToast('Backup exported successfully', 'success');
+      } else {
+        showToast(err || 'Export failed', 'error');
+      }
+    });
+
+    window.host.on('import:result', (data: unknown) => {
+      const { success, error: err, count } = data as { success: boolean; error?: string; count?: number };
+      if (success) {
+        loadNotes();
+        showToast(`Imported ${count} notes successfully`, 'success');
+      } else {
+        showToast(err || 'Import failed', 'error');
+      }
+    });
+  }
+
+  function checkVaultStatus() {
+    window.host.send('vault:status');
+  }
+
+  function loadNotes() {
+    window.host.send('note:list', { category: selectedCategory === 'all' ? undefined : selectedCategory });
+  }
+
+  function startActivityTracking() {
+    // Send activity ping every 30 seconds
+    activityInterval = setInterval(() => {
+      if (isUnlocked) {
+        window.host.send('activity:ping');
+      }
+    }, 30000) as unknown as number;
+
+    // Track user activity
+    const trackActivity = () => {
+      if (isUnlocked) {
+        window.host.send('activity:ping');
+      }
     };
-    todos = [...todos, newTodo];
-    newTodoText = '';
-    saveTodos();
+
+    document.addEventListener('mousemove', trackActivity);
+    document.addEventListener('keydown', trackActivity);
+    document.addEventListener('click', trackActivity);
   }
 
-  function toggleTodo(id: number) {
-    todos = todos.map(todo =>
-      todo.id === id ? { ...todo, done: !todo.done } : todo
-    );
-    saveTodos();
+  function handleUnlock(event: CustomEvent<{ password: string }>) {
+    isLoading = true;
+    error = '';
+    window.host.send('vault:unlock', { password: event.detail.password });
   }
 
-  function deleteTodo(id: number) {
-    todos = todos.filter(todo => todo.id !== id);
-    saveTodos();
+  function handleSetup(event: CustomEvent<{ password: string }>) {
+    isLoading = true;
+    error = '';
+    window.host.send('vault:setup', { password: event.detail.password });
   }
 
-  function saveTodos() {
-    window.host.send('save-todos', { todos });
+  function handleLock() {
+    window.host.send('vault:lock');
+    isUnlocked = false;
+    notes = [];
+    selectedNoteId = null;
+    selectedNoteContent = null;
+    showToast('Vault locked', 'success');
   }
 
-  $: remaining = todos.filter(t => !t.done).length;
+  function handleSelectNote(event: CustomEvent<{ noteId: string }>) {
+    selectedNoteId = event.detail.noteId;
+    selectedNoteContent = null;  // Clear previous content
+    currentView = 'notes';
+    // Fetch full note content
+    window.host.send('note:get', { id: event.detail.noteId });
+  }
+
+  function handleNewNote() {
+    const newNote: Note = {
+      id: '',
+      title: 'Untitled Note',
+      content: '',
+      category: selectedCategory === 'all' ? 'personal' : selectedCategory,
+      createdAt: new Date().toISOString(),
+      modifiedAt: new Date().toISOString()
+    };
+    window.host.send('note:create', { note: newNote });
+  }
+
+  function handleSaveNote(event: CustomEvent<{ note: Note }>) {
+    window.host.send('note:update', { note: event.detail.note });
+  }
+
+  function handleDeleteNote(event: CustomEvent<{ noteId: string }>) {
+    window.host.send('note:delete', { noteId: event.detail.noteId });
+  }
+
+  function handleCopyToClipboard(event: CustomEvent<{ text: string }>) {
+    window.host.send('clipboard:copy', { text: event.detail.text });
+  }
+
+  function handleExport() {
+    window.host.send('export:backup');
+  }
+
+  function handleImport() {
+    window.host.send('import:backup');
+  }
+
+  function handleCategoryChange(event: CustomEvent<{ category: Category }>) {
+    selectedCategory = event.detail.category;
+    loadNotes();
+  }
+
+  function handleViewChange(event: CustomEvent<{ view: View }>) {
+    currentView = event.detail.view;
+    if (currentView === 'generator') {
+      selectedNoteId = null;
+    }
+  }
+
+  function handleSearch(event: CustomEvent<{ query: string }>) {
+    searchQuery = event.detail.query;
+  }
+
+  function showToast(message: string, type: 'success' | 'error' | 'warning') {
+    toast = { message, type };
+    setTimeout(() => {
+      toast = null;
+    }, 3000);
+  }
 </script>
 
-<div class="container">
-  <h1>Svelte Todo App</h1>
-
-  <form on:submit|preventDefault={addTodo} class="add-form">
-    <input
-      type="text"
-      bind:value={newTodoText}
-      placeholder="Add a new todo..."
-      class="input"
+<div class="app">
+  {#if isLoading}
+    <div class="loading-screen">
+      <div class="spinner"></div>
+      <p>Loading...</p>
+    </div>
+  {:else if !isUnlocked}
+    <LockScreen
+      {isFirstTime}
+      {error}
+      on:unlock={handleUnlock}
+      on:setup={handleSetup}
     />
-    <button type="submit" class="btn">Add</button>
-  </form>
+  {:else}
+    <div class="vault-layout">
+      <Sidebar
+        {selectedCategory}
+        {currentView}
+        on:categoryChange={handleCategoryChange}
+        on:viewChange={handleViewChange}
+        on:newNote={handleNewNote}
+        on:lock={handleLock}
+        on:export={handleExport}
+        on:import={handleImport}
+      />
 
-  <ul class="todo-list">
-    {#each todos as todo (todo.id)}
-      <li class="todo-item" class:done={todo.done}>
-        <label class="checkbox-label">
-          <input
-            type="checkbox"
-            checked={todo.done}
-            on:change={() => toggleTodo(todo.id)}
-          />
-          <span class="todo-text">{todo.text}</span>
-        </label>
-        <button class="delete-btn" on:click={() => deleteTodo(todo.id)}>
-          Delete
-        </button>
-      </li>
-    {/each}
-  </ul>
+      <main class="main-content">
+        {#if currentView === 'notes'}
+          <div class="notes-panel">
+            <NoteList
+              notes={filteredNotes}
+              {selectedNoteId}
+              {searchQuery}
+              on:selectNote={handleSelectNote}
+              on:search={handleSearch}
+            />
 
-  {#if todos.length > 0}
-    <p class="status">
-      {remaining} item{remaining === 1 ? '' : 's'} remaining
-    </p>
+            <NoteEditor
+              note={selectedNote}
+              on:save={handleSaveNote}
+              on:delete={handleDeleteNote}
+              on:copy={handleCopyToClipboard}
+            />
+          </div>
+        {:else if currentView === 'generator'}
+          <PasswordGenerator on:copy={handleCopyToClipboard} />
+        {/if}
+      </main>
+    </div>
   {/if}
 
-  {#if status}
-    <p class="notification">{status}</p>
+  {#if toast}
+    <div class="toast toast-{toast.type}">
+      {toast.message}
+    </div>
   {/if}
-
-  <p class="hint">Edit web/App.svelte to customize this app</p>
 </div>
 
 <style>
-  .container {
-    padding: 2rem;
-    max-width: 500px;
-    margin: 0 auto;
-  }
-
-  h1 {
-    margin-bottom: 1.5rem;
-    color: #333;
-  }
-
-  .add-form {
+  .app {
+    height: 100vh;
+    width: 100vw;
     display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
+    flex-direction: column;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
   }
 
-  .input {
+  .loading-screen {
     flex: 1;
-    padding: 0.75rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 1rem;
-  }
-
-  .btn {
-    padding: 0.75rem 1.5rem;
-    background: #ff3e00;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-size: 1rem;
-    cursor: pointer;
-  }
-
-  .btn:hover {
-    background: #e63600;
-  }
-
-  .todo-list {
-    list-style: none;
-    margin-bottom: 1rem;
-  }
-
-  .todo-item {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem;
-    border-bottom: 1px solid #eee;
+    justify-content: center;
+    gap: var(--spacing-md);
   }
 
-  .todo-item.done .todo-text {
-    text-decoration: line-through;
-    color: #999;
+  .loading-screen p {
+    color: var(--text-secondary);
   }
 
-  .checkbox-label {
+  .vault-layout {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
+    height: 100%;
+    overflow: hidden;
   }
 
-  .delete-btn {
-    padding: 0.25rem 0.5rem;
-    background: transparent;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    color: #666;
-    cursor: pointer;
+  .main-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
   }
 
-  .delete-btn:hover {
-    background: #fee;
-    border-color: #fcc;
-    color: #c00;
-  }
-
-  .status {
-    color: #666;
-    font-size: 0.9rem;
-    margin-bottom: 1rem;
-  }
-
-  .notification {
-    padding: 0.5rem 1rem;
-    background: #d4edda;
-    color: #155724;
-    border-radius: 4px;
-    margin-bottom: 1rem;
-    font-size: 0.9rem;
-  }
-
-  .hint {
-    color: #999;
-    font-size: 0.9rem;
-    margin-top: 2rem;
+  .notes-panel {
+    display: flex;
+    width: 100%;
+    height: 100%;
   }
 </style>

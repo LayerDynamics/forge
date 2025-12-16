@@ -12,7 +12,7 @@ pub struct WeldModule {
     /// Internal module name (e.g., "host_fs")
     pub name: String,
 
-    /// Host specifier for imports (e.g., "host:fs")
+    /// Host specifier for imports (e.g., "runtime:fs")
     pub specifier: String,
 
     /// All ops in this module
@@ -24,7 +24,7 @@ pub struct WeldModule {
     /// All enums in this module
     pub enums: Vec<WeldEnum>,
 
-    /// ESM entry point path (e.g., "ext:host_fs/init.js")
+    /// ESM entry point path (e.g., "ext:runtime_fs/init.js")
     pub esm_entry_point: String,
 
     /// Module documentation
@@ -56,10 +56,10 @@ impl WeldModule {
         }
     }
 
-    /// Create a host module (e.g., "host_fs" -> "host:fs")
+    /// Create a host module (e.g., "host_fs" -> "runtime:fs")
     pub fn host(name: &str) -> Self {
         let module_name = format!("host_{}", name);
-        let specifier = format!("host:{}", name);
+        let specifier = format!("runtime:{}", name);
         Self::new(module_name, specifier)
     }
 
@@ -331,7 +331,7 @@ mod tests {
             .with_doc("Filesystem operations");
 
         assert_eq!(module.name, "host_fs");
-        assert_eq!(module.specifier, "host:fs");
+        assert_eq!(module.specifier, "runtime:fs");
         assert_eq!(module.esm_entry_point, "ext:host_fs/init.js");
         assert_eq!(module.ops.len(), 1);
     }
@@ -352,13 +352,13 @@ mod tests {
 
     #[test]
     fn test_module_validation() {
-        let module = WeldModule::new("", "host:test");
+        let module = WeldModule::new("", "runtime:test");
         assert!(module.validate().is_err());
 
         let module = WeldModule::new("test", "");
         assert!(module.validate().is_err());
 
-        let module = WeldModule::new("test", "host:test")
+        let module = WeldModule::new("test", "runtime:test")
             .op(OpSymbol::from_rust_name("op_test"))
             .op(OpSymbol::from_rust_name("op_test")); // Duplicate
         assert!(module.validate().is_err());

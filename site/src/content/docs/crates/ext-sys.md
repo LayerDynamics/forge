@@ -1,9 +1,10 @@
 ---
 title: "ext_sys"
-description: System operations extension providing the host:sys module.
+description: System operations extension providing the runtime:sys module.
+slug: crates/ext-sys
 ---
 
-The `ext_sys` crate provides system-level operations for Forge applications through the `host:sys` module.
+The `ext_sys` crate provides system-level operations for Forge applications through the `runtime:sys` module.
 
 ## Overview
 
@@ -16,14 +17,14 @@ ext_sys handles:
 - **Environment** - Environment variables
 - **Capability-based security** - Permission checks per operation
 
-## Module: `host:sys`
+## Module: `runtime:sys`
 
 ```typescript
 import {
   info,
   clipboard,
   notify
-} from "host:sys";
+} from "runtime:sys";
 ```
 
 ## Key Types
@@ -134,6 +135,52 @@ crates/ext_sys/
 └── Cargo.toml
 ```
 
+## Rust Implementation
+
+Operations are annotated with forge-weld macros for automatic TypeScript binding generation:
+
+```rust
+// src/lib.rs
+use deno_core::{op2, Extension, OpState};
+use forge_weld_macro::{weld_op, weld_struct};
+use serde::{Deserialize, Serialize};
+
+#[weld_struct]
+#[derive(Debug, Serialize)]
+pub struct SystemInfo {
+    pub os: String,
+    pub arch: String,
+    pub hostname: String,
+    pub username: String,
+}
+
+#[weld_op(async)]
+#[op2(async)]
+#[serde]
+pub async fn op_sys_info(
+    state: Rc<RefCell<OpState>>,
+) -> Result<SystemInfo, SysError> {
+    // implementation
+}
+```
+
+## Build Configuration
+
+```rust
+// build.rs
+use forge_weld::ExtensionBuilder;
+
+fn main() {
+    ExtensionBuilder::new("runtime_sys", "runtime:sys")
+        .ts_path("ts/init.ts")
+        .ops(&["op_sys_info", "op_sys_clipboard_read", "op_sys_notify", /* ... */])
+        .generate_sdk_module("sdk")
+        .use_inventory_types()
+        .build()
+        .expect("Failed to build runtime_sys extension");
+}
+```
+
 ## Dependencies
 
 | Dependency | Purpose |
@@ -146,8 +193,10 @@ crates/ext_sys/
 | `mac-notification-sys` | macOS notifications |
 | `notify-rust` | Linux notifications |
 | `forge-weld` | Build-time code generation |
+| `forge-weld-macro` | `#[weld_op]`, `#[weld_struct]` macros |
+| `linkme` | Compile-time symbol collection |
 
 ## Related
 
-- [host:sys API](/docs/api/host-sys) - TypeScript API documentation
-- [forge-weld](/docs/crates/forge-weld) - Build system
+- [runtime:sys API](/docs/api/runtime-sys) - TypeScript API documentation
+- [forge-weld](/docs/crates/forge-weld) - Code generation library

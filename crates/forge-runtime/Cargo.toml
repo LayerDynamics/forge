@@ -1,0 +1,68 @@
+[package]
+name = "forge-runtime"
+version = "0.1.0-alpha.1"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+anyhow = "1"
+thiserror = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+tokio = { version = "1", features = ["rt", "macros", "fs", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+deno_core = "0.373"
+deno_ast = { version = "0.52", features = ["transpiling"] }
+wry = "0.46"
+tao = "0.30"
+tray-icon = "0.19"
+image = "0.25"
+globset = "0.4"
+rfd = "0.14"
+muda = "0.15"
+crossbeam-channel = "0.5"
+# HMR support
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+notify = { version = "6", default-features = false, features = ["macos_fsevent"] }
+# Crash reporting
+backtrace = "0.3"
+once_cell = "1"
+chrono = "0.4"
+hostname = "0.4"
+
+ext_fs = { path = "../ext_fs" }
+ext_ipc = { path = "../ext_ipc" }
+ext_net = { path = "../ext_net" }
+ext_sys = { path = "../ext_sys" }
+ext_window = { path = "../ext_window" }
+ext_process = { path = "../ext_process" }
+ext_wasm = { path = "../ext_wasm" }
+ext_app = { path = "../ext_app" }
+ext_crypto = { path = "../ext_crypto" }
+ext_storage = { path = "../ext_storage" }
+ext_shell = { path = "../ext_shell" }
+ext_database = { path = "../ext_database" }
+ext_debugger = { path = "../ext_debugger" }
+ext_display = { path = "../ext_display" }
+ext_log = { path = "../ext_log" }
+ext_monitor = { path = "../ext_monitor" }
+ext_protocol = { path = "../ext_protocol" }
+ext_shortcuts = { path = "../ext_shortcuts" }
+ext_updater = { path = "../ext_updater" }
+ext_lock = { path = "../ext_lock" }
+ext_os_compat = { path = "../ext_os_compat" }
+ext_trace = { path = "../ext_trace" }
+ext_path = { path = "../ext_path" }
+ext_signals = { path = "../ext_signals" }
+ext_timers = { path = "../ext_timers" }
+ext_webview = { path = "../ext_webview" }
+ext_devtools = { path = "../ext_devtools" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+
+[build-dependencies]
+deno_ast = { version = "0.52", features = ["transpiling"] }

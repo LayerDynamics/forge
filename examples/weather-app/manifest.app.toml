@@ -1,4 +1,4 @@
-# Forge Weather App - Demonstrates host:net, host:sys notifications, tray icons
+# Forge Weather App - Demonstrates runtime:net, runtime:sys notifications, tray icons
 [app]
 name = "Forge Weather"
 identifier = "com.forge.weather"

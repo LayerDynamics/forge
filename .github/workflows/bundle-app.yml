@@ -49,17 +49,17 @@ jobs:
           key: ${{ runner.os }}-cargo-bundle-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build app
-        run: cargo run -p forge -- build ${{ env.APP_PATH }}
+        run: cargo run -p forge_cli -- build ${{ env.APP_PATH }}
 
       - name: Bundle app
-        run: cargo run -p forge -- bundle ${{ env.APP_PATH }}
+        run: cargo run -p forge_cli -- bundle ${{ env.APP_PATH }}
 
       - name: Sign MSIX (if requested)
         if: github.event.inputs.sign_windows == 'true'
         run: |
           # Import certificate from secrets
           echo "${{ secrets.WINDOWS_CERTIFICATE }}" | base64 -d > cert.pfx
-          cargo run -p forge -- sign --identity cert.pfx ${{ env.APP_PATH }}/bundle/*.msix
+          cargo run -p forge_cli -- sign --identity cert.pfx ${{ env.APP_PATH }}/bundle/*.msix
           rm cert.pfx
         env:
           FORGE_SIGNING_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
@@ -96,7 +96,7 @@ jobs:
           key: ${{ runner.os }}-cargo-bundle-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build app
-        run: cargo run -p forge -- build ${{ env.APP_PATH }}
+        run: cargo run -p forge_cli -- build ${{ env.APP_PATH }}
 
       - name: Import signing certificate (if requested)
         if: github.event.inputs.sign_macos == 'true'
@@ -134,7 +134,7 @@ jobs:
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
 
       - name: Bundle app
-        run: cargo run -p forge -- bundle ${{ env.APP_PATH }}
+        run: cargo run -p forge_cli -- bundle ${{ env.APP_PATH }}
         env:
           FORGE_SIGNING_IDENTITY: ${{ github.event.inputs.sign_macos == 'true' && secrets.MACOS_SIGNING_IDENTITY || '' }}
           FORGE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -194,10 +194,10 @@ jobs:
           key: ${{ runner.os }}-cargo-bundle-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build app
-        run: cargo run -p forge -- build ${{ env.APP_PATH }}
+        run: cargo run -p forge_cli -- build ${{ env.APP_PATH }}
 
       - name: Bundle app
-        run: cargo run -p forge -- bundle ${{ env.APP_PATH }}
+        run: cargo run -p forge_cli -- bundle ${{ env.APP_PATH }}
 
       - name: Upload AppImage
         uses: actions/upload-artifact@v4

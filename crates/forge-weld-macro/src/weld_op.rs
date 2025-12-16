@@ -122,6 +122,10 @@ pub fn weld_op_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         Ok(input) => input,
         Err(e) => return e.to_compile_error(),
     };
+    let mut stripped = input.clone();
+    stripped
+        .attrs
+        .retain(|a| !a.path().is_ident("weld_op") && !a.path().is_ident("weld_op2"));
 
     let attrs = WeldOpAttrs::parse(attr);
 
@@ -176,7 +180,7 @@ pub fn weld_op_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generate the metadata function and registration
     let expanded = quote! {
-        #input
+        #stripped
 
         #[doc(hidden)]
         fn #metadata_fn_name() -> forge_weld::OpSymbol {

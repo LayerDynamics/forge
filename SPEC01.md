@@ -67,7 +67,7 @@ Primary control plane" as Deno
   component "Host Modules (Rust ops)
 fs, net, ui, dialog, process, sys" as Mods
   component "Window/WebView Manager (wry+tao)" as WV
-  component "Module Loader (host:* scheme)" as Loader
+  component "Module Loader (runtime:* scheme)" as Loader
 }
 
 package "Renderer(s)" as R {
@@ -77,7 +77,7 @@ package "Renderer(s)" as R {
 
 Deno -down-> Mods : op_* calls (sync/async)
 Deno -down-> WV : create window, eval, inject preload
-Deno -left-> Loader : resolves imports host:* to builtins
+Deno -left-> Loader : resolves imports runtime:* to builtins
 R -down-> Deno : messages via injected bridge (abstracted)
 @enduml
 ```
@@ -128,15 +128,15 @@ Pkg -[#..] Host : used by CLI
 **Design**
 
 * App authors write **Deno/TypeScript** exclusively.
-* Native capabilities are exposed as **ES modules** under a reserved specifier scheme: `host:*` (e.g., `host:fs`, `host:ui`).
-* Each `host:*` module is backed by a **Rust extension** (ops) and a tiny TS wrapper for ergonomics and typing.
+* Native capabilities are exposed as **ES modules** under a reserved specifier scheme: `runtime:*` (e.g., `runtime:fs`, `runtime:ui`).
+* Each `runtime:*` module is backed by a **Rust extension** (ops) and a tiny TS wrapper for ergonomics and typing.
 * There is **no JSON-RPC** in userland. Calls look and feel like normal async functions.
 
 **Examples (developer)**
 
 ```ts
-import { readTextFile, writeTextFile } from "host:fs";
-import { openWindow } from "host:ui";
+import { readTextFile, writeTextFile } from "runtime:fs";
+import { openWindow } from "runtime:ui";
 
 const cfg = await readTextFile("./data/config.json");
 const win = await openWindow({ url: "app://index.html", width: 1024, height: 640 });
@@ -144,8 +144,8 @@ const win = await openWindow({ url: "app://index.html", width: 1024, height: 640
 
 **Module loading**
 
-* A custom loader resolves `host:*` to embedded JS shims that call Rust ops.
-* Types are provided via `sdk/host.d.ts` so editors get intellisense without extra tooling.
+* A custom loader resolves `runtime:*` to embedded JS shims that call Rust ops.
+* Types are provided via `sdk/runtime.d.ts` so editors get intellisense without extra tooling.
 
 ### Deno Runtime & Extensions
 
@@ -170,16 +170,16 @@ pub fn fs_extension() -> Extension {
     Extension::builder("host_fs")
       .ops(vec![op_fs_read_text::decl()])
       .esm(vec![
-        ("ext:host_fs/init.js", include_str!("./js/host_fs_init.js")),
+        ("ext:runtime_fs/init.js", include_str!("./js/host_fs_init.js")),
       ])
       .build()
 }
 ```
 
-**`host:fs` shim (embedded JS)**
+**`runtime:fs` shim (embedded JS)**
 
 ```js
-// ext:host_fs/init.js
+// ext:runtime_fs/init.js
 export async function readTextFile(path) {
   return Deno.core.ops.op_fs_read_text(path);
 }
@@ -190,11 +190,11 @@ export async function writeTextFile(path, text) {
 
 **Initial modules**
 
-* `host:fs` (read/write, watch)
-* `host:net` (fetch with host allowlist)
-* `host:ui` (windows, menus, tray, dialogs)
-* `host:process` (spawn; default disabled)
-* `host:sys` (clipboard, notifications, system info)
+* `runtime:fs` (read/write, watch)
+* `runtime:net` (fetch with host allowlist)
+* `runtime:ui` (windows, menus, tray, dialogs)
+* `runtime:process` (spawn; default disabled)
+* `runtime:sys` (clipboard, notifications, system info)
 
 All **ops are capability-gated** and **off by default**.
 **
@@ -210,10 +210,10 @@ All ops are **capability‑gated** and **off by default**.
 
 ### Security Model
 
-* **Deno-first policy:** No Node/DOM extras in Deno globals; only `host:*` modules.
+* **Deno-first policy:** No Node/DOM extras in Deno globals; only `runtime:*` modules.
 * **Scheme:** `app://` for local assets; remote blocked by default.
-* **Permissions:** granular caps bound to `host:*` modules and scoped by `manifest.app.toml`.
-* **Renderer isolation:** renderers cannot access `host:*` directly; they use the injected `window.host` bridge with channel allowlists defined by Deno.
+* **Permissions:** granular caps bound to `runtime:*` modules and scoped by `manifest.app.toml`.
+* **Renderer isolation:** renderers cannot access `runtime:*` directly; they use the injected `window.host` bridge with channel allowlists defined by Deno.
 * **Strict CSP** and no `eval`.
 
 ### Configuration: `manifest.app.toml`
@@ -248,7 +248,7 @@ windows = { format = "msix", sign = false }
 
 ### Windowing & UI Primitives (Deno-first)
 
-* Windows are created from **Deno** via `host:ui`:
+* Windows are created from **Deno** via `runtime:ui`:
 
   ```ts
   const win = await openWindow({ url: "app://index.html" });
@@ -257,14 +257,14 @@ windows = { format = "msix", sign = false }
   }
   ```
 
-* Menus/tray/dialogs are exposed as functions/events on `host:ui` with typed payloads.
+* Menus/tray/dialogs are exposed as functions/events on `runtime:ui` with typed payloads.
 * The WebView **preload** injects a small `window.host` bridge for renderer code that needs to talk to the Deno main:
 
   * Renderer API stays minimal (`window.host.send(channel, payload)` / `window.host.on(channel, cb)`), but **app authors primarily write Deno code**; renderer should be view-only where possible.
 
 ### Renderer ↔ Deno Bridge (internals, hidden from app authors)
 
-* Implemented in Rust as a `host:webview` extension exposing async streams and sinks to Deno.
+* Implemented in Rust as a `runtime:webview` extension exposing async streams and sinks to Deno.
 * Per-window channels are surfaced to Deno as `AsyncIterable` event sources.
 * Transport framing is private and optimized (string/bytes), but never exposed as JSON-RPC to userland.
 
@@ -290,8 +290,8 @@ Commands (identical across OS):
 
 ```ts
 // main.ts (runs in Deno)
-import { readTextFile } from "host:fs";
-import { openWindow, onMenu } from "host:ui";
+import { readTextFile } from "runtime:fs";
+import { openWindow, onMenu } from "runtime:ui";
 
 const win = await openWindow({ url: "app://index.html" });
 const data = await readTextFile("./data/config.json");
@@ -314,7 +314,7 @@ const data = await readTextFile("./data/config.json");
 actor User
 participant Renderer as R
 participant Deno
-participant host_fs as "host:fs (Rust ops)"
+participant host_fs as "runtime:fs (Rust ops)"
 
 User -> R: clicks "Open Config"
 R -> Deno: window.host.send("request-config")
@@ -367,13 +367,13 @@ UI --> User: render config
 root/
 ├─ crates/
 │  ├─ host/                # Rust lib: window/webview + Deno embed + module loader
-│  ├─ ext_fs/              # Rust ext: host:fs (ops + ESM shim)
-│  ├─ ext_ui/              # Rust ext: host:ui (windows, menus, dialogs)
-│  ├─ ext_net/             # Rust ext: host:net (HTTP)
-│  ├─ ext_sys/             # Rust ext: host:sys (clipboard, notify, power)
+│  ├─ ext_fs/              # Rust ext: runtime:fs (ops + ESM shim)
+│  ├─ ext_ui/              # Rust ext: runtime:ui (windows, menus, dialogs)
+│  ├─ ext_net/             # Rust ext: runtime:net (HTTP)
+│  ├─ ext_sys/             # Rust ext: runtime:sys (clipboard, notify, power)
 │  └─ forge/               # Rust CLI: init/dev/build/bundle/sign (single UX)
 ├─ sdk/
-│  ├─ host.d.ts            # Types for host:*modules
+│  ├─ runtime.d.ts            # Types for runtime:*modules
 │  ├─ host.fs.ts           # Thin TS wrappers calling Deno.core.ops.* (generated)
 │  └─ host.ui.ts           # "
 ├─ templates/
@@ -410,7 +410,7 @@ impl AppHost {
         ext_ui::ui_extension(/* window registry handle */),
         ext_net::net_extension(),
         ext_sys::sys_extension(),
-        host_loader_extension(), // resolves host:*
+        host_loader_extension(), // resolves runtime:*
       ],
       ..Default::default()
     });
@@ -425,21 +425,21 @@ impl AppHost {
 }
 ```
 
-### `host:*` Module Loader
+### `runtime:*` Module Loader
 
-* Implement a **custom resolver** extension that maps `host:fs` → `ext:host_fs/init.js` (embedded ESM). No network fetches.
+* Implement a **custom resolver** extension that maps `runtime:fs` → `ext:runtime_fs/init.js` (embedded ESM). No network fetches.
 * Generate TS wrappers from the ext ops **at build time** into `sdk/` so developers import stable typed APIs.
 
 **Resolver sketch**
 
 ```rust
-// provides ESM source for host:* specifiers
+// provides ESM source for runtime:* specifiers
 Extension::builder("host_loader")
-  .esm(vec![("ext:host_loader/resolver.js", include_str!("js/resolver.js"))])
+  .esm(vec![("ext:runtime_loader/resolver.js", include_str!("js/resolver.js"))])
   .build();
 ```
 
-### `host:ui` — WebView & Window Integration
+### `runtime:ui` — WebView & Window Integration
 
 * Windows are **created by Deno**: `openWindow(opts)` calls Rust op → builds a `tao::Window` and a `wry::WebView`.
 * Preload injects `window.host = { send, on }` in renderer; channels **whitelisted** per window.
@@ -519,8 +519,8 @@ manifest.app.toml
 **src/main.ts**
 
 ```ts
-import { openWindow } from "host:ui";
-import { readTextFile } from "host:fs";
+import { openWindow } from "runtime:ui";
+import { readTextFile } from "runtime:fs";
 
 const win = await openWindow({ url: "app://index.html", width: 1024, height: 640 });
 win.emit("ready", {});
@@ -562,7 +562,7 @@ createRoot(document.getElementById("root")!).render(<App/>);
 
 ### Hardening
 
-* Sandboxed renderer (no `host:*`); strict channel allowlists.
+* Sandboxed renderer (no `runtime:*`); strict channel allowlists.
 * Optional content signing for embedded assets; verify on load.
 * Update channel with signature verification.
 
@@ -571,18 +571,18 @@ createRoot(document.getElementById("root")!).render(<App/>);
 1. **M0 – Bootstrap (2–3 weeks)**
 
 * crates/host with Deno embed and empty window
-* `host:*` loader resolving to a trivial module
+* `runtime:*` loader resolving to a trivial module
 * `forge init/dev/build` skeleton; serve static HTML in dev
 
 2. **M1 – UI & Bridge (3–4 weeks)**
 
-* `host:ui` with window open/close, preload, `window.host` bridge
+* `runtime:ui` with window open/close, preload, `window.host` bridge
 * `app://` loader + asset embedding
 * Minimal React/Vue templates; Deno bundling for browser target
 
 3. **M2 – Core Ops (3–4 weeks)**
 
-* `host:fs`, `host:net`, `host:sys` with caps
+* `runtime:fs`, `runtime:net`, `runtime:sys` with caps
 * Manifest parsing + capability enforcement
 * Logging/diagnostics; error codes
 
@@ -624,7 +624,7 @@ createRoot(document.getElementById("root")!).render(<App/>);
 **Security**
 
 * Verify CSP blocks remote fetch by default
-* Ensure renderer cannot call `host:*` directly
+* Ensure renderer cannot call `runtime:*` directly
 * Fuzz `window.host` channel with malformed payloads
 
 **Release criteria**

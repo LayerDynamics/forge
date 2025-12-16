@@ -9,6 +9,7 @@ Forge Weld bridges the gap between Rust `deno_core` ops and TypeScript by:
 1. **Capturing type metadata** from Rust structs, enums, and op functions via proc macros
 2. **Storing metadata at compile time** using `linkme` distributed slices
 3. **Generating TypeScript declarations** (`.d.ts` files) from the collected metadata
+4. **Generating TypeScript SDK modules** (`runtime.*.ts`) that wrap `Deno.core.ops`
 4. **Transpiling TypeScript init modules** to JavaScript for the Deno runtime
 
 ### Architecture
@@ -46,10 +47,10 @@ Forge Weld bridges the gap between Rust `deno_core` ops and TypeScript by:
 │                           │                                     │
 │  ┌────────────────────────┴─────────────────────────────────┐   │
 │  │                      Codegen                             │   │
-│  │  ┌──────────────┐  ┌───────────────────┐                 │   │
-│  │  │ DtsGenerator │  │ ExtensionGenerator│                 │   │
-│  │  │  (.d.ts)     │  │  (extension.rs)   │                 │   │
-│  │  └──────────────┘  └───────────────────┘                 │   │
+│  │  ┌──────────────┐  ┌───────────────────┐  ┌─────────────────────┐ │
+│  │  │ DtsGenerator │  │ ExtensionGenerator│  │ TypeScriptGenerator │ │
+│  │  │  (.d.ts)     │  │  (extension.rs)   │  │ (runtime.*.ts SDK)  │ │
+│  │  └──────────────┘  └───────────────────┘  └─────────────────────┘ │
 │  └──────────────────────────────────────────────────────────┘   │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐   │
@@ -65,6 +66,7 @@ Forge Weld bridges the gap between Rust `deno_core` ops and TypeScript by:
               │  ┌─────────────────┐  │
               │  │ host.fs.d.ts    │  │
               │  │ host.ui.d.ts    │  │
+              │  │ runtime.fs.ts   │  │
               │  │ extension.rs    │  │
               │  │ init.js         │  │
               │  └─────────────────┘  │
@@ -169,10 +171,11 @@ Use `ExtensionBuilder` in your extension's `build.rs`:
 use forge_weld::build::ExtensionBuilder;
 
 fn main() {
-    ExtensionBuilder::new("host_fs", "host:fs")
+    ExtensionBuilder::new("host_fs", "runtime:fs")
         .ts_path("ts/init.ts")
         .ops(&["op_fs_read_text", "op_fs_write_text"])
         .generate_sdk_types("../../sdk")
+        .generate_sdk_module("../../sdk")
         .build()
         .expect("Failed to build extension");
 }
@@ -183,6 +186,7 @@ This will:
 1. Transpile `ts/init.ts` to JavaScript
 2. Generate `extension.rs` with the module initialization
 3. Generate `host.fs.d.ts` in the SDK directory
+4. Generate `runtime.fs.ts` (full SDK implementation) in the SDK directory
 
 ### Inventory System
 

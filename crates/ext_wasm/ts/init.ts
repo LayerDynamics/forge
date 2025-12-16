@@ -1,4 +1,4 @@
-// host:wasm module - TypeScript wrapper for Deno core ops
+// runtime:wasm module - TypeScript wrapper for Deno core ops
 
 declare const Deno: {
   core: {

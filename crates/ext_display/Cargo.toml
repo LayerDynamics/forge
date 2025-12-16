@@ -1,0 +1,19 @@
+[package]
+name = "ext_display"
+version = "0.1.0-alpha.1"
+edition = "2021"
+publish = false
+build = "build.rs"
+
+[dependencies]
+deno_core = "0.373"
+serde = { version = "1", features = ["derive"] }
+forge-weld = { path = "../forge-weld" }
+forge-weld-macro = { path = "../forge-weld-macro" }
+linkme = "0.3"
+
+[build-dependencies]
+forge-weld = { path = "../forge-weld" }
+
+[lib]
+crate-type = ["lib"]

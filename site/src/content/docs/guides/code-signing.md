@@ -1,6 +1,7 @@
 ---
 title: Code Signing Guide
 description: Sign your Forge app for distribution on macOS, Windows, and Linux.
+slug: guides/code-signing
 ---
 
 Code signing verifies your app's authenticity and integrity. It's required for distribution on macOS (especially for notarization) and recommended on Windows for user trust.

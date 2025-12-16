@@ -1,4 +1,4 @@
-// host:window module - TypeScript wrapper for native window operations
+// runtime:window module - TypeScript wrapper for native window operations
 
 // Deno.core type declaration with all 37 ops
 declare const Deno: {
@@ -47,6 +47,16 @@ declare const Deno: {
       // Events & Native (2 ops)
       op_window_events_recv(): Promise<WindowSystemEvent | null>;
       op_window_get_native_handle(windowId: string): Promise<NativeHandle>;
+      // Enhanced Window Ops (9 ops)
+      op_window_open_devtools(windowId: string): Promise<void>;
+      op_window_close_devtools(windowId: string): Promise<void>;
+      op_window_is_devtools_open(windowId: string): Promise<boolean>;
+      op_window_eval_js(windowId: string, script: string): Promise<void>;
+      op_window_inject_css(windowId: string, css: string): Promise<void>;
+      op_window_set_min_size(windowId: string, width: number, height: number): Promise<void>;
+      op_window_set_max_size(windowId: string, width: number, height: number): Promise<void>;
+      op_window_center(windowId: string): Promise<void>;
+      op_window_get_monitors(): Promise<MonitorInfo[]>;
     };
   };
 };
@@ -65,6 +75,7 @@ interface WindowOptions {
   visible?: boolean;
   transparent?: boolean;
   alwaysOnTop?: boolean;
+  devtools?: boolean;
   x?: number;
   y?: number;
   minWidth?: number;
@@ -93,6 +104,19 @@ interface NativeHandle {
    * Typed as number since Rust u64 serializes to JS number (safe for values up to 2^53).
    */
   handle: number;
+}
+
+interface MonitorInfo {
+  /** Monitor name (may be null on some platforms) */
+  name: string | null;
+  /** Monitor position */
+  position: Position;
+  /** Monitor size in pixels */
+  size: Size;
+  /** Scale factor (DPI scaling) */
+  scaleFactor: number;
+  /** Whether this is the primary monitor */
+  isPrimary: boolean;
 }
 
 interface WindowSystemEvent {
@@ -139,6 +163,23 @@ interface Window {
   getNativeHandle(): Promise<NativeHandle>;
   // Events
   events(): AsyncGenerator<WindowSystemEvent, void, unknown>;
+  // Enhanced Window Operations
+  /** Open developer tools for this window */
+  openDevTools(): Promise<void>;
+  /** Close developer tools for this window */
+  closeDevTools(): Promise<void>;
+  /** Check if developer tools are open */
+  isDevToolsOpen(): Promise<boolean>;
+  /** Execute JavaScript in the window's WebView context */
+  evalJs(script: string): Promise<void>;
+  /** Inject CSS into the window's WebView */
+  injectCss(css: string): Promise<void>;
+  /** Set minimum window size */
+  setMinSize(width: number, height: number): Promise<void>;
+  /** Set maximum window size */
+  setMaxSize(width: number, height: number): Promise<void>;
+  /** Center the window on the screen */
+  center(): Promise<void>;
 }
 
 interface FileFilter {
@@ -322,6 +363,32 @@ export async function createWindow(opts: WindowOptions = {}): Promise<Window> {
           yield event;
         }
       }
+    },
+
+    // Enhanced Window Operations
+    async openDevTools(): Promise<void> {
+      return await core.ops.op_window_open_devtools(windowId);
+    },
+    async closeDevTools(): Promise<void> {
+      return await core.ops.op_window_close_devtools(windowId);
+    },
+    async isDevToolsOpen(): Promise<boolean> {
+      return await core.ops.op_window_is_devtools_open(windowId);
+    },
+    async evalJs(script: string): Promise<void> {
+      return await core.ops.op_window_eval_js(windowId, script);
+    },
+    async injectCss(css: string): Promise<void> {
+      return await core.ops.op_window_inject_css(windowId, css);
+    },
+    async setMinSize(width: number, height: number): Promise<void> {
+      return await core.ops.op_window_set_min_size(windowId, width, height);
+    },
+    async setMaxSize(width: number, height: number): Promise<void> {
+      return await core.ops.op_window_set_max_size(windowId, width, height);
+    },
+    async center(): Promise<void> {
+      return await core.ops.op_window_center(windowId);
     }
   };
 
@@ -351,6 +418,21 @@ export async function* windowEvents(): AsyncGenerator<WindowSystemEvent, void, u
     if (event === null) break;
     yield event;
   }
+}
+
+/**
+ * Get information about all available monitors
+ */
+export async function getMonitors(): Promise<MonitorInfo[]> {
+  const monitors = await core.ops.op_window_get_monitors();
+  // Convert snake_case from Rust to camelCase
+  return monitors.map((m: { name: string | null; position: Position; size: Size; scale_factor: number; is_primary: boolean }) => ({
+    name: m.name,
+    position: m.position,
+    size: m.size,
+    scaleFactor: m.scale_factor,
+    isPrimary: m.is_primary,
+  }));
 }
 
 // ============================================================================
@@ -550,6 +632,7 @@ export type {
   Position,
   Size,
   NativeHandle,
+  MonitorInfo,
   WindowSystemEvent,
   Window,
   FileFilter,

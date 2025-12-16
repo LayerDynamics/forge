@@ -18,7 +18,7 @@
 //! use forge_weld::build::ExtensionBuilder;
 //!
 //! fn main() {
-//!     ExtensionBuilder::new("host_fs", "host:fs")
+//!     ExtensionBuilder::new("host_fs", "runtime:fs")
 //!         .ts_path("ts/init.ts")
 //!         .ops(&["op_fs_read_text", "op_fs_write_text"])
 //!         .generate_sdk_types("../../sdk")

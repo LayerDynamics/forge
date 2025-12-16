@@ -1,4 +1,4 @@
-# Forge Todo App - Demonstrates host:fs, host:ui, and IPC patterns
+# Forge Todo App - Demonstrates runtime:fs, runtime:ui, and IPC patterns
 [app]
 name = "Forge Todo"
 identifier = "com.forge.todo"

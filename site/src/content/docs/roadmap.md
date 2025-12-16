@@ -1,6 +1,7 @@
 ---
 title: Roadmap
 description: Forge SDK development roadmap - planned modules, features, and improvements.
+slug: roadmap
 ---
 
 This document outlines the Forge SDK development roadmap, including planned extension modules, features, and improvements to bring Forge to feature parity with Electron and Tauri.
@@ -11,20 +12,20 @@ Forge currently has **8 fully implemented extension modules**:
 
 | Module | Crate | Operations | Status |
 |--------|-------|------------|--------|
-| `host:fs` | ext_fs | 11 | Complete |
-| `host:window` | ext_window | 37 | Complete |
-| `host:ipc` | ext_ipc | 2 | Complete |
-| `host:net` | ext_net | 2 | Complete |
-| `host:process` | ext_process | 7 | Complete |
-| `host:sys` | ext_sys | 11 | Complete |
-| `host:wasm` | ext_wasm | 10 | Complete |
-| `host:ui` | ext_ui | - | Legacy (use host:window) |
+| `runtime:fs` | ext_fs | 11 | Complete |
+| `runtime:window` | ext_window | 37 | Complete |
+| `runtime:ipc` | ext_ipc | 2 | Complete |
+| `runtime:net` | ext_net | 2 | Complete |
+| `runtime:process` | ext_process | 7 | Complete |
+| `runtime:sys` | ext_sys | 11 | Complete |
+| `runtime:wasm` | ext_wasm | 10 | Complete |
+| `runtime:ui` | ext_ui | - | Legacy (use runtime:window) |
 
 ---
 
 ## Phase 1: High Priority Modules
 
-### host:crypto - Cryptography & Security
+### runtime:crypto - Cryptography & Security
 
 Cryptographic operations for secure applications.
 
@@ -45,7 +46,7 @@ Cryptographic operations for secure applications.
 
 ---
 
-### host:storage - Persistent Key-Value Storage
+### runtime:storage - Persistent Key-Value Storage
 
 App state persistence with SQLite-backed storage.
 
@@ -68,7 +69,7 @@ App state persistence with SQLite-backed storage.
 
 ---
 
-### host:shell - Shell & OS Integration
+### runtime:shell - Shell & OS Integration
 
 Common desktop app integrations for opening files, URLs, and system interactions.
 
@@ -87,7 +88,7 @@ Common desktop app integrations for opening files, URLs, and system interactions
 
 ---
 
-### host:app - Application Lifecycle
+### runtime:app - Application Lifecycle
 
 Core application management and lifecycle control.
 
@@ -118,7 +119,7 @@ Core application management and lifecycle control.
 
 ## Phase 2: Medium Priority Modules
 
-### host:screen - Display Information
+### runtime:screen - Display Information
 
 Multi-monitor support and display information.
 
@@ -147,7 +148,7 @@ interface Display {
 
 ---
 
-### host:globalShortcut - Global Keyboard Shortcuts
+### runtime:globalShortcut - Global Keyboard Shortcuts
 
 System-wide keyboard shortcut registration.
 
@@ -166,7 +167,7 @@ System-wide keyboard shortcut registration.
 
 ---
 
-### host:autoUpdater - Application Updates
+### runtime:autoUpdater - Application Updates
 
 Automatic application update system.
 
@@ -200,7 +201,7 @@ type UpdateEvent =
 
 ---
 
-### host:theme - Native Theme Detection
+### runtime:theme - Native Theme Detection
 
 System theme detection and preference management.
 
@@ -217,7 +218,7 @@ System theme detection and preference management.
 
 ---
 
-### host:database - Embedded SQLite Database
+### runtime:database - Embedded SQLite Database
 
 Full SQLite database support for complex data storage.
 
@@ -241,7 +242,7 @@ Full SQLite database support for complex data storage.
 
 ## Phase 3: Low Priority Modules
 
-### host:dock - macOS Dock Integration
+### runtime:dock - macOS Dock Integration
 
 macOS-specific dock customization.
 
@@ -262,7 +263,7 @@ macOS-specific dock customization.
 
 ---
 
-### host:taskbar - Windows Taskbar Integration
+### runtime:taskbar - Windows Taskbar Integration
 
 Windows-specific taskbar customization.
 
@@ -279,7 +280,7 @@ Windows-specific taskbar customization.
 
 ---
 
-### host:protocol - Custom Protocol Handlers
+### runtime:protocol - Custom Protocol Handlers
 
 Deep linking and custom URL scheme support.
 
@@ -297,7 +298,7 @@ Deep linking and custom URL scheme support.
 
 ---
 
-### host:session - WebView Session Management
+### runtime:session - WebView Session Management
 
 WebView session and cookie management.
 
@@ -316,7 +317,7 @@ WebView session and cookie management.
 
 ---
 
-### host:download - Download Manager
+### runtime:download - Download Manager
 
 File download tracking and management.
 
@@ -333,7 +334,7 @@ File download tracking and management.
 
 ---
 
-### host:log - Structured Logging
+### runtime:log - Structured Logging
 
 Production-ready logging with file rotation.
 
@@ -393,7 +394,7 @@ Consistent error codes across all modules.
 OS-level URL scheme handling.
 
 **Components:**
-- Integrate with `host:protocol`
+- Integrate with `runtime:protocol`
 - Startup argument parsing for URLs
 - Event dispatch to running app
 

@@ -105,8 +105,10 @@ impl SymbolRegistry {
 #[macro_export]
 macro_rules! register_op {
     ($op:expr) => {
-        #[linkme::distributed_slice($crate::ir::WELD_OPS)]
-        static _WELD_OP: fn() -> $crate::ir::OpSymbol = || $op;
+        const _: () = {
+            #[::linkme::distributed_slice(::forge_weld::ir::WELD_OPS)]
+            static REGISTER: fn() -> $crate::ir::OpSymbol = || $op;
+        };
     };
 }
 
@@ -114,8 +116,10 @@ macro_rules! register_op {
 #[macro_export]
 macro_rules! register_struct {
     ($s:expr) => {
-        #[linkme::distributed_slice($crate::ir::WELD_STRUCTS)]
-        static _WELD_STRUCT: fn() -> $crate::ir::WeldStruct = || $s;
+        const _: () = {
+            #[::linkme::distributed_slice(::forge_weld::ir::WELD_STRUCTS)]
+            static REGISTER: fn() -> $crate::ir::WeldStruct = || $s;
+        };
     };
 }
 
@@ -123,8 +127,10 @@ macro_rules! register_struct {
 #[macro_export]
 macro_rules! register_enum {
     ($e:expr) => {
-        #[linkme::distributed_slice($crate::ir::WELD_ENUMS)]
-        static _WELD_ENUM: fn() -> $crate::ir::WeldEnum = || $e;
+        const _: () = {
+            #[::linkme::distributed_slice(::forge_weld::ir::WELD_ENUMS)]
+            static REGISTER: fn() -> $crate::ir::WeldEnum = || $e;
+        };
     };
 }
 

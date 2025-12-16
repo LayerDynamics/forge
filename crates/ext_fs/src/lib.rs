@@ -1,9 +1,10 @@
-//! host:fs extension - Filesystem operations for Forge apps
+//! runtime:fs extension - Filesystem operations for Forge apps
 //!
 //! Provides file read/write, directory operations, and file watching
 //! with capability-based security.
 
 use deno_core::{op2, Extension, OpState};
+use forge_weld_macro::{weld_op, weld_struct};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -36,6 +37,10 @@ pub enum FsErrorCode {
     Watch = 3006,
     /// Invalid watch ID
     InvalidWatchId = 3007,
+    /// Symlink error
+    Symlink = 3008,
+    /// Temp file/dir error
+    TempError = 3009,
 }
 
 /// Custom error type for FS operations
@@ -72,6 +77,14 @@ pub enum FsError {
     #[error("[{code}] Invalid watch ID: {message}")]
     #[class(generic)]
     InvalidWatchId { code: u32, message: String },
+
+    #[error("[{code}] Symlink error: {message}")]
+    #[class(generic)]
+    Symlink { code: u32, message: String },
+
+    #[error("[{code}] Temp error: {message}")]
+    #[class(generic)]
+    TempError { code: u32, message: String },
 }
 
 impl FsError {
@@ -130,6 +143,20 @@ impl FsError {
             message: message.into(),
         }
     }
+
+    pub fn symlink(message: impl Into<String>) -> Self {
+        Self::Symlink {
+            code: FsErrorCode::Symlink as u32,
+            message: message.into(),
+        }
+    }
+
+    pub fn temp_error(message: impl Into<String>) -> Self {
+        Self::TempError {
+            code: FsErrorCode::TempError as u32,
+            message: message.into(),
+        }
+    }
 }
 
 impl From<std::io::Error> for FsError {
@@ -149,6 +176,7 @@ impl From<std::io::Error> for FsError {
 // ============================================================================
 
 /// File event from watch
+#[weld_struct]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileEvent {
     pub kind: String,
@@ -177,6 +205,7 @@ impl Default for FsWatchState {
 }
 
 /// File stat information
+#[weld_struct]
 #[derive(Debug, Serialize)]
 pub struct FileStat {
     pub is_file: bool,
@@ -186,6 +215,7 @@ pub struct FileStat {
 }
 
 /// Directory entry
+#[weld_struct]
 #[derive(Debug, Serialize)]
 pub struct DirEntry {
     pub name: String,
@@ -203,6 +233,38 @@ pub struct MkdirOpts {
 #[derive(Debug, Deserialize)]
 pub struct RemoveOpts {
     pub recursive: Option<bool>,
+}
+
+/// Extended file metadata with timestamps and permissions
+#[weld_struct]
+#[derive(Debug, Serialize)]
+pub struct FileMetadata {
+    pub is_file: bool,
+    pub is_dir: bool,
+    pub is_symlink: bool,
+    pub size: u64,
+    pub readonly: bool,
+    pub created_at: Option<u64>,
+    pub modified_at: Option<u64>,
+    pub accessed_at: Option<u64>,
+    #[cfg(unix)]
+    pub permissions: Option<u32>,
+    #[cfg(not(unix))]
+    pub permissions: Option<u32>,
+}
+
+/// Information about a temporary file
+#[weld_struct]
+#[derive(Debug, Serialize)]
+pub struct TempFileInfo {
+    pub path: String,
+}
+
+/// Information about a temporary directory
+#[weld_struct]
+#[derive(Debug, Serialize)]
+pub struct TempDirInfo {
+    pub path: String,
 }
 
 // ============================================================================
@@ -272,6 +334,7 @@ fn check_fs_write(state: &OpState, path: &str) -> Result<(), FsError> {
 // Operations
 // ============================================================================
 
+#[weld_op(async)]
 #[op2(async)]
 #[string]
 async fn op_fs_read_text(
@@ -290,6 +353,7 @@ async fn op_fs_read_text(
     Ok(text)
 }
 
+#[weld_op(async)]
 #[op2(async)]
 async fn op_fs_write_text(
     state: Rc<RefCell<OpState>>,
@@ -307,6 +371,7 @@ async fn op_fs_write_text(
     Ok(())
 }
 
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_fs_read_bytes(
@@ -325,6 +390,7 @@ async fn op_fs_read_bytes(
     Ok(bytes)
 }
 
+#[weld_op(async)]
 #[op2(async)]
 async fn op_fs_write_bytes(
     state: Rc<RefCell<OpState>>,
@@ -342,6 +408,7 @@ async fn op_fs_write_bytes(
     Ok(())
 }
 
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_fs_stat(
@@ -364,6 +431,7 @@ async fn op_fs_stat(
     })
 }
 
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_fs_read_dir(
@@ -391,6 +459,7 @@ async fn op_fs_read_dir(
     Ok(entries)
 }
 
+#[weld_op(async)]
 #[op2(async)]
 async fn op_fs_mkdir(
     state: Rc<RefCell<OpState>>,
@@ -412,6 +481,7 @@ async fn op_fs_mkdir(
     Ok(())
 }
 
+#[weld_op(async)]
 #[op2(async)]
 async fn op_fs_remove(
     state: Rc<RefCell<OpState>>,
@@ -438,6 +508,7 @@ async fn op_fs_remove(
     Ok(())
 }
 
+#[weld_op(async)]
 #[op2(async)]
 async fn op_fs_rename(
     state: Rc<RefCell<OpState>>,
@@ -456,6 +527,7 @@ async fn op_fs_rename(
     Ok(())
 }
 
+#[weld_op(async)]
 #[op2(async)]
 async fn op_fs_copy(
     state: Rc<RefCell<OpState>>,
@@ -474,6 +546,7 @@ async fn op_fs_copy(
     Ok(())
 }
 
+#[weld_op(async)]
 #[op2(async)]
 async fn op_fs_exists(
     state: Rc<RefCell<OpState>>,
@@ -490,6 +563,7 @@ async fn op_fs_exists(
 }
 
 // File watching operations using notify crate
+#[weld_op(async)]
 #[op2(async)]
 #[string]
 async fn op_fs_watch(
@@ -569,6 +643,7 @@ async fn op_fs_watch(
     Ok(watch_id)
 }
 
+#[weld_op(async)]
 #[op2(async)]
 #[serde]
 async fn op_fs_watch_next(
@@ -603,6 +678,7 @@ async fn op_fs_watch_next(
     }
 }
 
+#[weld_op(async)]
 #[op2(async)]
 async fn op_fs_watch_close(
     state: Rc<RefCell<OpState>>,
@@ -619,6 +695,271 @@ async fn op_fs_watch_close(
         }
     }
     Ok(())
+}
+
+// ============================================================================
+// Enhanced Operations (symlink, append, metadata, temp)
+// ============================================================================
+
+/// Create a symbolic link
+#[weld_op(async)]
+#[op2(async)]
+async fn op_fs_symlink(
+    state: Rc<RefCell<OpState>>,
+    #[string] target: String,
+    #[string] path: String,
+) -> Result<(), FsError> {
+    // Check capabilities
+    {
+        let s = state.borrow();
+        check_fs_read(&s, &target)?;
+        check_fs_write(&s, &path)?;
+    }
+
+    debug!(target = %target, path = %path, "fs.symlink");
+
+    #[cfg(unix)]
+    {
+        tokio::fs::symlink(&target, &path).await?;
+    }
+
+    #[cfg(windows)]
+    {
+        let target_path = std::path::Path::new(&target);
+        if target_path.is_dir() {
+            tokio::fs::symlink_dir(&target, &path).await?;
+        } else {
+            tokio::fs::symlink_file(&target, &path).await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Read the target of a symbolic link
+#[weld_op(async)]
+#[op2(async)]
+#[string]
+async fn op_fs_read_link(
+    state: Rc<RefCell<OpState>>,
+    #[string] path: String,
+) -> Result<String, FsError> {
+    // Check capabilities
+    {
+        let s = state.borrow();
+        check_fs_read(&s, &path)?;
+    }
+
+    debug!(path = %path, "fs.read_link");
+    let target = tokio::fs::read_link(&path).await?;
+    Ok(target.to_string_lossy().to_string())
+}
+
+/// Append text to a file
+#[weld_op(async)]
+#[op2(async)]
+async fn op_fs_append_text(
+    state: Rc<RefCell<OpState>>,
+    #[string] path: String,
+    #[string] content: String,
+) -> Result<(), FsError> {
+    // Check capabilities
+    {
+        let s = state.borrow();
+        check_fs_write(&s, &path)?;
+    }
+
+    debug!(path = %path, len = content.len(), "fs.append_text");
+
+    use tokio::io::AsyncWriteExt;
+    let mut file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .await?;
+    file.write_all(content.as_bytes()).await?;
+    file.flush().await?;
+
+    Ok(())
+}
+
+/// Append bytes to a file
+#[weld_op(async)]
+#[op2(async)]
+async fn op_fs_append_bytes(
+    state: Rc<RefCell<OpState>>,
+    #[string] path: String,
+    #[serde] content: Vec<u8>,
+) -> Result<(), FsError> {
+    // Check capabilities
+    {
+        let s = state.borrow();
+        check_fs_write(&s, &path)?;
+    }
+
+    debug!(path = %path, len = content.len(), "fs.append_bytes");
+
+    use tokio::io::AsyncWriteExt;
+    let mut file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .await?;
+    file.write_all(&content).await?;
+    file.flush().await?;
+
+    Ok(())
+}
+
+/// Get extended file metadata including timestamps
+#[weld_op(async)]
+#[op2(async)]
+#[serde]
+async fn op_fs_metadata(
+    state: Rc<RefCell<OpState>>,
+    #[string] path: String,
+) -> Result<FileMetadata, FsError> {
+    // Check capabilities
+    {
+        let s = state.borrow();
+        check_fs_read(&s, &path)?;
+    }
+
+    debug!(path = %path, "fs.metadata");
+
+    let metadata = tokio::fs::symlink_metadata(&path).await?;
+
+    let created_at = metadata
+        .created()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs());
+
+    let modified_at = metadata
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs());
+
+    let accessed_at = metadata
+        .accessed()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs());
+
+    #[cfg(unix)]
+    let permissions = {
+        use std::os::unix::fs::PermissionsExt;
+        Some(metadata.permissions().mode())
+    };
+
+    #[cfg(not(unix))]
+    let permissions = None;
+
+    Ok(FileMetadata {
+        is_file: metadata.is_file(),
+        is_dir: metadata.is_dir(),
+        is_symlink: metadata.is_symlink(),
+        size: metadata.len(),
+        readonly: metadata.permissions().readonly(),
+        created_at,
+        modified_at,
+        accessed_at,
+        permissions,
+    })
+}
+
+/// Resolve a path to its canonical, absolute form (resolving symlinks)
+#[weld_op(async)]
+#[op2(async)]
+#[string]
+async fn op_fs_real_path(
+    state: Rc<RefCell<OpState>>,
+    #[string] path: String,
+) -> Result<String, FsError> {
+    // Check capabilities
+    {
+        let s = state.borrow();
+        check_fs_read(&s, &path)?;
+    }
+
+    debug!(path = %path, "fs.real_path");
+    let canonical = tokio::fs::canonicalize(&path).await?;
+    Ok(canonical.to_string_lossy().to_string())
+}
+
+/// Create a temporary file and return its path
+#[weld_op(async)]
+#[op2(async)]
+#[serde]
+async fn op_fs_temp_file(
+    state: Rc<RefCell<OpState>>,
+    #[string] prefix: Option<String>,
+    #[string] suffix: Option<String>,
+) -> Result<TempFileInfo, FsError> {
+    // Check write capability for temp directory
+    {
+        let s = state.borrow();
+        let temp_dir = std::env::temp_dir();
+        check_fs_write(&s, temp_dir.to_string_lossy().as_ref())?;
+    }
+
+    debug!(prefix = ?prefix, suffix = ?suffix, "fs.temp_file");
+
+    let mut builder = tempfile::Builder::new();
+    if let Some(p) = &prefix {
+        builder.prefix(p);
+    }
+    if let Some(s) = &suffix {
+        builder.suffix(s);
+    }
+
+    // Create a named temp file that persists (won't be deleted when handle is dropped)
+    let temp_file = builder
+        .tempfile()
+        .map_err(|e| FsError::temp_error(e.to_string()))?;
+
+    // Keep the file by converting to a path (don't auto-delete)
+    let (_, path_buf) = temp_file.keep().map_err(|e| FsError::temp_error(e.to_string()))?;
+
+    Ok(TempFileInfo {
+        path: path_buf.to_string_lossy().to_string(),
+    })
+}
+
+/// Create a temporary directory and return its path
+#[weld_op(async)]
+#[op2(async)]
+#[serde]
+async fn op_fs_temp_dir(
+    state: Rc<RefCell<OpState>>,
+    #[string] prefix: Option<String>,
+) -> Result<TempDirInfo, FsError> {
+    // Check write capability for temp directory
+    {
+        let s = state.borrow();
+        let temp_dir = std::env::temp_dir();
+        check_fs_write(&s, temp_dir.to_string_lossy().as_ref())?;
+    }
+
+    debug!(prefix = ?prefix, "fs.temp_dir");
+
+    let mut builder = tempfile::Builder::new();
+    if let Some(p) = &prefix {
+        builder.prefix(p);
+    }
+
+    // Create a temp directory that persists
+    let temp_dir = builder
+        .tempdir()
+        .map_err(|e| FsError::temp_error(e.to_string()))?;
+
+    // Persist the directory by consuming TempDir (prevents auto-delete)
+    let path = temp_dir.keep();
+
+    Ok(TempDirInfo {
+        path: path.to_string_lossy().to_string(),
+    })
 }
 
 // ============================================================================
@@ -641,7 +982,7 @@ pub fn init_fs_state(op_state: &mut OpState, capabilities: Option<Arc<dyn FsCapa
 include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 pub fn fs_extension() -> Extension {
-    host_fs::ext()
+    runtime_fs::ext()
 }
 
 // ============================================================================

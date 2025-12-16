@@ -44,7 +44,7 @@ jobs:
 
       - name: Build forge CLI and runtime
         run: |
-          cargo build -p forge --release
+          cargo build -p forge_cli --release
           cargo build -p forge-host --release
 
       - name: Package forge binaries
@@ -55,10 +55,10 @@ jobs:
           cd forge-dist && tar -czvf ../forge-x86_64-pc-windows-msvc.tar.gz *
 
       - name: Build example app
-        run: cargo run -p forge -- build examples/example-deno-app
+        run: cargo run -p forge_cli -- build examples/example-deno-app
 
       - name: Bundle example app (MSIX)
-        run: cargo run -p forge -- bundle examples/example-deno-app
+        run: cargo run -p forge_cli -- bundle examples/example-deno-app
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -95,7 +95,7 @@ jobs:
 
       - name: Build forge CLI and runtime
         run: |
-          cargo build -p forge --release
+          cargo build -p forge_cli --release
           cargo build -p forge-host --release
 
       - name: Package forge binaries
@@ -106,10 +106,10 @@ jobs:
           cd forge-dist && tar -czvf ../forge-aarch64-apple-darwin.tar.gz *
 
       - name: Build example app
-        run: cargo run -p forge -- build examples/example-deno-app
+        run: cargo run -p forge_cli -- build examples/example-deno-app
 
       - name: Bundle example app (DMG)
-        run: cargo run -p forge -- bundle examples/example-deno-app
+        run: cargo run -p forge_cli -- bundle examples/example-deno-app
 
       - name: Upload macOS ARM artifacts
         uses: actions/upload-artifact@v4
@@ -162,7 +162,7 @@ jobs:
 
       - name: Build forge CLI and runtime
         run: |
-          cargo build -p forge --release
+          cargo build -p forge_cli --release
           cargo build -p forge-host --release
 
       - name: Package forge binaries
@@ -173,10 +173,10 @@ jobs:
           cd forge-dist && tar -czvf ../forge-x86_64-unknown-linux-gnu.tar.gz *
 
       - name: Build example app
-        run: cargo run -p forge -- build examples/example-deno-app
+        run: cargo run -p forge_cli -- build examples/example-deno-app
 
       - name: Bundle example app (AppImage)
-        run: cargo run -p forge -- bundle examples/example-deno-app
+        run: cargo run -p forge_cli -- bundle examples/example-deno-app
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
