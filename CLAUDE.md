@@ -42,13 +42,29 @@ cargo build -p forge-runtime
 cargo run -p forge_cli -- dev examples/example-deno-app
 
 # Run tests
-cargo test
+cargo test --workspace
 
 # Run tests for a specific crate
 cargo test -p ext_fs
 
+# Check code compiles without building
+cargo check --workspace
+
+# Format code
+cargo fmt --all
+
+# Lint with clippy (CI enforces -D warnings)
+cargo clippy --workspace -- -D warnings
+
 # Build everything in release mode
 cargo build --workspace --release
+```
+
+### Linux System Dependencies
+
+On Linux, install these before building:
+```bash
+sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
 ```
 
 ## Architecture
@@ -59,42 +75,26 @@ cargo build --workspace --release
 |-------|---------|
 | `forge-runtime` | Main runtime binary. Embeds Deno JsRuntime, creates windows via tao/wry, handles IPC, event loop |
 | `forge_cli` | CLI tool (`forge dev/build/bundle/sign/icon`). Contains bundler for all platforms |
-| `forge-weld` | Macro system for generating TypeScript bindings from Rust ops |
+| `forge-weld` | Code generation framework for TypeScript bindings from Rust ops |
 | `forge-weld-macro` | Proc macros (`#[weld_op]`, `#[weld_struct]`, `#[weld_enum]`) |
 
 ### Extension Crates (runtime:* modules)
 
-Each `ext_*` crate provides a `runtime:*` module accessible from TypeScript:
+Each `ext_*` crate provides a `runtime:*` module accessible from TypeScript. There are 27 extension crates total, including:
 
-| Extension | Module | Purpose |
-|-----------|--------|---------|
-| `ext_fs` | `runtime:fs` | File operations (read, write, watch, stat) |
-| `ext_window` | `runtime:window` | Window management, menus, trays, dialogs |
-| `ext_ipc` | `runtime:ipc` | Deno ↔ Renderer communication |
-| `ext_net` | `runtime:net` | HTTP fetch, network operations |
-| `ext_sys` | `runtime:sys` | System info, clipboard, notifications |
-| `ext_process` | `runtime:process` | Spawn child processes |
-| `ext_wasm` | `runtime:wasm` | WebAssembly module loading |
-| `ext_app` | `runtime:app` | App lifecycle, info |
-| `ext_crypto` | `runtime:crypto` | Cryptographic operations |
-| `ext_storage` | `runtime:storage` | Persistent key-value storage |
-| `ext_shell` | `runtime:shell` | Shell command execution |
-| `ext_database` | `runtime:database` | Database operations |
-| `ext_webview` | `runtime:webview` | WebView manipulation |
-| `ext_devtools` | `runtime:devtools` | Developer tools |
-| `ext_timers` | `runtime:timers` | setTimeout/setInterval |
-| `ext_shortcuts` | `runtime:shortcuts` | Global keyboard shortcuts |
-| `ext_signals` | `runtime:signals` | OS signal handling |
-| `ext_updater` | `runtime:updater` | Auto-update functionality |
-| `ext_monitor` | `runtime:monitor` | Display/monitor info |
-| `ext_display` | `runtime:display` | Display management |
-| `ext_log` | `runtime:log` | Logging infrastructure |
-| `ext_trace` | `runtime:trace` | Tracing/telemetry |
-| `ext_lock` | `runtime:lock` | File/resource locking |
-| `ext_path` | `runtime:path` | Path manipulation |
-| `ext_protocol` | `runtime:protocol` | Custom protocol handlers |
-| `ext_os_compat` | `runtime:os_compat` | OS compatibility layer |
-| `ext_debugger` | `runtime:debugger` | Debugging support |
+**Core Extensions (fully implemented):**
+- `ext_fs` → `runtime:fs` - File operations (read, write, watch, stat)
+- `ext_window` → `runtime:window` - Window management, menus, trays, dialogs
+- `ext_ipc` → `runtime:ipc` - Deno ↔ Renderer communication
+- `ext_net` → `runtime:net` - HTTP fetch, network operations
+- `ext_sys` → `runtime:sys` - System info, clipboard, notifications
+- `ext_process` → `runtime:process` - Spawn child processes
+- `ext_wasm` → `runtime:wasm` - WebAssembly module loading
+- `ext_app` → `runtime:app` - App lifecycle, info
+- `ext_crypto` → `runtime:crypto` - Cryptographic operations
+- `ext_storage` → `runtime:storage` - Persistent key-value storage
+
+**Additional Extensions:** `ext_shell`, `ext_database`, `ext_webview`, `ext_devtools`, `ext_timers`, `ext_shortcuts`, `ext_signals`, `ext_updater`, `ext_monitor`, `ext_display`, `ext_log`, `ext_trace`, `ext_lock`, `ext_path`, `ext_protocol`, `ext_os_compat`, `ext_debugger`
 
 ### Runtime Flow
 
