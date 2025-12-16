@@ -27,9 +27,9 @@ The `forge-runtime` crate is the main runtime executable that runs Forge applica
 │  │  Deno JsRuntime │◄────►│       Event Loop (tao)      │   │
 │  │   (app logic)   │      │   (windows, menus, tray)    │   │
 │  └────────┬────────┘      └──────────────┬──────────────┘   │
-│           │                               │                  │
-│           │ runtime:* ops                    │ WebView IPC      │
-│           ▼                               ▼                  │
+│           │                              │                  │
+│           │ runtime:* ops                │ WebView IPC      │
+│           ▼                              ▼                  │
 │  ┌─────────────────┐      ┌─────────────────────────────┐   │
 │  │   Extensions    │      │     WebView (wry)           │   │
 │  │ fs,net,ui,ipc.. │      │  (renders app:// content)   │   │

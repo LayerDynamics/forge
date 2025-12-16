@@ -666,7 +666,10 @@ fn op_sys_locale() -> LocaleInfo {
     let locale = sys_locale::get_locale().unwrap_or_else(|| "en-US".to_string());
 
     let parts: Vec<&str> = locale.split('-').collect();
-    let language = parts.first().map(|s| s.to_string()).unwrap_or_else(|| "en".to_string());
+    let language = parts
+        .first()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "en".to_string());
     let country = parts.get(1).map(|s| s.to_string());
 
     LocaleInfo {

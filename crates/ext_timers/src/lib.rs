@@ -78,12 +78,14 @@ pub struct TimerOptions {
 #[weld_op]
 #[op2]
 #[serde]
-pub fn op_host_timer_create(
-    state: &mut OpState,
-    #[serde] options: TimerOptions,
-) -> TimerResult {
+pub fn op_host_timer_create(state: &mut OpState, #[serde] options: TimerOptions) -> TimerResult {
     let timer_id = TIMER_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
-    debug!(timer_id = timer_id, delay_ms = options.delay_ms, repeat = options.repeat, "timer.create");
+    debug!(
+        timer_id = timer_id,
+        delay_ms = options.delay_ms,
+        repeat = options.repeat,
+        "timer.create"
+    );
 
     // Create a channel to cancel the timer
     let (cancel_tx, _cancel_rx) = mpsc::channel::<()>(1);

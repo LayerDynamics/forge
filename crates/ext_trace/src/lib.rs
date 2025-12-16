@@ -99,7 +99,10 @@ fn op_trace_end(
     #[serde] result: Option<Value>,
 ) -> Result<SpanRecord, TraceError> {
     let trace_state = state.borrow_mut::<TraceState>();
-    let span = trace_state.active.remove(&id).ok_or(TraceError::SpanNotFound)?;
+    let span = trace_state
+        .active
+        .remove(&id)
+        .ok_or(TraceError::SpanNotFound)?;
     let duration = span.started.elapsed_or_zero();
 
     let record = SpanRecord {

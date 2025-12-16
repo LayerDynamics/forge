@@ -8,9 +8,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use thiserror::Error;
 use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 use tokio::time::{timeout, Duration};
-use thiserror::Error;
 
 #[derive(Debug, Error, JsError)]
 pub enum LockError {

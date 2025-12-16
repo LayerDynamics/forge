@@ -214,7 +214,9 @@ impl Default for StorageCapabilities {
 // ============================================================================
 
 /// Get or create the storage database connection
-async fn get_connection(state: &Rc<RefCell<OpState>>) -> Result<Arc<Mutex<Connection>>, StorageError> {
+async fn get_connection(
+    state: &Rc<RefCell<OpState>>,
+) -> Result<Arc<Mutex<Connection>>, StorageError> {
     // Check if already connected
     {
         let s = state.borrow();
@@ -258,10 +260,7 @@ async fn get_connection(state: &Rc<RefCell<OpState>>) -> Result<Arc<Mutex<Connec
         )?;
 
         // Create index for faster lookups
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_kv_key ON kv_store(key)",
-            [],
-        )?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_kv_key ON kv_store(key)", [])?;
 
         Ok(conn)
     })
@@ -299,11 +298,10 @@ async fn op_storage_get(
     let conn = get_connection(&state).await?;
     let conn = conn.lock().await;
 
-    let result: Result<String, rusqlite::Error> = conn.query_row(
-        "SELECT value FROM kv_store WHERE key = ?",
-        [&key],
-        |row| row.get(0),
-    );
+    let result: Result<String, rusqlite::Error> =
+        conn.query_row("SELECT value FROM kv_store WHERE key = ?", [&key], |row| {
+            row.get(0)
+        });
 
     match result {
         Ok(value_str) => {
@@ -385,9 +383,7 @@ async fn op_storage_has(
 #[weld_op(async)]
 #[op2(async)]
 #[serde]
-async fn op_storage_keys(
-    state: Rc<RefCell<OpState>>,
-) -> Result<Vec<String>, StorageError> {
+async fn op_storage_keys(state: Rc<RefCell<OpState>>) -> Result<Vec<String>, StorageError> {
     debug!("storage.keys");
 
     let conn = get_connection(&state).await?;
@@ -405,9 +401,7 @@ async fn op_storage_keys(
 /// Clear all data
 #[weld_op(async)]
 #[op2(async)]
-async fn op_storage_clear(
-    state: Rc<RefCell<OpState>>,
-) -> Result<(), StorageError> {
+async fn op_storage_clear(state: Rc<RefCell<OpState>>) -> Result<(), StorageError> {
     debug!("storage.clear");
 
     let conn = get_connection(&state).await?;
@@ -422,9 +416,7 @@ async fn op_storage_clear(
 #[weld_op(async)]
 #[op2(async)]
 #[bigint]
-async fn op_storage_size(
-    state: Rc<RefCell<OpState>>,
-) -> Result<u64, StorageError> {
+async fn op_storage_size(state: Rc<RefCell<OpState>>) -> Result<u64, StorageError> {
     debug!("storage.size");
 
     let conn = get_connection(&state).await?;
@@ -464,7 +456,8 @@ async fn op_storage_get_many(
     );
 
     let mut stmt = conn.prepare(&sql)?;
-    let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+    let params: Vec<&dyn rusqlite::ToSql> =
+        keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
 
     let mut result = HashMap::new();
     let rows = stmt.query_map(params.as_slice(), |row| {
@@ -542,7 +535,8 @@ async fn op_storage_delete_many(
         placeholders.join(",")
     );
 
-    let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+    let params: Vec<&dyn rusqlite::ToSql> =
+        keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
     let rows_deleted = conn.execute(&sql, params.as_slice())?;
 
     Ok(rows_deleted as u32)

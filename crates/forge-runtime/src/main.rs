@@ -684,7 +684,10 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         move || {
             while let Some(cmd) = window_cmd_rx.blocking_recv() {
                 println!("forge_runtime: forwarding WindowCmd {:?}", cmd);
-                tracing::debug!("forge_runtime: forwarding WindowCmd to event loop: {:?}", cmd);
+                tracing::debug!(
+                    "forge_runtime: forwarding WindowCmd to event loop: {:?}",
+                    cmd
+                );
                 if let Err(e) = proxy.send_event(UserEvent::WindowCmd(cmd)) {
                     tracing::error!("Failed to send WindowCmd event: {:?}", e);
                 }

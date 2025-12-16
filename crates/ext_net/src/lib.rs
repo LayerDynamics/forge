@@ -345,9 +345,8 @@ impl Default for NetHttpClient {
 }
 
 /// Type alias for WebSocket stream
-type WsStream = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+type WsStream =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 /// WebSocket connection entry
 pub struct WebSocketEntry {

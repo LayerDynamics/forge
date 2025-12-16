@@ -920,7 +920,9 @@ async fn op_fs_temp_file(
         .map_err(|e| FsError::temp_error(e.to_string()))?;
 
     // Keep the file by converting to a path (don't auto-delete)
-    let (_, path_buf) = temp_file.keep().map_err(|e| FsError::temp_error(e.to_string()))?;
+    let (_, path_buf) = temp_file
+        .keep()
+        .map_err(|e| FsError::temp_error(e.to_string()))?;
 
     Ok(TempFileInfo {
         path: path_buf.to_string_lossy().to_string(),

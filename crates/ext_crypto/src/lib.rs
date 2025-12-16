@@ -327,7 +327,11 @@ fn encrypt_impl(
 }
 
 /// Decrypt data using AES-256-GCM (internal implementation)
-fn decrypt_impl(algorithm: &str, key: &[u8], encrypted: &EncryptedData) -> Result<Vec<u8>, CryptoError> {
+fn decrypt_impl(
+    algorithm: &str,
+    key: &[u8],
+    encrypted: &EncryptedData,
+) -> Result<Vec<u8>, CryptoError> {
     // Validate algorithm
     if !matches!(
         algorithm.to_lowercase().as_str(),
@@ -423,7 +427,12 @@ fn derive_key_impl(
 }
 
 /// Verify an HMAC signature (internal implementation)
-fn verify_impl(algorithm: &str, key: &[u8], data: &[u8], signature: &[u8]) -> Result<bool, CryptoError> {
+fn verify_impl(
+    algorithm: &str,
+    key: &[u8],
+    data: &[u8],
+    signature: &[u8],
+) -> Result<bool, CryptoError> {
     let algo = get_hmac_algorithm(algorithm)?;
     let key = hmac::Key::new(algo, key);
 
@@ -542,7 +551,11 @@ fn op_crypto_derive_key(
     #[smi] iterations: u32,
     #[smi] key_length: u32,
 ) -> Result<Vec<u8>, CryptoError> {
-    debug!(iterations = iterations, key_length = key_length, "crypto.derive_key");
+    debug!(
+        iterations = iterations,
+        key_length = key_length,
+        "crypto.derive_key"
+    );
     derive_key_impl(&password, &salt, iterations, key_length)
 }
 

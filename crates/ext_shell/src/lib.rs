@@ -58,43 +58,73 @@ impl std::fmt::Display for ShellErrorCode {
 pub enum ShellError {
     #[error("[{code}] Failed to open external URL: {message}")]
     #[class(generic)]
-    OpenExternalFailed { code: ShellErrorCode, message: String },
+    OpenExternalFailed {
+        code: ShellErrorCode,
+        message: String,
+    },
 
     #[error("[{code}] Failed to open path: {message}")]
     #[class(generic)]
-    OpenPathFailed { code: ShellErrorCode, message: String },
+    OpenPathFailed {
+        code: ShellErrorCode,
+        message: String,
+    },
 
     #[error("[{code}] Failed to show item in folder: {message}")]
     #[class(generic)]
-    ShowItemFailed { code: ShellErrorCode, message: String },
+    ShowItemFailed {
+        code: ShellErrorCode,
+        message: String,
+    },
 
     #[error("[{code}] Failed to move to trash: {message}")]
     #[class(generic)]
-    TrashFailed { code: ShellErrorCode, message: String },
+    TrashFailed {
+        code: ShellErrorCode,
+        message: String,
+    },
 
     #[error("[{code}] Failed to play beep: {message}")]
     #[class(generic)]
-    BeepFailed { code: ShellErrorCode, message: String },
+    BeepFailed {
+        code: ShellErrorCode,
+        message: String,
+    },
 
     #[error("[{code}] Failed to get file icon: {message}")]
     #[class(generic)]
-    IconFailed { code: ShellErrorCode, message: String },
+    IconFailed {
+        code: ShellErrorCode,
+        message: String,
+    },
 
     #[error("[{code}] Failed to get default app: {message}")]
     #[class(generic)]
-    DefaultAppFailed { code: ShellErrorCode, message: String },
+    DefaultAppFailed {
+        code: ShellErrorCode,
+        message: String,
+    },
 
     #[error("[{code}] Invalid path: {message}")]
     #[class(generic)]
-    InvalidPath { code: ShellErrorCode, message: String },
+    InvalidPath {
+        code: ShellErrorCode,
+        message: String,
+    },
 
     #[error("[{code}] Permission denied: {message}")]
     #[class(generic)]
-    PermissionDenied { code: ShellErrorCode, message: String },
+    PermissionDenied {
+        code: ShellErrorCode,
+        message: String,
+    },
 
     #[error("[{code}] Operation not supported: {message}")]
     #[class(generic)]
-    NotSupported { code: ShellErrorCode, message: String },
+    NotSupported {
+        code: ShellErrorCode,
+        message: String,
+    },
 }
 
 impl ShellError {
@@ -237,10 +267,7 @@ pub struct DefaultAppInfo {
 // ============================================================================
 
 /// Initialize shell state in the OpState
-pub fn init_shell_state<C: ShellCapabilityChecker>(
-    state: &mut OpState,
-    checker: Option<C>,
-) {
+pub fn init_shell_state<C: ShellCapabilityChecker>(state: &mut OpState, checker: Option<C>) {
     let checker: Box<dyn ShellCapabilityChecker> = match checker {
         Some(c) => Box::new(c),
         None => Box::new(DefaultShellCapabilityChecker),
@@ -264,7 +291,9 @@ pub async fn op_shell_open_external(
         let state = state.borrow();
         let checker = state.borrow::<Box<dyn ShellCapabilityChecker>>();
         if !checker.can_open_external() {
-            return Err(ShellError::permission_denied("Opening external URLs is not allowed"));
+            return Err(ShellError::permission_denied(
+                "Opening external URLs is not allowed",
+            ));
         }
     }
 
@@ -298,7 +327,9 @@ pub async fn op_shell_open_path(
         let state = state.borrow();
         let checker = state.borrow::<Box<dyn ShellCapabilityChecker>>();
         if !checker.can_open_path() {
-            return Err(ShellError::permission_denied("Opening paths is not allowed"));
+            return Err(ShellError::permission_denied(
+                "Opening paths is not allowed",
+            ));
         }
     }
 
@@ -332,7 +363,9 @@ pub async fn op_shell_show_item_in_folder(
         let state = state.borrow();
         let checker = state.borrow::<Box<dyn ShellCapabilityChecker>>();
         if !checker.can_show_item() {
-            return Err(ShellError::permission_denied("Showing items in folder is not allowed"));
+            return Err(ShellError::permission_denied(
+                "Showing items in folder is not allowed",
+            ));
         }
     }
 
@@ -403,7 +436,9 @@ pub async fn op_shell_move_to_trash(
         let state = state.borrow();
         let checker = state.borrow::<Box<dyn ShellCapabilityChecker>>();
         if !checker.can_trash() {
-            return Err(ShellError::permission_denied("Moving to trash is not allowed"));
+            return Err(ShellError::permission_denied(
+                "Moving to trash is not allowed",
+            ));
         }
     }
 
@@ -481,7 +516,9 @@ pub async fn op_shell_get_file_icon(
         let state = state.borrow();
         let checker = state.borrow::<Box<dyn ShellCapabilityChecker>>();
         if !checker.can_get_icon() {
-            return Err(ShellError::permission_denied("Getting file icons is not allowed"));
+            return Err(ShellError::permission_denied(
+                "Getting file icons is not allowed",
+            ));
         }
     }
 
@@ -517,7 +554,9 @@ pub async fn op_shell_get_file_icon(
     }
 
     #[allow(unreachable_code)]
-    Err(ShellError::not_supported("File icon retrieval not implemented for this platform"))
+    Err(ShellError::not_supported(
+        "File icon retrieval not implemented for this platform",
+    ))
 }
 
 /// Get the default application for a file type
@@ -533,7 +572,9 @@ pub async fn op_shell_get_default_app(
         let state = state.borrow();
         let checker = state.borrow::<Box<dyn ShellCapabilityChecker>>();
         if !checker.can_open_path() {
-            return Err(ShellError::permission_denied("Querying default apps is not allowed"));
+            return Err(ShellError::permission_denied(
+                "Querying default apps is not allowed",
+            ));
         }
     }
 

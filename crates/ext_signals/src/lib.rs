@@ -95,14 +95,7 @@ fn op_signals_supported() -> Vec<String> {
     #[cfg(unix)]
     {
         vec![
-            "SIGINT",
-            "SIGTERM",
-            "SIGHUP",
-            "SIGQUIT",
-            "SIGUSR1",
-            "SIGUSR2",
-            "SIGALRM",
-            "SIGCHLD",
+            "SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT", "SIGUSR1", "SIGUSR2", "SIGALRM", "SIGCHLD",
             "SIGPIPE",
         ]
         .into_iter()
@@ -202,7 +195,9 @@ async fn op_signals_next(
         let Some(sub) = signals_state.subscriptions.get_mut(&id) else {
             return Err(SignalsError::SubscriptionNotFound);
         };
-        sub.receiver.take().ok_or(SignalsError::SubscriptionNotFound)?
+        sub.receiver
+            .take()
+            .ok_or(SignalsError::SubscriptionNotFound)?
     };
 
     let result = rx.recv().await;
@@ -222,11 +217,7 @@ async fn op_signals_next(
 #[weld_op]
 #[op2(fast)]
 fn op_signals_unsubscribe(state: &mut OpState, #[bigint] id: u64) -> bool {
-    let Some(sub) = state
-        .borrow_mut::<SignalsState>()
-        .subscriptions
-        .remove(&id)
-    else {
+    let Some(sub) = state.borrow_mut::<SignalsState>().subscriptions.remove(&id) else {
         return false;
     };
 

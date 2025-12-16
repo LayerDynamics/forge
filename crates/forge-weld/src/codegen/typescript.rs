@@ -156,7 +156,11 @@ impl<'a> TypeScriptGenerator<'a> {
                 variant_types.push(variant_type_name);
             }
 
-            output.push_str(&format!("export type {} = {};\n", e.ts_name, variant_types.join(" | ")));
+            output.push_str(&format!(
+                "export type {} = {};\n",
+                e.ts_name,
+                variant_types.join(" | ")
+            ));
         }
 
         output

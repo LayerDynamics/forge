@@ -454,9 +454,7 @@ pub fn init_app_state<C: AppCapabilityChecker>(
 /// Quit the application gracefully
 #[weld_op(async)]
 #[op2(async)]
-pub async fn op_app_quit(
-    state: std::rc::Rc<std::cell::RefCell<OpState>>,
-) -> Result<(), AppError> {
+pub async fn op_app_quit(state: std::rc::Rc<std::cell::RefCell<OpState>>) -> Result<(), AppError> {
     // Check capability
     {
         let state = state.borrow();
@@ -535,7 +533,9 @@ pub async fn op_app_relaunch(
 pub fn op_app_get_version(state: &mut OpState) -> Result<String, AppError> {
     let checker = state.borrow::<Box<dyn AppCapabilityChecker>>();
     if !checker.can_get_info() {
-        return Err(AppError::permission_denied("Getting app info is not allowed"));
+        return Err(AppError::permission_denied(
+            "Getting app info is not allowed",
+        ));
     }
     let _ = checker;
 
@@ -550,7 +550,9 @@ pub fn op_app_get_version(state: &mut OpState) -> Result<String, AppError> {
 pub fn op_app_get_name(state: &mut OpState) -> Result<String, AppError> {
     let checker = state.borrow::<Box<dyn AppCapabilityChecker>>();
     if !checker.can_get_info() {
-        return Err(AppError::permission_denied("Getting app info is not allowed"));
+        return Err(AppError::permission_denied(
+            "Getting app info is not allowed",
+        ));
     }
     let _ = checker;
 
@@ -565,7 +567,9 @@ pub fn op_app_get_name(state: &mut OpState) -> Result<String, AppError> {
 pub fn op_app_get_identifier(state: &mut OpState) -> Result<String, AppError> {
     let checker = state.borrow::<Box<dyn AppCapabilityChecker>>();
     if !checker.can_get_info() {
-        return Err(AppError::permission_denied("Getting app info is not allowed"));
+        return Err(AppError::permission_denied(
+            "Getting app info is not allowed",
+        ));
     }
     let _ = checker;
 
@@ -602,7 +606,10 @@ pub fn op_app_get_path(
         PathType::Videos => dirs::video_dir(),
         PathType::Temp => Some(std::env::temp_dir()),
         PathType::Exe => app_info.exe_path.as_ref().map(std::path::PathBuf::from),
-        PathType::Resources => app_info.resource_path.as_ref().map(std::path::PathBuf::from),
+        PathType::Resources => app_info
+            .resource_path
+            .as_ref()
+            .map(std::path::PathBuf::from),
         PathType::Logs => dirs::data_dir().map(|p| p.join(&app_info.identifier).join("logs")),
         PathType::Cache => dirs::cache_dir().map(|p| p.join(&app_info.identifier)),
     };
@@ -627,7 +634,10 @@ pub fn op_app_get_locale() -> Result<LocaleInfo, AppError> {
     let locale = sys_locale::get_locale().unwrap_or_else(|| "en-US".to_string());
 
     let parts: Vec<&str> = locale.split('-').collect();
-    let language = parts.first().map(|s| s.to_string()).unwrap_or_else(|| "en".to_string());
+    let language = parts
+        .first()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "en".to_string());
     let country = parts.get(1).map(|s| s.to_string());
 
     Ok(LocaleInfo {
@@ -648,7 +658,9 @@ pub async fn op_app_request_single_instance_lock(
         let state = state.borrow();
         let checker = state.borrow::<Box<dyn AppCapabilityChecker>>();
         if !checker.can_lock() {
-            return Err(AppError::permission_denied("Single instance locking is not allowed"));
+            return Err(AppError::permission_denied(
+                "Single instance locking is not allowed",
+            ));
         }
     }
 
@@ -736,9 +748,7 @@ pub async fn op_app_release_single_instance_lock(
 /// Bring the application to the foreground
 #[weld_op(async)]
 #[op2(async)]
-pub async fn op_app_focus(
-    state: std::rc::Rc<std::cell::RefCell<OpState>>,
-) -> Result<(), AppError> {
+pub async fn op_app_focus(state: std::rc::Rc<std::cell::RefCell<OpState>>) -> Result<(), AppError> {
     // Check capability
     {
         let state = state.borrow();
@@ -782,9 +792,7 @@ pub async fn op_app_focus(
 /// Hide all application windows
 #[weld_op(async)]
 #[op2(async)]
-pub async fn op_app_hide(
-    state: std::rc::Rc<std::cell::RefCell<OpState>>,
-) -> Result<(), AppError> {
+pub async fn op_app_hide(state: std::rc::Rc<std::cell::RefCell<OpState>>) -> Result<(), AppError> {
     // Check capability
     {
         let state = state.borrow();
@@ -815,9 +823,7 @@ pub async fn op_app_hide(
 /// Show all application windows
 #[weld_op(async)]
 #[op2(async)]
-pub async fn op_app_show(
-    state: std::rc::Rc<std::cell::RefCell<OpState>>,
-) -> Result<(), AppError> {
+pub async fn op_app_show(state: std::rc::Rc<std::cell::RefCell<OpState>>) -> Result<(), AppError> {
     // Check capability
     {
         let state = state.borrow();
@@ -948,8 +954,14 @@ mod tests {
     #[test]
     fn test_path_type_parsing() {
         assert_eq!("home".parse::<PathType>().unwrap(), PathType::Home);
-        assert_eq!("documents".parse::<PathType>().unwrap(), PathType::Documents);
-        assert_eq!("downloads".parse::<PathType>().unwrap(), PathType::Downloads);
+        assert_eq!(
+            "documents".parse::<PathType>().unwrap(),
+            PathType::Documents
+        );
+        assert_eq!(
+            "downloads".parse::<PathType>().unwrap(),
+            PathType::Downloads
+        );
         assert_eq!("temp".parse::<PathType>().unwrap(), PathType::Temp);
         assert_eq!("tmp".parse::<PathType>().unwrap(), PathType::Temp);
         assert_eq!("appData".parse::<PathType>().unwrap(), PathType::AppData);
