@@ -462,9 +462,11 @@ pub struct Breakpoint {
 /// Scope types
 #[weld_enum]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Default)]
 #[serde(rename_all = "camelCase")]
 pub enum ScopeType {
     Global,
+    #[default]
     Local,
     Closure,
     Catch,
@@ -473,12 +475,6 @@ pub enum ScopeType {
     Eval,
     Module,
     WasmExpressionStack,
-}
-
-impl Default for ScopeType {
-    fn default() -> Self {
-        ScopeType::Local
-    }
 }
 
 /// A scope in the call stack
@@ -618,7 +614,7 @@ pub struct PropertyDescriptor {
 
 /// Reasons for pause
 #[weld_enum]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum PauseReason {
     Breakpoint,
@@ -630,13 +626,8 @@ pub enum PauseReason {
     Instrumentation,
     OOM,
     PromiseRejection,
+    #[default]
     Other,
-}
-
-impl Default for PauseReason {
-    fn default() -> Self {
-        PauseReason::Other
-    }
 }
 
 /// Paused event data
@@ -727,21 +718,16 @@ pub struct ConnectionStatus {
 
 /// Exception pause state
 #[weld_enum]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ExceptionPauseState {
     /// Don't pause on exceptions
+    #[default]
     None,
     /// Pause on uncaught exceptions
     Uncaught,
     /// Pause on all exceptions
     All,
-}
-
-impl Default for ExceptionPauseState {
-    fn default() -> Self {
-        ExceptionPauseState::None
-    }
 }
 
 /// Exception details
@@ -1385,7 +1371,7 @@ pub async fn op_debugger_get_scope_chain(
     let frame = frames
         .iter()
         .find(|f| f.call_frame_id == call_frame_id)
-        .ok_or_else(|| DebuggerError::InvalidFrameId(call_frame_id))?;
+        .ok_or(DebuggerError::InvalidFrameId(call_frame_id))?;
 
     Ok(frame.scope_chain.clone())
 }
@@ -1481,7 +1467,7 @@ pub async fn op_debugger_get_script_source(
     let source = response
         .get("scriptSource")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| DebuggerError::SourceNotFound(script_id))?
+        .ok_or(DebuggerError::SourceNotFound(script_id))?
         .to_string();
 
     Ok(source)

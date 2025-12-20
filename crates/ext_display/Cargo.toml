@@ -23,6 +23,9 @@ tokio-util = "0.7"
 tracing = "0.1"
 tao = "0.30"
 
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
 [build-dependencies]
 forge-weld = { path = "../forge-weld" }
 

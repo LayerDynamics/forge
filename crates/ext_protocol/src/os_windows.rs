@@ -8,7 +8,7 @@ use crate::{
     ProtocolCapabilities, ProtocolError, RegistrationOptions, RegistrationResult,
     RegistrationStatus,
 };
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 #[cfg(target_os = "windows")]
 use winreg::enums::*;
