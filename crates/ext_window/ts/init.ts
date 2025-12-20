@@ -125,6 +125,19 @@ interface WindowSystemEvent {
   payload: unknown;
 }
 
+// ============================================================================
+// Window Lifecycle Event Callback Types
+// ============================================================================
+
+/** Callback for resize events */
+type ResizeCallback = (width: number, height: number) => void;
+
+/** Callback for move events */
+type MoveCallback = (x: number, y: number) => void;
+
+/** Callback for simple events (focus, blur, close) */
+type WindowEventCallback = () => void;
+
 interface Window {
   readonly id: string;
   // Lifecycle
@@ -163,6 +176,19 @@ interface Window {
   getNativeHandle(): Promise<NativeHandle>;
   // Events
   events(): AsyncGenerator<WindowSystemEvent, void, unknown>;
+  // Window Lifecycle Event Listeners
+  /** Register a callback for window focus events. Returns unsubscribe function. */
+  onFocus(callback: WindowEventCallback): () => void;
+  /** Register a callback for window blur (lost focus) events. Returns unsubscribe function. */
+  onBlur(callback: WindowEventCallback): () => void;
+  /** Register a callback for window resize events. Returns unsubscribe function. */
+  onResize(callback: ResizeCallback): () => void;
+  /** Register a callback for window move events. Returns unsubscribe function. */
+  onMove(callback: MoveCallback): () => void;
+  /** Register a callback for window close events. Returns unsubscribe function. */
+  onClose(callback: WindowEventCallback): () => void;
+  /** Dispatch a window event to registered callbacks. Call from your main event loop. Returns true if handled. */
+  dispatchEvent(event: { type?: string; payload?: unknown }): boolean;
   // Enhanced Window Operations
   /** Open developer tools for this window */
   openDevTools(): Promise<void>;
@@ -254,6 +280,61 @@ const core = Deno.core;
  */
 export async function createWindow(opts: WindowOptions = {}): Promise<Window> {
   const windowId = await core.ops.op_window_create(opts);
+
+  // ============================================================================
+  // Window Lifecycle Event System
+  // ============================================================================
+
+  // Callback storage for this window
+  const focusCallbacks: WindowEventCallback[] = [];
+  const blurCallbacks: WindowEventCallback[] = [];
+  const resizeCallbacks: ResizeCallback[] = [];
+  const moveCallbacks: MoveCallback[] = [];
+  const closeCallbacks: WindowEventCallback[] = [];
+
+  // Dispatch a window lifecycle event to registered callbacks
+  // Call this from your main event loop when you receive a __window__ event
+  function dispatchWindowEvent(event: { type?: string; payload?: unknown }): boolean {
+    const payload = (event.payload || {}) as { width?: number; height?: number; x?: number; y?: number };
+
+    switch (event.type) {
+      case "focus":
+        for (const cb of focusCallbacks) {
+          try { cb(); } catch (e) { console.error("Error in onFocus callback:", e); }
+        }
+        return true;
+      case "blur":
+        for (const cb of blurCallbacks) {
+          try { cb(); } catch (e) { console.error("Error in onBlur callback:", e); }
+        }
+        return true;
+      case "resize":
+        for (const cb of resizeCallbacks) {
+          try { cb(payload.width!, payload.height!); } catch (e) { console.error("Error in onResize callback:", e); }
+        }
+        return true;
+      case "move":
+        for (const cb of moveCallbacks) {
+          try { cb(payload.x!, payload.y!); } catch (e) { console.error("Error in onMove callback:", e); }
+        }
+        return true;
+      case "close":
+        for (const cb of closeCallbacks) {
+          try { cb(); } catch (e) { console.error("Error in onClose callback:", e); }
+        }
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  // Helper to create unsubscribe functions
+  function createUnsubscribe<T>(callbacks: T[], callback: T): () => void {
+    return () => {
+      const idx = callbacks.indexOf(callback);
+      if (idx !== -1) callbacks.splice(idx, 1);
+    };
+  }
 
   const handle: Window = {
     id: windowId,
@@ -363,6 +444,38 @@ export async function createWindow(opts: WindowOptions = {}): Promise<Window> {
           yield event;
         }
       }
+    },
+
+    // Window Lifecycle Event Listeners
+    onFocus(callback: WindowEventCallback): () => void {
+      focusCallbacks.push(callback);
+      return createUnsubscribe(focusCallbacks, callback);
+    },
+
+    onBlur(callback: WindowEventCallback): () => void {
+      blurCallbacks.push(callback);
+      return createUnsubscribe(blurCallbacks, callback);
+    },
+
+    onResize(callback: ResizeCallback): () => void {
+      resizeCallbacks.push(callback);
+      return createUnsubscribe(resizeCallbacks, callback);
+    },
+
+    onMove(callback: MoveCallback): () => void {
+      moveCallbacks.push(callback);
+      return createUnsubscribe(moveCallbacks, callback);
+    },
+
+    onClose(callback: WindowEventCallback): () => void {
+      closeCallbacks.push(callback);
+      return createUnsubscribe(closeCallbacks, callback);
+    },
+
+    // Dispatch a window event to registered callbacks
+    // Call from your main event loop when you receive __window__ events for this window
+    dispatchEvent(event: { type?: string; payload?: unknown }): boolean {
+      return dispatchWindowEvent(event);
     },
 
     // Enhanced Window Operations
@@ -641,5 +754,9 @@ export type {
   MenuItem,
   MenuEvent,
   TrayOptions,
-  TrayHandle
+  TrayHandle,
+  // Window Lifecycle Event Callbacks
+  ResizeCallback,
+  MoveCallback,
+  WindowEventCallback
 };

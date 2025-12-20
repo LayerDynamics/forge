@@ -62,6 +62,7 @@ fn main() {
         .generate_sdk_module("sdk")
         .use_inventory_types()
         .dts_generator(generate_host_window_types)
+        .enable_extensibility()
         .build()
         .expect("Failed to build host_window extension");
 }

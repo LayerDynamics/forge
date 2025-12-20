@@ -1,0 +1,118 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "WebAssembly Text",
+  "scopeName": "source.wat",
+  "fileTypes": ["wat", "wast"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#types" },
+    { "include": "#keywords" },
+    { "include": "#instructions" },
+    { "include": "#numbers" },
+    { "include": "#identifiers" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.semicolon.wat",
+          "match": ";;.*$"
+        },
+        {
+          "name": "comment.block.wat",
+          "begin": "\\(;",
+          "end": ";\\)"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.wat",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.wat",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.wat",
+          "match": "\\b(i32|i64|f32|f64|v128|funcref|externref|anyfunc)\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.wat",
+          "match": "\\b(module|func|param|result|local|global|memory|table|import|export|type|elem|data|start|mut|offset|align)\\b"
+        },
+        {
+          "name": "keyword.control.flow.wat",
+          "match": "\\b(block|loop|if|then|else|end|br|br_if|br_table|return|call|call_indirect|unreachable|nop|drop|select)\\b"
+        }
+      ]
+    },
+    "instructions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.wat",
+          "match": "\\b(local\\.get|local\\.set|local\\.tee|global\\.get|global\\.set)\\b"
+        },
+        {
+          "name": "entity.name.function.wat",
+          "match": "\\b(i32|i64|f32|f64)\\.(load|load8_s|load8_u|load16_s|load16_u|load32_s|load32_u|store|store8|store16|store32)\\b"
+        },
+        {
+          "name": "entity.name.function.wat",
+          "match": "\\b(i32|i64)\\.(add|sub|mul|div_s|div_u|rem_s|rem_u|and|or|xor|shl|shr_s|shr_u|rotl|rotr|clz|ctz|popcnt|eqz|eq|ne|lt_s|lt_u|le_s|le_u|gt_s|gt_u|ge_s|ge_u|wrap_i64|extend_i32_s|extend_i32_u|trunc_f32_s|trunc_f32_u|trunc_f64_s|trunc_f64_u|reinterpret_f32|reinterpret_f64|extend8_s|extend16_s|extend32_s|const)\\b"
+        },
+        {
+          "name": "entity.name.function.wat",
+          "match": "\\b(f32|f64)\\.(add|sub|mul|div|min|max|abs|neg|ceil|floor|trunc|nearest|sqrt|copysign|eq|ne|lt|le|gt|ge|convert_i32_s|convert_i32_u|convert_i64_s|convert_i64_u|demote_f64|promote_f32|reinterpret_i32|reinterpret_i64|const)\\b"
+        },
+        {
+          "name": "entity.name.function.wat",
+          "match": "\\b(memory\\.size|memory\\.grow|memory\\.fill|memory\\.copy)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.wat",
+          "match": "\\b0x[0-9a-fA-F_]+\\b"
+        },
+        {
+          "name": "constant.numeric.float.wat",
+          "match": "\\b-?[0-9][0-9_]*(\\.[0-9_]*)?([eE][+-]?[0-9_]+)?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.wat",
+          "match": "\\b-?[0-9][0-9_]*\\b"
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "variable.other.wat",
+          "match": "\\$[a-zA-Z0-9_!#$%&'*+\\-./:<=>?@\\\\^`|~]+"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.section.parens.wat",
+          "match": "[()]"
+        }
+      ]
+    }
+  }
+}

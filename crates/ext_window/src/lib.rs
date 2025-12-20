@@ -533,6 +533,13 @@ pub enum WindowCmd {
     GetMonitors {
         respond: tokio::sync::oneshot::Sender<Vec<MonitorInfo>>,
     },
+
+    // === Internal/System ===
+    /// Signal that a window's renderer is ready to receive IPC messages.
+    /// Sent by preload.ts after __host_dispatch is defined.
+    RendererReady {
+        window_id: String,
+    },
 }
 
 // ============================================================================

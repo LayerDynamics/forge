@@ -1,0 +1,44 @@
+[package]
+name = "ext_image_tools"
+version = "0.1.0-alpha.1"
+edition = "2021"
+description = "Forge Image Tools extension - PNG, SVG, WebP, ICO operations and transformations"
+license = "MIT"
+build = "build.rs"
+
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
+[dependencies]
+# Deno runtime
+deno_core = "0.373"
+deno_error = "0.7"
+
+# Forge
+forge-weld = { path = "../forge-weld" }
+forge-weld-macro = { path = "../forge-weld-macro" }
+
+# Image processing
+image = { version = "0.25", features = ["png", "ico", "webp"] }
+resvg = "0.39"
+webp = "0.3"
+
+# ICO format
+ico = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_bytes = "0.11"
+
+# Error handling
+thiserror = "1"
+
+# Tracing
+tracing = "0.1"
+
+# Inventory for weld macros
+linkme = "0.3"
+
+[build-dependencies]
+forge-weld = { path = "../forge-weld" }

@@ -3,7 +3,7 @@
 //! This module provides the WeldModule structure that represents
 //! an entire Forge extension module with its ops, structs, and configuration.
 
-use crate::ir::{OpSymbol, WeldEnum, WeldStruct};
+use crate::ir::{ExtensibilityConfig, OpSymbol, WeldEnum, WeldStruct};
 use serde::{Deserialize, Serialize};
 
 /// Metadata for an entire extension module
@@ -35,6 +35,10 @@ pub struct WeldModule {
 
     /// Error code range start (for error code allocation)
     pub error_code_start: Option<u32>,
+
+    /// Extensibility configuration (hooks, handlers, config options)
+    #[serde(default)]
+    pub extensibility: ExtensibilityConfig,
 }
 
 impl WeldModule {
@@ -53,6 +57,7 @@ impl WeldModule {
             doc: None,
             error_type: None,
             error_code_start: None,
+            extensibility: ExtensibilityConfig::default(),
         }
     }
 
@@ -120,6 +125,36 @@ impl WeldModule {
     /// Set error code start
     pub fn with_error_code_start(mut self, start: u32) -> Self {
         self.error_code_start = Some(start);
+        self
+    }
+
+    /// Enable full extensibility (hooks + handlers)
+    pub fn with_extensibility(mut self) -> Self {
+        self.extensibility = ExtensibilityConfig::new();
+        self
+    }
+
+    /// Set extensibility configuration
+    pub fn with_extensibility_config(mut self, config: ExtensibilityConfig) -> Self {
+        self.extensibility = config;
+        self
+    }
+
+    /// Enable hooks only
+    pub fn with_hooks(mut self) -> Self {
+        self.extensibility.hooks_enabled = true;
+        self
+    }
+
+    /// Enable handlers only
+    pub fn with_handlers(mut self) -> Self {
+        self.extensibility.handlers_enabled = true;
+        self
+    }
+
+    /// Set specific ops that support hooks
+    pub fn with_hookable_ops(mut self, ops: &[&str]) -> Self {
+        self.extensibility.hookable_ops = ops.iter().map(|s| s.to_string()).collect();
         self
     }
 

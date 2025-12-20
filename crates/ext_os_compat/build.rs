@@ -6,6 +6,7 @@ fn main() {
         .ops(&["op_os_compat_info", "op_os_compat_path_sep"])
         .generate_sdk_module("sdk")
         .use_inventory_types()
+        .enable_extensibility()
         .build()
         .expect("Failed to build host_os_compat extension");
 }

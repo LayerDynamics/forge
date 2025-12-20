@@ -1,0 +1,21 @@
+# Cargo configuration for Forge workspace
+#
+# This file configures build and documentation settings for the entire workspace.
+# For more information, see: https://doc.rust-lang.org/cargo/reference/config.html
+
+[build]
+# Pass --document-private-items to rustdoc by default
+# This documents private items which is useful for internal API documentation
+rustdocflags = ["--document-private-items"]
+
+[doc]
+# Default browser for `cargo doc --open`
+# Uncomment and customize for your system:
+# browser = ["open"]              # macOS
+# browser = ["xdg-open"]          # Linux
+# browser = ["start"]             # Windows
+# browser = ["chromium"]          # Specific browser
+
+# Note: The --no-deps flag cannot be configured here.
+# Always use: cargo doc --workspace --no-deps
+# to exclude dependency documentation.

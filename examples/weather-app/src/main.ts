@@ -2,7 +2,7 @@
 // Demonstrates: runtime:net HTTP fetch, runtime:sys notifications, runtime:window tray icons
 
 import { createWindow, tray, menu } from "runtime:window";
-import { ipcEvents, sendToWindow } from "runtime:ipc";
+import { windowEvents, sendToWindow } from "runtime:ipc";
 import { fetchJson } from "runtime:net";
 import { notify, clipboard } from "runtime:sys";
 
@@ -209,7 +209,7 @@ async function main() {
   });
 
   // Handle window events
-  for await (const event of ipcEvents()) {
+  for await (const event of windowEvents()) {
     console.log("Window event:", event.channel, event.payload);
 
     switch (event.channel) {

@@ -30,3 +30,12 @@ enabled = true
 
 [capabilities.shell]
 open = true
+
+[capabilities.log]
+enabled = true
+
+# [capabilities.trace]  # Disabled: ext_trace uses u128 which Deno ops don't support
+# enabled = true
+
+[capabilities.svelte]
+enabled = true

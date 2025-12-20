@@ -45,10 +45,23 @@ struct SignalSubscription {
     running: Arc<AtomicBool>,
 }
 
+/// Signals state stored in OpState - tracks signal subscriptions
 #[derive(Default)]
-struct SignalsState {
+pub struct SignalsState {
     next_id: u64,
     subscriptions: HashMap<u64, SignalSubscription>,
+}
+
+impl SignalsState {
+    /// Get the count of active signal subscriptions
+    pub fn subscription_count(&self) -> usize {
+        self.subscriptions.len()
+    }
+
+    /// Get the IDs of active subscriptions
+    pub fn subscription_ids(&self) -> Vec<u64> {
+        self.subscriptions.keys().copied().collect()
+    }
 }
 
 #[cfg(unix)]

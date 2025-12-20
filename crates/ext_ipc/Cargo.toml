@@ -4,6 +4,10 @@ version = "0.1.0-alpha.1"
 edition = "2021"
 build = "build.rs"
 
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
 [dependencies]
 deno_core = "0.373"
 deno_error = "0.7"

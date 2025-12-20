@@ -1,7 +1,255 @@
-//! runtime:fs extension - Filesystem operations for Forge apps
+//! # `runtime:fs` - Filesystem Operations Extension
 //!
-//! Provides file read/write, directory operations, and file watching
-//! with capability-based security.
+//! Comprehensive filesystem operations for Forge applications with capability-based
+//! security and cross-platform support.
+//!
+//! ## Overview
+//!
+//! This extension provides a complete filesystem API including:
+//! - **File I/O**: Text and binary read/write operations
+//! - **Directory Management**: Create, read, and remove directories
+//! - **File Watching**: Real-time filesystem event notifications
+//! - **Symbolic Links**: Create and resolve symlinks
+//! - **Metadata Access**: File stats, timestamps, and permissions
+//! - **Temporary Files**: Secure temporary file and directory creation
+//! - **Path Resolution**: Canonical path resolution with symlink following
+//!
+//! All operations are subject to capability-based permissions defined in the app's
+//! `manifest.app.toml` configuration file, providing granular security control.
+//!
+//! ## API Categories
+//!
+//! ### Core File I/O
+//! Operations for reading and writing file contents:
+//! - `readTextFile()` / `writeTextFile()` - UTF-8 text operations
+//! - `readBytes()` / `writeBytes()` - Binary data operations
+//! - `appendTextFile()` / `appendBytes()` - Append to existing files
+//!
+//! ### Directory Operations
+//! Managing filesystem directory structures:
+//! - `readDir()` - List directory contents
+//! - `mkdir()` - Create directories (with `recursive` option)
+//! - `remove()` - Delete files or directories (with `recursive` option)
+//! - `copy()` - Copy files
+//! - `rename()` - Move/rename files or directories
+//!
+//! ### Metadata & Information
+//! Querying filesystem entity properties:
+//! - `stat()` - Get file statistics (size, type, readonly)
+//! - `metadata()` - Get extended metadata (timestamps, permissions)
+//! - `exists()` - Check if path exists
+//!
+//! ### File Watching
+//! Real-time filesystem event monitoring:
+//! - `watch()` - Watch file or directory for changes
+//! - Returns async iterator yielding `WatchEvent` objects
+//! - Events: create, modify, remove, rename
+//!
+//! ### Symbolic Links
+//! Cross-platform symlink support:
+//! - `symlink()` - Create symbolic links
+//! - `readLink()` - Read symlink target
+//! - `realPath()` - Resolve to canonical absolute path
+//!
+//! ### Temporary Files
+//! Secure temporary filesystem entities:
+//! - `tempFile()` - Create temporary file with optional prefix/suffix
+//! - `tempDir()` - Create temporary directory with optional prefix
+//! - Files persist until explicitly deleted
+//!
+//! ## TypeScript Usage Examples
+//!
+//! ### Basic File Operations
+//! ```typescript
+//! import { readTextFile, writeTextFile, exists } from "runtime:fs";
+//!
+//! // Read a text file
+//! const config = await readTextFile("./config.json");
+//! const data = JSON.parse(config);
+//!
+//! // Write a text file
+//! await writeTextFile("./output.txt", "Hello, World!");
+//!
+//! // Check if file exists
+//! if (await exists("./data.json")) {
+//!   const content = await readTextFile("./data.json");
+//!   console.log("File contents:", content);
+//! }
+//! ```
+//!
+//! ### Binary File Operations
+//! ```typescript
+//! import { readBytes, writeBytes } from "runtime:fs";
+//!
+//! // Read binary data
+//! const imageData = await readBytes("./image.png");
+//! const buffer = new Uint8Array(imageData);
+//!
+//! // Write binary data
+//! const data = new Uint8Array([0x89, 0x50, 0x4E, 0x47]);
+//! await writeBytes("./output.bin", data);
+//! ```
+//!
+//! ### Directory Operations
+//! ```typescript
+//! import { readDir, mkdir, remove, stat } from "runtime:fs";
+//!
+//! // List directory contents
+//! const entries = await readDir("./data");
+//! for (const entry of entries) {
+//!   console.log(`${entry.name} (${entry.isFile ? "file" : "directory"})`);
+//! }
+//!
+//! // Create nested directories
+//! await mkdir("./data/cache/images", { recursive: true });
+//!
+//! // Remove directory and contents
+//! await remove("./temp", { recursive: true });
+//! ```
+//!
+//! ### File Watching
+//! ```typescript
+//! import { watch } from "runtime:fs";
+//!
+//! // Watch directory for changes
+//! const watcher = await watch("./data");
+//! try {
+//!   for await (const event of watcher) {
+//!     console.log(`${event.kind}: ${event.paths.join(", ")}`);
+//!   }
+//! } finally {
+//!   await watcher.close(); // Always clean up
+//! }
+//! ```
+//!
+//! ### Symbolic Links
+//! ```typescript
+//! import { symlink, readLink, realPath } from "runtime:fs";
+//!
+//! // Create a symbolic link
+//! await symlink("/var/log/app", "./logs");
+//!
+//! // Read where symlink points
+//! const target = await readLink("./logs");
+//! console.log(`Points to: ${target}`); // "/var/log/app"
+//!
+//! // Resolve to canonical path
+//! const canonical = await realPath("./logs");
+//! console.log(`Canonical: ${canonical}`); // "/var/log/app"
+//! ```
+//!
+//! ### Temporary Files
+//! ```typescript
+//! import { tempFile, tempDir, writeTextFile, remove } from "runtime:fs";
+//!
+//! // Create temp file for processing
+//! const temp = await tempFile("process-", ".json");
+//! try {
+//!   await writeTextFile(temp.path, JSON.stringify({ data: "test" }));
+//!   await processFile(temp.path);
+//! } finally {
+//!   await remove(temp.path);
+//! }
+//!
+//! // Create temp directory for batch work
+//! const tempDirectory = await tempDir("build-");
+//! try {
+//!   await mkdir(`${tempDirectory.path}/output`);
+//!   // ... process files ...
+//! } finally {
+//!   await remove(tempDirectory.path, { recursive: true });
+//! }
+//! ```
+//!
+//! ## Error Codes
+//!
+//! All filesystem operations use structured error codes (3000-3009 range):
+//!
+//! | Code | Error | Description |
+//! |------|-------|-------------|
+//! | 3000 | `Io` | Generic I/O error during filesystem operation |
+//! | 3001 | `PermissionDenied` | Capability system denied permission |
+//! | 3002 | `NotFound` | File or directory not found |
+//! | 3003 | `AlreadyExists` | File or directory already exists |
+//! | 3004 | `IsDirectory` | Path is a directory (expected file) |
+//! | 3005 | `IsFile` | Path is a file (expected directory) |
+//! | 3006 | `Watch` | File watch setup or operation error |
+//! | 3007 | `InvalidWatchId` | Invalid or closed watch ID |
+//! | 3008 | `Symlink` | Symbolic link creation or resolution error |
+//! | 3009 | `TempError` | Temporary file/directory creation error |
+//!
+//! ## Permission System
+//!
+//! Filesystem operations require explicit permissions in `manifest.app.toml`:
+//!
+//! ```toml
+//! [permissions.fs]
+//! # Allow reading specific paths (glob patterns supported)
+//! read = [
+//!   "./data/**",           # All files under ./data/
+//!   "./config/*.json",     # All JSON files in ./config/
+//!   "/etc/hosts"           # Specific absolute path
+//! ]
+//!
+//! # Allow writing specific paths
+//! write = [
+//!   "./data/**",           # All files under ./data/
+//!   "./logs/*.log",        # Log files only
+//!   "/tmp/**"              # System temp directory
+//! ]
+//! ```
+//!
+//! **Development Mode**: When running with `forge dev`, all filesystem permissions are
+//! granted by default for rapid development. Production builds enforce the permission
+//! configuration strictly.
+//!
+//! **Permission Checks**: Every filesystem operation checks both read and write permissions:
+//! - Read ops (`readTextFile`, `readBytes`, `stat`, etc.) require `read` permission
+//! - Write ops (`writeTextFile`, `mkdir`, `remove`, etc.) require `write` permission
+//! - Copy/rename require both permissions (read source, write destination)
+//!
+//! ## Platform Support
+//!
+//! ### Cross-Platform Compatibility
+//! - **macOS, Linux, Windows**: All core operations fully supported
+//! - **Path separators**: Use forward slashes (`/`) in paths; automatically converted on Windows
+//! - **Symlinks**: Fully supported on all platforms
+//!   - **Windows**: Directory symlinks require admin privileges or Developer Mode
+//!   - **Unix**: No special requirements
+//!
+//! ### Platform-Specific Behaviors
+//! - **Timestamps**: `birthtime` (creation time) may be `null` on some Linux filesystems
+//! - **Permissions**: Unix-style permission bits only available on Unix systems (via `metadata()`)
+//! - **Case sensitivity**: macOS default filesystems are case-insensitive; Linux/Windows vary
+//! - **File watching**: Uses platform-optimal backend (FSEvents on macOS, inotify on Linux, etc.)
+//!
+//! ## Implementation Details
+//!
+//! ### State Management
+//! This extension maintains state in `OpState`:
+//! - `FsWatchState`: Manages active file watchers and their receivers
+//! - `FsCapabilities`: Holds the capability checker for permission validation
+//!
+//! ### Async I/O
+//! All filesystem operations use `tokio::fs` for non-blocking async I/O, ensuring
+//! the Deno event loop remains responsive even during heavy filesystem activity.
+//!
+//! ### File Watching
+//! Implemented using the `notify` crate with platform-optimal backends:
+//! - Watchers use async channels (`mpsc::Receiver`) for event delivery
+//! - Events are buffered (64-event capacity) to handle bursts
+//! - Must call `close()` to clean up resources and stop the watcher
+//!
+//! ### Capability Integration
+//! The extension accepts an optional `Arc<dyn FsCapabilityChecker>` during initialization.
+//! The runtime injects a checker that evaluates glob patterns from `manifest.app.toml`.
+//! If no checker is provided, a permissive checker allows all operations (dev mode).
+//!
+//! ## See Also
+//!
+//! - [`ext_path`](../ext_path/index.html) - Path manipulation utilities
+//! - [`ext_process`](../ext_process/index.html) - Child process management
+//! - [`ext_storage`](../ext_storage/index.html) - Persistent key-value storage
 
 use deno_core::{op2, Extension, OpState};
 use forge_weld_macro::{weld_op, weld_struct};

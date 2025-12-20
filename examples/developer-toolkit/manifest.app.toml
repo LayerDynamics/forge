@@ -1,0 +1,51 @@
+# Developer Toolkit - Comprehensive Forge extension demo
+# Demonstrates: codesign, crypto, fs, process, shell, sys, storage, window, ipc
+
+[app]
+name = "Developer Toolkit"
+identifier = "com.forge.devtoolkit"
+version = "0.1.0"
+description = "A developer toolkit demonstrating Forge's advanced capabilities including code signing, cryptography, file operations, and system integration"
+
+[windows]
+width = 900
+height = 700
+resizable = true
+title = "Developer Toolkit"
+decorations = true
+
+# Permissions - demonstrating capability-based security
+[permissions]
+
+# File system access for reading/writing files
+[permissions.fs]
+read = ["**/*"]
+write = ["**/*"]
+
+# Network access for timestamp servers (codesign)
+[permissions.net]
+allow = ["*.digicert.com", "timestamp.apple.com"]
+
+# System access
+[permissions.sys]
+clipboard = true
+notify = true
+power = true
+
+# Process spawning for build tools
+[permissions.process]
+allow = ["codesign", "signtool", "security", "openssl", "shasum", "md5", "file", "otool", "lipo"]
+max_processes = 5
+
+# Code signing permissions
+[permissions.codesign]
+sign = true
+list_identities = true
+
+# UI permissions
+[permissions.ui]
+windows = true
+menus = true
+dialogs = true
+tray = true
+channels = ["*"]

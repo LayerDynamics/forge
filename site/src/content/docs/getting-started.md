@@ -40,7 +40,7 @@ cp -r examples/svelte-app my-app     # Svelte with TypeScript
 
 This creates a new Forge application with the following structure:
 
-```
+```ascii
 my-app/
 ├── manifest.app.toml   # App configuration and capabilities
 ├── deno.json           # Deno configuration
@@ -154,6 +154,7 @@ forge dev .
 ```
 
 This starts the Forge runtime with:
+
 - Live reload on file changes
 - Development-friendly CSP settings
 - Console output in terminal

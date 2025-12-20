@@ -55,3 +55,5 @@ resources/
 
 CLAUDE.md 
 .claude
+/examples/*/bundle
+bundle

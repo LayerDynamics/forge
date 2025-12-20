@@ -1,7 +1,190 @@
-//! runtime:process extension - Process spawning for Forge apps
+//! runtime:process extension - Process spawning and management for Forge apps
 //!
-//! Provides child process spawning, I/O, and management
-//! with capability-based security.
+//! This extension provides cross-platform child process spawning with comprehensive
+//! I/O management, lifecycle control, and capability-based security. It enables
+//! Forge applications to execute external commands, interact with long-running
+//! processes through bidirectional communication, and manage process lifecycles.
+//!
+//! ## Features
+//!
+//! - **Process Spawning**: Launch child processes with configurable environment,
+//!   working directory, and command-line arguments
+//! - **I/O Management**: Pipe, inherit, or discard stdin/stdout/stderr streams
+//! - **Bidirectional Communication**: Write to stdin and read from stdout/stderr
+//! - **Async Streams**: Async iterators for line-by-line output consumption
+//! - **Lifecycle Management**: Kill, wait, and check process status
+//! - **Cross-Platform Signals**: Unix signal support with graceful fallback on Windows
+//! - **Capability-Based Security**: Permission checking via `ProcessCapabilityChecker`
+//! - **Resource Limits**: Configurable maximum concurrent processes
+//! - **Structured Errors**: Machine-readable error codes (4000-4009 range)
+//!
+//! ## API Overview
+//!
+//! The extension exposes 7 operations grouped into functional categories:
+//!
+//! ### Process Lifecycle
+//! - `op_process_spawn` - Create new child process with options
+//! - `op_process_kill` - Terminate process with optional signal
+//! - `op_process_wait` - Block until process exits, returns code
+//! - `op_process_status` - Check if process is running (non-blocking)
+//!
+//! ### I/O Operations
+//! - `op_process_write_stdin` - Write data to process's standard input
+//! - `op_process_read_stdout` - Read line from standard output
+//! - `op_process_read_stderr` - Read line from standard error
+//!
+//! ## TypeScript Usage
+//!
+//! ```typescript
+//! import { spawn } from "runtime:process";
+//!
+//! // Simple command execution
+//! const proc = await spawn("echo", { args: ["Hello, World!"] });
+//! for await (const line of proc.stdout) {
+//!   console.log(line); // "Hello, World!"
+//! }
+//! const result = await proc.wait();
+//! console.log(result.code); // 0
+//!
+//! // Interactive process with stdin/stdout
+//! const python = await spawn("python3", {
+//!   args: ["-i"],
+//!   stdin: "piped",
+//!   stdout: "piped",
+//!   cwd: "/path/to/project"
+//! });
+//!
+//! await python.writeStdin("print('Hello from Python')\n");
+//! const output = await python.readStdout();
+//! console.log(output.data); // "Hello from Python"
+//!
+//! // Custom environment
+//! const build = await spawn("npm", {
+//!   args: ["run", "build"],
+//!   env: { "NODE_ENV": "production" }
+//! });
+//! ```
+//!
+//! ## Permission Model
+//!
+//! Process spawning requires explicit permissions in `manifest.app.toml`:
+//!
+//! ```toml
+//! [permissions.process]
+//! spawn = ["node", "python3", "/usr/bin/ffmpeg"]
+//! # Or use wildcards (not recommended for production)
+//! spawn = ["*"]
+//! ```
+//!
+//! In development mode (`forge dev`), all processes are allowed by default.
+//! In production, the capability checker validates each `spawn()` call against
+//! the manifest configuration.
+//!
+//! ## Error Codes
+//!
+//! All operations use structured error codes for programmatic error handling:
+//!
+//! | Code | Name | Meaning | Recovery Strategy |
+//! |------|------|---------|-------------------|
+//! | 4000 | `Io` | Generic I/O error | Check system logs, retry |
+//! | 4001 | `PermissionDenied` | Binary not in spawn allowlist | Update manifest permissions |
+//! | 4002 | `NotFound` | Binary not found in PATH | Install binary or use full path |
+//! | 4003 | `FailedToSpawn` | Process spawn failed | Check binary permissions, arguments |
+//! | 4004 | `ProcessExited` | Process already exited | Check exit code, restart if needed |
+//! | 4005 | `Timeout` | Operation timeout | Increase timeout, check process health |
+//! | 4006 | `InvalidHandle` | Process handle doesn't exist | Verify handle still valid |
+//! | 4007 | `StdinClosed` | Stdin already closed | Check process still running |
+//! | 4008 | `OutputNotCaptured` | stdout/stderr not piped | Set stdio to "piped" in options |
+//! | 4009 | `TooManyProcesses` | Concurrent process limit reached | Wait for processes to exit, increase limit |
+//!
+//! ## Common Use Cases
+//!
+//! ### Running Build Scripts
+//! ```typescript
+//! const proc = await spawn("npm", { args: ["run", "build"] });
+//! for await (const line of proc.stdout) {
+//!   console.log(line); // Stream build output
+//! }
+//! const result = await proc.wait();
+//! if (!result.success) {
+//!   throw new Error(`Build failed with code ${result.code}`);
+//! }
+//! ```
+//!
+//! ### Interactive REPL Communication
+//! ```typescript
+//! const repl = await spawn("python3", {
+//!   args: ["-i"],
+//!   stdin: "piped",
+//!   stdout: "piped",
+//!   stderr: "piped"
+//! });
+//!
+//! await repl.writeStdin("import math\n");
+//! await repl.writeStdin("print(math.pi)\n");
+//! const output = await repl.readStdout();
+//! console.log(output.data); // "3.141592653589793"
+//! ```
+//!
+//! ### Long-Running Process Management
+//! ```typescript
+//! const server = await spawn("./server", { stdout: "piped" });
+//!
+//! // Monitor in background
+//! setTimeout(async () => {
+//!   const status = await server.status();
+//!   if (!status.running) {
+//!     console.error("Server crashed!");
+//!   }
+//! }, 5000);
+//!
+//! // Graceful shutdown on app exit
+//! addEventListener("beforeunload", async () => {
+//!   await server.kill("SIGTERM");
+//!   await server.wait();
+//! });
+//! ```
+//!
+//! ## Platform Differences
+//!
+//! ### Unix (macOS, Linux)
+//! - Full signal support: SIGTERM, SIGKILL, SIGINT, SIGHUP, SIGUSR1, SIGUSR2
+//! - Exit status includes signal information
+//! - Child processes inherit file descriptors (use appropriate stdio config)
+//!
+//! ### Windows
+//! - Limited signal support (kill uses TerminateProcess API)
+//! - Signal parameter ignored in `kill()` operations
+//! - Exit codes use Windows process exit conventions
+//!
+//! ## Implementation Details
+//!
+//! ### State Management
+//! The extension maintains a `ProcessState` structure in Deno's `OpState`:
+//! - **Process Registry**: HashMap of active processes by handle ID
+//! - **Resource Limits**: Configurable `max_processes` (default: 10)
+//! - **Auto-cleanup**: Processes removed after kill/wait operations
+//!
+//! ### I/O Streaming
+//! - Uses Tokio's `BufReader` for line-buffered reads
+//! - Stdout/stderr wrapped in `Arc<Mutex<>>` for concurrent access
+//! - Stdin uses `AsyncWriteExt` with explicit flushing
+//!
+//! ### Security Model
+//! ```rust
+//! // Initialize with custom capability checker
+//! init_process_state(
+//!     &mut op_state,
+//!     Some(Arc::new(MyProcessChecker)),
+//!     Some(20) // max concurrent processes
+//! );
+//! ```
+//!
+//! ## See Also
+//!
+//! - TypeScript SDK: [`runtime:process`](../../../sdk/runtime.process.ts)
+//! - Astro docs: [ext_process guide](../../../site/src/content/docs/crates/ext-process.md)
+//! - Tests: [`tests`](#tests) module below
 
 use deno_core::{op2, Extension, OpState};
 use forge_weld_macro::{weld_op, weld_struct};

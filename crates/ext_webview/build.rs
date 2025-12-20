@@ -16,6 +16,7 @@ fn main() {
         .generate_sdk_types("sdk")
         .generate_sdk_module("sdk")
         .use_inventory_types()
+        .enable_extensibility()
         .build()
         .expect("Failed to build host_webview extension");
 }

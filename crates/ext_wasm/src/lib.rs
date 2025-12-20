@@ -1,7 +1,210 @@
 //! runtime:wasm extension - WebAssembly support for Forge apps
 //!
-//! Provides WASM module loading, instantiation, function calls, memory access,
-//! and WASI support with capability-based security.
+//! Provides comprehensive WebAssembly support for Forge applications including module
+//! compilation, instantiation, function calls, linear memory access, and WASI
+//! (WebAssembly System Interface) integration with capability-based security.
+//!
+//! **Runtime Module:** `runtime:wasm`
+//!
+//! ## Overview
+//!
+//! This extension enables Forge applications to load and execute WebAssembly modules
+//! using the [Wasmtime](https://wasmtime.dev/) runtime. It provides a complete API for:
+//!
+//! - **Module Management**: Compile WASM bytecode from bytes or files, cache compiled
+//!   modules for reuse across multiple instances
+//! - **Instance Management**: Create multiple independent instances from a single compiled
+//!   module, each with its own linear memory and state
+//! - **Function Calls**: Invoke exported WASM functions with automatic type conversion
+//!   between JavaScript and WebAssembly value types (i32, i64, f32, f64)
+//! - **Linear Memory Access**: Direct read/write access to WASM linear memory organized
+//!   in 64KB pages, with bounds checking
+//! - **WASI Support**: Full WASI preview1 support with file system access (preopens),
+//!   environment variables, command-line arguments, and standard I/O inheritance
+//!
+//! ## Features
+//!
+//! ### Module Compilation and Caching
+//!
+//! Modules are compiled using Wasmtime's AOT compiler and cached in memory for reuse.
+//! Multiple instances can be created from the same compiled module without recompilation.
+//!
+//! ### WASI Integration
+//!
+//! Full WebAssembly System Interface (WASI) preview1 support enables WASM modules to:
+//! - Access the file system through capability-based directory preopens
+//! - Read environment variables
+//! - Access command-line arguments
+//! - Inherit standard I/O streams from the host process
+//!
+//! ### Capability-Based Security
+//!
+//! File system access is controlled through directory preopens, following the capability
+//! security model. WASM modules can only access directories explicitly granted via the
+//! `preopens` configuration map.
+//!
+//! ### Linear Memory Model
+//!
+//! WebAssembly linear memory is organized in 64KB pages and can be:
+//! - Read and written directly from JavaScript
+//! - Grown dynamically (within limits specified by the WASM module)
+//! - Shared between host and guest for efficient data exchange
+//!
+//! ## Architecture
+//!
+//! ```text
+//! ┌─────────────────────────────────────────────────────────────┐
+//! │ TypeScript Application (runtime:wasm)                       │
+//! │  - compile(), instantiate(), call()                          │
+//! │  - memory.read(), memory.write()                             │
+//! │  - types.i32(), types.f64()                                  │
+//! └──────────────────┬──────────────────────────────────────────┘
+//!                    │ Deno Ops (op_wasm_*)
+//!                    ↓
+//! ┌─────────────────────────────────────────────────────────────┐
+//! │ WasmState (Arc<Mutex<>>)                                    │
+//! │  ├─ modules: HashMap<ModuleId, WasmModule>                  │
+//! │  ├─ instances: HashMap<InstanceId, WasmInstance>            │
+//! │  └─ engine: wasmtime::Engine                                │
+//! └──────────────────┬──────────────────────────────────────────┘
+//!                    │
+//!         ┌──────────┴──────────┐
+//!         ↓                     ↓
+//! ┌────────────────┐   ┌──────────────────┐
+//! │ Wasmtime       │   │ WASI Preview1    │
+//! │  - Engine      │   │  - WasiCtxBuilder│
+//! │  - Store       │   │  - Preopens      │
+//! │  - Module      │   │  - Env, Args     │
+//! │  - Instance    │   │  - Stdio         │
+//! │  - Memory      │   │                  │
+//! └────────────────┘   └──────────────────┘
+//! ```
+//!
+//! ## State Management
+//!
+//! The `WasmState` structure maintains:
+//! - **Engine**: Shared Wasmtime engine for all modules
+//! - **Modules**: Compiled WASM modules indexed by ID
+//! - **Instances**: Active instances with their stores and contexts
+//! - **Next IDs**: Monotonic counters for module and instance IDs
+//!
+//! All state is protected by `Arc<Mutex<>>` for thread safety.
+//!
+//! ## Error Handling
+//!
+//! All operations return structured errors with machine-readable error codes (5000-5011):
+//!
+//! | Code | Error | Description |
+//! |------|-------|-------------|
+//! | 5000 | CompileError | WASM module compilation failed |
+//! | 5001 | InstantiateError | Module instantiation failed |
+//! | 5002 | CallError | Function call failed |
+//! | 5003 | ExportNotFound | Requested export not found |
+//! | 5004 | InvalidModuleHandle | Invalid module ID |
+//! | 5005 | InvalidInstanceHandle | Invalid instance ID |
+//! | 5006 | MemoryError | Memory access out of bounds |
+//! | 5007 | TypeError | Type mismatch in function call |
+//! | 5008 | IoError | File I/O error |
+//! | 5009 | PermissionDenied | Permission denied by capability system |
+//! | 5010 | WasiError | WASI configuration error |
+//! | 5011 | FuelExhausted | Fuel limit exceeded |
+//!
+//! ## TypeScript Usage
+//!
+//! ```typescript
+//! import * as wasm from "runtime:wasm";
+//!
+//! // Compile WASM module
+//! const wasmBytes = await Deno.readFile("module.wasm");
+//! const moduleId = await wasm.compile(wasmBytes);
+//!
+//! // Instantiate with WASI configuration
+//! const instance = await wasm.instantiate(moduleId, {
+//!   preopens: { "/data": "./app-data" },
+//!   env: { "LOG_LEVEL": "debug" },
+//!   args: ["--verbose"],
+//!   inheritStdout: true
+//! });
+//!
+//! // Call exported function
+//! const [result] = await instance.call("add", 10, 32);
+//! console.log("Result:", result); // 42
+//!
+//! // Access linear memory
+//! const data = await instance.memory.read(0, 256);
+//! await instance.memory.write(1024, new Uint8Array([1, 2, 3]));
+//!
+//! // Cleanup
+//! await instance.drop();
+//! await wasm.dropModule(moduleId);
+//! ```
+//!
+//! ## WASM Value Types
+//!
+//! WebAssembly supports four numeric value types:
+//! - `i32`: 32-bit signed integer (-2,147,483,648 to 2,147,483,647)
+//! - `i64`: 64-bit signed integer (requires BigInt in JavaScript)
+//! - `f32`: 32-bit IEEE 754 floating point (single precision)
+//! - `f64`: 64-bit IEEE 754 floating point (double precision)
+//!
+//! The extension provides automatic conversion between JavaScript numbers and WASM types,
+//! with explicit type control available via the `types` helper.
+//!
+//! ## Performance Considerations
+//!
+//! - **Compilation**: Module compilation is expensive (~10-100ms for typical modules).
+//!   Cache compiled modules and reuse them for multiple instances.
+//! - **Memory Access**: Direct memory access via `memory.read/write` requires copying data
+//!   between WASM and JavaScript. For large data transfers, minimize round trips.
+//! - **Function Calls**: Cross-boundary calls have overhead (~1μs). Batch operations when
+//!   possible.
+//! - **Instance Creation**: Creating instances is relatively cheap (~100μs). Safe to create
+//!   multiple instances for parallel processing.
+//!
+//! ## Thread Safety
+//!
+//! - `WasmState` is wrapped in `Arc<Mutex<>>` for safe concurrent access
+//! - Wasmtime `Engine` is `Send + Sync` and shared across all modules
+//! - `Store` and `Instance` are not thread-safe and protected by the state mutex
+//! - All ops are async and properly synchronized
+//!
+//! ## Dependencies
+//!
+//! | Dependency | Purpose |
+//! |------------|---------|
+//! | `wasmtime` | WebAssembly runtime and JIT compiler |
+//! | `wasmtime-wasi` | WASI preview1 implementation |
+//! | `deno_core` | Op definitions and runtime integration |
+//! | `tokio` | Async runtime for mutex synchronization |
+//! | `serde` | Serialization framework for type bindings |
+//! | `forge-weld-macro` | TypeScript binding generation macros |
+//!
+//! ## Testing
+//!
+//! ```bash
+//! # Run all tests
+//! cargo test -p ext_wasm
+//!
+//! # Run with output
+//! cargo test -p ext_wasm -- --nocapture
+//! ```
+//!
+//! Tests cover:
+//! - Module compilation from bytes and files
+//! - Instance creation with and without WASI
+//! - Function calls with various argument types
+//! - Linear memory access (read, write, size, grow)
+//! - Export introspection
+//! - Error handling for invalid operations
+//! - WASI file system access via preopens
+//! - Multiple instances from single module
+//!
+//! ## See Also
+//!
+//! - [Wasmtime Documentation](https://docs.wasmtime.dev/)
+//! - [WASI Specification](https://github.com/WebAssembly/WASI)
+//! - [WebAssembly Specification](https://webassembly.github.io/spec/)
+//! - [Forge Documentation](../../site/) - Full framework documentation
 
 use deno_core::{op2, Extension, OpState};
 use forge_weld_macro::{weld_op, weld_struct};

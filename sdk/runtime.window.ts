@@ -125,6 +125,19 @@ export interface WindowSystemEvent {
   payload: unknown;
 }
 
+// ============================================================================
+// Window Lifecycle Event Callback Types
+// ============================================================================
+
+/** Callback for resize events */
+export type ResizeCallback = (width: number, height: number) => void;
+
+/** Callback for move events */
+export type MoveCallback = (x: number, y: number) => void;
+
+/** Callback for simple events (focus, blur, close) */
+export type WindowEventCallback = () => void;
+
 export interface Window {
   readonly id: string;
   // Lifecycle
@@ -163,6 +176,19 @@ export interface Window {
   getNativeHandle(): Promise<NativeHandle>;
   // Events
   events(): AsyncGenerator<WindowSystemEvent, void, unknown>;
+  // Window Lifecycle Event Listeners
+  /** Register a callback for window focus events. Returns unsubscribe function. */
+  onFocus(callback: WindowEventCallback): () => void;
+  /** Register a callback for window blur (lost focus) events. Returns unsubscribe function. */
+  onBlur(callback: WindowEventCallback): () => void;
+  /** Register a callback for window resize events. Returns unsubscribe function. */
+  onResize(callback: ResizeCallback): () => void;
+  /** Register a callback for window move events. Returns unsubscribe function. */
+  onMove(callback: MoveCallback): () => void;
+  /** Register a callback for window close events. Returns unsubscribe function. */
+  onClose(callback: WindowEventCallback): () => void;
+  /** Dispatch a window event to registered callbacks. Call from your main event loop. Returns true if handled. */
+  dispatchEvent(event: { type?: string; payload?: unknown }): boolean;
   // Enhanced Window Operations
   /** Open developer tools for this window */
   openDevTools(): Promise<void>;
@@ -254,6 +280,61 @@ const core = Deno.core;
  */
 export async function createWindow(opts: WindowOptions = {}): Promise<Window> {
   const windowId = await core.ops.op_window_create(opts);
+
+  // ============================================================================
+  // Window Lifecycle Event System
+  // ============================================================================
+
+  // Callback storage for this window
+  const focusCallbacks: WindowEventCallback[] = [];
+  const blurCallbacks: WindowEventCallback[] = [];
+  const resizeCallbacks: ResizeCallback[] = [];
+  const moveCallbacks: MoveCallback[] = [];
+  const closeCallbacks: WindowEventCallback[] = [];
+
+  // Dispatch a window lifecycle event to registered callbacks
+  // Call this from your main event loop when you receive a __window__ event
+  function dispatchWindowEvent(event: { type?: string; payload?: unknown }): boolean {
+    const payload = (event.payload || {}) as { width?: number; height?: number; x?: number; y?: number };
+
+    switch (event.type) {
+      case "focus":
+        for (const cb of focusCallbacks) {
+          try { cb(); } catch (e) { console.error("Error in onFocus callback:", e); }
+        }
+        return true;
+      case "blur":
+        for (const cb of blurCallbacks) {
+          try { cb(); } catch (e) { console.error("Error in onBlur callback:", e); }
+        }
+        return true;
+      case "resize":
+        for (const cb of resizeCallbacks) {
+          try { cb(payload.width!, payload.height!); } catch (e) { console.error("Error in onResize callback:", e); }
+        }
+        return true;
+      case "move":
+        for (const cb of moveCallbacks) {
+          try { cb(payload.x!, payload.y!); } catch (e) { console.error("Error in onMove callback:", e); }
+        }
+        return true;
+      case "close":
+        for (const cb of closeCallbacks) {
+          try { cb(); } catch (e) { console.error("Error in onClose callback:", e); }
+        }
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  // Helper to create unsubscribe functions
+  function createUnsubscribe<T>(callbacks: T[], callback: T): () => void {
+    return () => {
+      const idx = callbacks.indexOf(callback);
+      if (idx !== -1) callbacks.splice(idx, 1);
+    };
+  }
 
   const handle: Window = {
     id: windowId,
@@ -363,6 +444,38 @@ export async function createWindow(opts: WindowOptions = {}): Promise<Window> {
           yield event;
         }
       }
+    },
+
+    // Window Lifecycle Event Listeners
+    onFocus(callback: WindowEventCallback): () => void {
+      focusCallbacks.push(callback);
+      return createUnsubscribe(focusCallbacks, callback);
+    },
+
+    onBlur(callback: WindowEventCallback): () => void {
+      blurCallbacks.push(callback);
+      return createUnsubscribe(blurCallbacks, callback);
+    },
+
+    onResize(callback: ResizeCallback): () => void {
+      resizeCallbacks.push(callback);
+      return createUnsubscribe(resizeCallbacks, callback);
+    },
+
+    onMove(callback: MoveCallback): () => void {
+      moveCallbacks.push(callback);
+      return createUnsubscribe(moveCallbacks, callback);
+    },
+
+    onClose(callback: WindowEventCallback): () => void {
+      closeCallbacks.push(callback);
+      return createUnsubscribe(closeCallbacks, callback);
+    },
+
+    // Dispatch a window event to registered callbacks
+    // Call from your main event loop when you receive __window__ events for this window
+    dispatchEvent(event: { type?: string; payload?: unknown }): boolean {
+      return dispatchWindowEvent(event);
     },
 
     // Enhanced Window Operations
@@ -641,5 +754,243 @@ export type {
   MenuItem,
   MenuEvent,
   TrayOptions,
-  TrayHandle
+  TrayHandle,
+  // Window Lifecycle Event Callbacks
+  ResizeCallback,
+  MoveCallback,
+  WindowEventCallback
 };
+
+
+// ============================================================================
+// Extensibility API (auto-generated)
+// ============================================================================
+
+/** Registry of operations with their argument and result types */
+interface OpRegistry {
+  create: { args: []; result: void };
+  close: { args: []; result: void };
+  minimize: { args: []; result: void };
+  maximize: { args: []; result: void };
+  unmaximize: { args: []; result: void };
+  restore: { args: []; result: void };
+  setFullscreen: { args: []; result: void };
+  isFullscreen: { args: []; result: void };
+  focus: { args: []; result: void };
+  isFocused: { args: []; result: void };
+  getPosition: { args: []; result: void };
+  setPosition: { args: []; result: void };
+  getSize: { args: []; result: void };
+  setSize: { args: []; result: void };
+  getTitle: { args: []; result: void };
+  setTitle: { args: []; result: void };
+  setResizable: { args: []; result: void };
+  isResizable: { args: []; result: void };
+  setDecorations: { args: []; result: void };
+  hasDecorations: { args: []; result: void };
+  setAlwaysOnTop: { args: []; result: void };
+  isAlwaysOnTop: { args: []; result: void };
+  setVisible: { args: []; result: void };
+  isVisible: { args: []; result: void };
+  isMaximized: { args: []; result: void };
+  isMinimized: { args: []; result: void };
+  dialogOpen: { args: []; result: void };
+  dialogSave: { args: []; result: void };
+  dialogMessage: { args: []; result: void };
+  setAppMenu: { args: []; result: void };
+  showContextMenu: { args: []; result: void };
+  menuRecv: { args: []; result: void };
+  createTray: { args: []; result: void };
+  updateTray: { args: []; result: void };
+  destroyTray: { args: []; result: void };
+  eventsRecv: { args: []; result: void };
+  getNativeHandle: { args: []; result: void };
+  openDevtools: { args: []; result: void };
+  closeDevtools: { args: []; result: void };
+  isDevtoolsOpen: { args: []; result: void };
+  evalJs: { args: []; result: void };
+  injectCss: { args: []; result: void };
+  setMinSize: { args: []; result: void };
+  setMaxSize: { args: []; result: void };
+  center: { args: []; result: void };
+  getMonitors: { args: []; result: void };
+}
+
+/** Extract argument types for an operation */
+type OpArgs<T extends keyof OpRegistry> = OpRegistry[T]['args'];
+
+/** Extract result type for an operation */
+type OpResult<T extends keyof OpRegistry> = OpRegistry[T]['result'];
+
+/** Valid operation names for this extension */
+type OpName = "create" | "close" | "minimize" | "maximize" | "unmaximize" | "restore" | "setFullscreen" | "isFullscreen" | "focus" | "isFocused" | "getPosition" | "setPosition" | "getSize" | "setSize" | "getTitle" | "setTitle" | "setResizable" | "isResizable" | "setDecorations" | "hasDecorations" | "setAlwaysOnTop" | "isAlwaysOnTop" | "setVisible" | "isVisible" | "isMaximized" | "isMinimized" | "dialogOpen" | "dialogSave" | "dialogMessage" | "setAppMenu" | "showContextMenu" | "menuRecv" | "createTray" | "updateTray" | "destroyTray" | "eventsRecv" | "getNativeHandle" | "openDevtools" | "closeDevtools" | "isDevtoolsOpen" | "evalJs" | "injectCss" | "setMinSize" | "setMaxSize" | "center" | "getMonitors";
+
+/** Hook callback types */
+type BeforeHookCallback<T extends OpName> = (args: OpArgs<T>) => void | Promise<void>;
+type AfterHookCallback<T extends OpName> = (result: OpResult<T>, args: OpArgs<T>) => void | Promise<void>;
+type ErrorHookCallback<T extends OpName> = (error: Error, args: OpArgs<T>) => void | Promise<void>;
+
+/** Internal hook storage */
+const _hooks = {
+  before: new Map<OpName, Set<BeforeHookCallback<OpName>>>(),
+  after: new Map<OpName, Set<AfterHookCallback<OpName>>>(),
+  error: new Map<OpName, Set<ErrorHookCallback<OpName>>>(),
+};
+
+/**
+ * Register a callback to be called before an operation executes.
+ * @param opName - The name of the operation to hook
+ * @param callback - Function called with the operation arguments
+ * @returns Unsubscribe function to remove the hook
+ */
+export function onBefore<T extends OpName>(
+  opName: T,
+  callback: BeforeHookCallback<T>
+): () => void {
+  if (!_hooks.before.has(opName)) {
+    _hooks.before.set(opName, new Set());
+  }
+  _hooks.before.get(opName)!.add(callback as BeforeHookCallback<OpName>);
+  return () => _hooks.before.get(opName)?.delete(callback as BeforeHookCallback<OpName>);
+}
+
+/**
+ * Register a callback to be called after an operation completes successfully.
+ * @param opName - The name of the operation to hook
+ * @param callback - Function called with the result and original arguments
+ * @returns Unsubscribe function to remove the hook
+ */
+export function onAfter<T extends OpName>(
+  opName: T,
+  callback: AfterHookCallback<T>
+): () => void {
+  if (!_hooks.after.has(opName)) {
+    _hooks.after.set(opName, new Set());
+  }
+  _hooks.after.get(opName)!.add(callback as AfterHookCallback<OpName>);
+  return () => _hooks.after.get(opName)?.delete(callback as AfterHookCallback<OpName>);
+}
+
+/**
+ * Register a callback to be called when an operation throws an error.
+ * @param opName - The name of the operation to hook
+ * @param callback - Function called with the error and original arguments
+ * @returns Unsubscribe function to remove the hook
+ */
+export function onError<T extends OpName>(
+  opName: T,
+  callback: ErrorHookCallback<T>
+): () => void {
+  if (!_hooks.error.has(opName)) {
+    _hooks.error.set(opName, new Set());
+  }
+  _hooks.error.get(opName)!.add(callback as ErrorHookCallback<OpName>);
+  return () => _hooks.error.get(opName)?.delete(callback as ErrorHookCallback<OpName>);
+}
+
+/** Internal: Invoke before hooks for an operation */
+async function _invokeBeforeHooks<T extends OpName>(opName: T, args: OpArgs<T>): Promise<void> {
+  const hooks = _hooks.before.get(opName);
+  if (hooks) {
+    for (const hook of hooks) {
+      await hook(args);
+    }
+  }
+}
+
+/** Internal: Invoke after hooks for an operation */
+async function _invokeAfterHooks<T extends OpName>(opName: T, result: OpResult<T>, args: OpArgs<T>): Promise<void> {
+  const hooks = _hooks.after.get(opName);
+  if (hooks) {
+    for (const hook of hooks) {
+      await hook(result, args);
+    }
+  }
+}
+
+/** Internal: Invoke error hooks for an operation */
+async function _invokeErrorHooks<T extends OpName>(opName: T, error: Error, args: OpArgs<T>): Promise<void> {
+  const hooks = _hooks.error.get(opName);
+  if (hooks) {
+    for (const hook of hooks) {
+      await hook(error, args);
+    }
+  }
+}
+
+/**
+ * Remove all hooks for a specific operation or all operations.
+ * @param opName - Optional: specific operation to clear hooks for
+ */
+export function removeAllHooks(opName?: OpName): void {
+  if (opName) {
+    _hooks.before.delete(opName);
+    _hooks.after.delete(opName);
+    _hooks.error.delete(opName);
+  } else {
+    _hooks.before.clear();
+    _hooks.after.clear();
+    _hooks.error.clear();
+  }
+}
+
+/** Handler function type */
+type HandlerFn = (...args: unknown[]) => unknown | Promise<unknown>;
+
+/** Internal handler storage */
+const _handlers = new Map<string, HandlerFn>();
+
+/**
+ * Register a custom handler that can be invoked by name.
+ * @param name - Unique name for the handler
+ * @param handler - Handler function to register
+ * @throws Error if a handler with the same name already exists
+ */
+export function registerHandler(name: string, handler: HandlerFn): void {
+  if (_handlers.has(name)) {
+    throw new Error(`Handler '${name}' already registered`);
+  }
+  _handlers.set(name, handler);
+}
+
+/**
+ * Invoke a registered handler by name.
+ * @param name - Name of the handler to invoke
+ * @param args - Arguments to pass to the handler
+ * @returns The handler's return value
+ * @throws Error if no handler with the given name exists
+ */
+export async function invokeHandler(name: string, ...args: unknown[]): Promise<unknown> {
+  const handler = _handlers.get(name);
+  if (!handler) {
+    throw new Error(`Handler '${name}' not found`);
+  }
+  return await handler(...args);
+}
+
+/**
+ * List all registered handler names.
+ * @returns Array of handler names
+ */
+export function listHandlers(): string[] {
+  return Array.from(_handlers.keys());
+}
+
+/**
+ * Remove a registered handler.
+ * @param name - Name of the handler to remove
+ * @returns true if the handler was removed, false if it didn't exist
+ */
+export function removeHandler(name: string): boolean {
+  return _handlers.delete(name);
+}
+
+/**
+ * Check if a handler is registered.
+ * @param name - Name of the handler to check
+ * @returns true if the handler exists
+ */
+export function hasHandler(name: string): boolean {
+  return _handlers.has(name);
+}
+

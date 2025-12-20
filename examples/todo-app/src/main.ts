@@ -2,7 +2,7 @@
 // Demonstrates: runtime:fs persistence, runtime:window windows/menus/dialogs, IPC patterns
 
 import { createWindow, menu, dialog } from "runtime:window";
-import { ipcEvents, sendToWindow } from "runtime:ipc";
+import { windowEvents, sendToWindow } from "runtime:ipc";
 import { readTextFile, writeTextFile, exists } from "runtime:fs";
 import { homeDir } from "runtime:sys";
 
@@ -157,7 +157,7 @@ async function main() {
   });
 
   // Handle window/IPC events
-  for await (const event of ipcEvents()) {
+  for await (const event of windowEvents()) {
     console.log("Window event:", event.channel, event.payload);
 
     switch (event.channel) {

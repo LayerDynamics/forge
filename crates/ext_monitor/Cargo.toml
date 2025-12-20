@@ -4,13 +4,24 @@ version = "0.1.0-alpha.1"
 edition = "2021"
 publish = false
 build = "build.rs"
+description = "System and runtime monitoring extension for Forge"
 
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
 [dependencies]
 deno_core = "0.373"
+deno_error = "0.7"
 serde = { version = "1", features = ["derive"] }
 forge-weld = { path = "../forge-weld" }
 forge-weld-macro = { path = "../forge-weld-macro" }
 linkme = "0.3"
+thiserror = "2"
+tracing = "0.1"
+tokio = { version = "1", features = ["sync", "time", "rt"] }
+tokio-util = "0.7"
+sysinfo = "0.32"
 
 [build-dependencies]
 forge-weld = { path = "../forge-weld" }

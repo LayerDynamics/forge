@@ -28,6 +28,9 @@ fn transpile_ts(ts_code: &str, specifier: &str) -> String {
 }
 
 fn main() {
+    // Tell Cargo to rerun build.rs when FORGE_EMBED_DIR changes
+    println!("cargo:rerun-if-env-changed=FORGE_EMBED_DIR");
+
     let out_dir = env::var("OUT_DIR").unwrap();
     let out_path = Path::new(&out_dir);
 

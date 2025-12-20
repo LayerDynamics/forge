@@ -4,6 +4,10 @@ version = "0.1.0-alpha.1"
 edition = "2021"
 build = "build.rs"
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
+
 [dependencies]
 anyhow = "1"
 thiserror = "1"
@@ -41,7 +45,10 @@ ext_window = { path = "../ext_window" }
 ext_process = { path = "../ext_process" }
 ext_wasm = { path = "../ext_wasm" }
 ext_app = { path = "../ext_app" }
+ext_bundler = { path = "../ext_bundler" }
+ext_codesign = { path = "../ext_codesign" }
 ext_crypto = { path = "../ext_crypto" }
+ext_encoding = { path = "../ext_encoding" }
 ext_storage = { path = "../ext_storage" }
 ext_shell = { path = "../ext_shell" }
 ext_database = { path = "../ext_database" }
@@ -59,7 +66,13 @@ ext_path = { path = "../ext_path" }
 ext_signals = { path = "../ext_signals" }
 ext_timers = { path = "../ext_timers" }
 ext_webview = { path = "../ext_webview" }
+ext_weld = { path = "../ext_weld" }
 ext_devtools = { path = "../ext_devtools" }
+ext_etcher = { path = "../ext_etcher" }
+ext_svelte = { path = "../ext_svelte" }
+ext_dock = { path = "../ext_dock" }
+ext_image_tools = { path = "../ext_image_tools" }
+ext_web_inspector = { path = "../ext_web_inspector" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"

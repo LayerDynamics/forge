@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forge Inspector</title>
+    <link rel="stylesheet" href="forge-panel.css">
+</head>
+<body>
+    <div id="forge-inspector">
+        <header class="toolbar">
+            <div class="brand">
+                <svg class="logo" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.5L19 8l-7 3.5L5 8l7-3.5zM4 9.5l7 3.5v6.5L4 16V9.5zm16 0V16l-7 3.5V13l7-3.5z"/>
+                </svg>
+                <h1>Forge</h1>
+            </div>
+            <nav class="tabs" role="tablist">
+                <button data-tab="monitor" class="active" role="tab" aria-selected="true" aria-controls="monitor">
+                    <span class="tab-icon">&#x1F4CA;</span>
+                    Monitor
+                </button>
+                <button data-tab="trace" role="tab" aria-selected="false" aria-controls="trace">
+                    <span class="tab-icon">&#x23F1;</span>
+                    Trace
+                </button>
+                <button data-tab="debugger" role="tab" aria-selected="false" aria-controls="debugger">
+                    <span class="tab-icon">&#x1F41E;</span>
+                    Debugger
+                </button>
+                <button data-tab="signals" role="tab" aria-selected="false" aria-controls="signals">
+                    <span class="tab-icon">&#x26A1;</span>
+                    Signals
+                </button>
+                <button data-tab="runtime" role="tab" aria-selected="false" aria-controls="runtime">
+                    <span class="tab-icon">&#x2699;</span>
+                    Runtime
+                </button>
+            </nav>
+            <div class="toolbar-actions">
+                <button id="refresh-btn" class="icon-btn" title="Refresh data">&#x21BB;</button>
+                <button id="pause-btn" class="icon-btn" title="Pause updates">&#x23F8;</button>
+                <span class="status-indicator" id="connection-status" title="CDP connection status"></span>
+            </div>
+        </header>
+
+        <main class="content">
+            <!-- Monitor Panel -->
+            <section id="monitor" class="panel active" role="tabpanel" aria-labelledby="tab-monitor">
+                <div class="metrics-grid">
+                    <div class="metric-card" id="cpu-card">
+                        <div class="metric-header">
+                            <h3>CPU Usage</h3>
+                            <span class="metric-badge" id="cpu-cores">-- cores</span>
+                        </div>
+                        <div class="gauge-container">
+                            <div class="gauge" id="cpu-gauge">
+                                <div class="gauge-fill" id="cpu-gauge-fill"></div>
+                            </div>
+                            <span class="gauge-label" id="cpu-value">--%</span>
+                        </div>
+                        <div class="metric-details">
+                            <div class="detail-row">
+                                <span class="detail-label">System</span>
+                                <span class="detail-value" id="cpu-system">--%</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">User</span>
+                                <span class="detail-value" id="cpu-user">--%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card" id="memory-card">
+                        <div class="metric-header">
+                            <h3>Memory</h3>
+                            <span class="metric-badge" id="memory-total">-- GB total</span>
+                        </div>
+                        <div class="gauge-container">
+                            <div class="gauge" id="memory-gauge">
+                                <div class="gauge-fill" id="memory-gauge-fill"></div>
+                            </div>
+                            <span class="gauge-label" id="memory-value">-- MB</span>
+                        </div>
+                        <div class="metric-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Available</span>
+                                <span class="detail-value" id="memory-available">-- MB</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Swap</span>
+                                <span class="detail-value" id="memory-swap">-- MB</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card" id="event-loop-card">
+                        <div class="metric-header">
+                            <h3>Event Loop</h3>
+                            <span class="metric-badge health-good" id="event-loop-health">Healthy</span>
+                        </div>
+                        <div class="metric-value-large" id="event-loop-value">-- <small>us</small></div>
+                        <div class="metric-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Min</span>
+                                <span class="detail-value" id="event-loop-min">-- us</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Max</span>
+                                <span class="detail-value" id="event-loop-max">-- us</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card" id="network-card">
+                        <div class="metric-header">
+                            <h3>Network</h3>
+                            <span class="metric-badge" id="network-interfaces">-- interfaces</span>
+                        </div>
+                        <div class="metric-value-large">
+                            <span id="network-rx">-- KB/s</span>
+                            <span class="separator">|</span>
+                            <span id="network-tx">-- KB/s</span>
+                        </div>
+                        <div class="metric-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Total RX</span>
+                                <span class="detail-value" id="network-total-rx">-- MB</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Total TX</span>
+                                <span class="detail-value" id="network-total-tx">-- MB</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="monitor-subscriptions">
+                    <h3>Active Subscriptions</h3>
+                    <div class="subscription-list" id="monitor-subscriptions"></div>
+                </div>
+            </section>
+
+            <!-- Trace Panel -->
+            <section id="trace" class="panel" role="tabpanel" aria-labelledby="tab-trace">
+                <div class="trace-toolbar">
+                    <div class="trace-stats">
+                        <span class="stat">
+                            <span class="stat-label">Active:</span>
+                            <span class="stat-value" id="trace-active-count">0</span>
+                        </span>
+                        <span class="stat">
+                            <span class="stat-label">Finished:</span>
+                            <span class="stat-value" id="trace-finished-count">0</span>
+                        </span>
+                    </div>
+                    <div class="trace-actions">
+                        <button id="trace-clear-btn" class="btn-small">Clear Finished</button>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="trace-auto-expand">
+                            Auto-expand
+                        </label>
+                    </div>
+                </div>
+
+                <div class="trace-content">
+                    <div class="trace-section">
+                        <h4 class="section-title">Active Spans</h4>
+                        <div class="span-list" id="active-spans">
+                            <div class="empty-state">No active spans</div>
+                        </div>
+                    </div>
+
+                    <div class="trace-section">
+                        <h4 class="section-title">Finished Spans</h4>
+                        <div class="span-list" id="finished-spans">
+                            <div class="empty-state">No finished spans</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Debugger Panel -->
+            <section id="debugger" class="panel" role="tabpanel" aria-labelledby="tab-debugger">
+                <div class="debugger-status">
+                    <div class="status-row">
+                        <span class="status-label">Connection:</span>
+                        <span class="status-value" id="debugger-connected">Disconnected</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="status-label">State:</span>
+                        <span class="status-value" id="debugger-state">Unknown</span>
+                    </div>
+                </div>
+
+                <div class="debugger-sections">
+                    <div class="debugger-section">
+                        <h4 class="section-title">
+                            Breakpoints
+                            <span class="badge" id="breakpoint-count">0</span>
+                        </h4>
+                        <div class="breakpoint-list" id="breakpoints">
+                            <div class="empty-state">No breakpoints set</div>
+                        </div>
+                    </div>
+
+                    <div class="debugger-section">
+                        <h4 class="section-title">
+                            Scripts
+                            <span class="badge" id="script-count">0</span>
+                        </h4>
+                        <div class="script-list" id="scripts">
+                            <div class="empty-state">No scripts loaded</div>
+                        </div>
+                    </div>
+
+                    <div class="debugger-section">
+                        <h4 class="section-title">Call Stack</h4>
+                        <div class="callstack-list" id="callstack">
+                            <div class="empty-state">Not paused</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Signals Panel -->
+            <section id="signals" class="panel" role="tabpanel" aria-labelledby="tab-signals">
+                <div class="signals-header">
+                    <h3>Signal Handling</h3>
+                    <span class="platform-info" id="signals-platform"></span>
+                </div>
+
+                <div class="signals-grid">
+                    <div class="signals-section">
+                        <h4 class="section-title">Supported Signals</h4>
+                        <div class="signal-list" id="supported-signals">
+                            <div class="empty-state">Loading...</div>
+                        </div>
+                    </div>
+
+                    <div class="signals-section">
+                        <h4 class="section-title">
+                            Active Subscriptions
+                            <span class="badge" id="signal-subscription-count">0</span>
+                        </h4>
+                        <div class="subscription-list" id="signal-subscriptions">
+                            <div class="empty-state">No active subscriptions</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="signal-log">
+                    <h4 class="section-title">Signal Events</h4>
+                    <div class="log-container" id="signal-events">
+                        <div class="empty-state">Waiting for signals...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Runtime Panel -->
+            <section id="runtime" class="panel" role="tabpanel" aria-labelledby="tab-runtime">
+                <div class="runtime-grid">
+                    <div class="runtime-card" id="app-info-card">
+                        <h3>Application</h3>
+                        <div class="info-list" id="app-info">
+                            <div class="info-row">
+                                <span class="info-label">Name:</span>
+                                <span class="info-value" id="app-name">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Version:</span>
+                                <span class="info-value" id="app-version">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Process ID:</span>
+                                <span class="info-value" id="app-pid">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="runtime-card" id="window-info-card">
+                        <h3>Windows</h3>
+                        <div class="window-list" id="window-list">
+                            <div class="empty-state">No windows</div>
+                        </div>
+                    </div>
+
+                    <div class="runtime-card" id="platform-info-card">
+                        <h3>Platform</h3>
+                        <div class="info-list" id="platform-info">
+                            <div class="info-row">
+                                <span class="info-label">OS:</span>
+                                <span class="info-value" id="platform-os">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Arch:</span>
+                                <span class="info-value" id="platform-arch">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">WebView:</span>
+                                <span class="info-value" id="platform-webview">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="runtime-card full-width" id="extensions-card">
+                        <h3>
+                            Extensions
+                            <span class="badge" id="extension-count">0</span>
+                        </h3>
+                        <div class="extension-grid" id="extensions">
+                            <div class="empty-state">Loading extensions...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="status-bar">
+            <span class="status-item" id="update-time">Last update: --</span>
+            <span class="status-item" id="cdp-version">CDP: --</span>
+            <span class="status-item" id="forge-version">Forge Inspector v1.0</span>
+        </footer>
+    </div>
+
+    <script src="forge-panel.js"></script>
+</body>
+</html>

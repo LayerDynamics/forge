@@ -2,6 +2,7 @@
 //!
 //! Generates the TypeScript source files that wrap Deno.core.ops calls.
 
+use crate::codegen::ExtensibilityGenerator;
 use crate::ir::{OpSymbol, WeldEnum, WeldModule, WeldStruct, WeldType};
 
 /// Generator for TypeScript init.ts modules
@@ -48,6 +49,12 @@ impl<'a> TypeScriptGenerator<'a> {
         for op in &self.module.ops {
             output.push_str(&self.generate_export_function(op));
             output.push('\n');
+        }
+
+        // Generate extensibility APIs if enabled
+        if self.module.extensibility.is_enabled() {
+            let ext_gen = ExtensibilityGenerator::new(self.module);
+            output.push_str(&ext_gen.generate());
         }
 
         output

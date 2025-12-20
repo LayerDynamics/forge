@@ -2,7 +2,7 @@
 // Demonstrates: runtime:sys info, runtime:process listing, multi-window, tray icons
 
 import { createWindow, tray, menu, WindowHandle } from "runtime:window";
-import { ipcEvents, sendToWindow } from "runtime:ipc";
+import { windowEvents, sendToWindow } from "runtime:ipc";
 import { info, powerInfo } from "runtime:sys";
 import { spawn } from "runtime:process";
 
@@ -185,7 +185,7 @@ async function main() {
   });
 
   // Handle window events
-  for await (const event of ipcEvents()) {
+  for await (const event of windowEvents()) {
     console.log("Window event:", event.channel, event.windowId);
 
     // Route events based on window

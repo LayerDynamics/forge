@@ -5,6 +5,17 @@ edition = "2021"
 description = "Code generation and binding utilities for Forge framework"
 license = "MIT"
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
+
+[features]
+default = []
+# Note: Documentation generation is handled by forge_cli using forge-etch directly.
+# We can't add forge-etch as a dependency here due to cyclic dependency (forge-etch depends on forge-weld).
+# When ExtensionBuilder.generate_docs() is used, it saves WeldModule JSON to OUT_DIR/docs/
+# which forge_cli can later consume to generate documentation using forge-etch.
+
 [dependencies]
 # Serialization
 serde = { version = "1", features = ["derive"] }

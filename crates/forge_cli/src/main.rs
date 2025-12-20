@@ -1,3 +1,99 @@
+//! Forge CLI - Command-line interface for building and bundling Forge applications
+//!
+//! The Forge CLI provides a complete workflow for developing, building, and distributing
+//! desktop applications built with the Forge framework. Commands are designed to follow
+//! a natural progression from development to production deployment.
+//!
+//! # Command Workflow
+//!
+//! 1. **Development** (`forge dev`) - Run app with hot reload and full debugging
+//! 2. **Build** (`forge build`) - Compile and bundle web assets for production
+//! 3. **Bundle** (`forge bundle`) - Create platform-specific distributables
+//! 4. **Sign** (`forge sign`) - Code sign the bundled artifacts
+//!
+//! # Architecture
+//!
+//! ## Binary Discovery
+//!
+//! The CLI locates the `forge-runtime` binary using a priority-based search:
+//! 1. Same directory as the CLI binary (for installed versions)
+//! 2. `~/.forge/bin/` (standard user installation)
+//! 3. System PATH environment variable
+//! 4. Development fallback: `cargo run -p forge-runtime`
+//!
+//! See [`find_forge_host()`] for implementation details.
+//!
+//! ## Framework Detection
+//!
+//! The build system automatically detects frontend frameworks by analyzing:
+//! - `deno.json` for framework imports (React, Svelte dependencies)
+//! - File extensions in `web/` directory (`.vue`, `.svelte`, `.tsx`)
+//!
+//! Detected frameworks receive specialized handling:
+//! - **React**: JSX automatic transform, esbuild with React preset
+//! - **Svelte**: Component compilation, TypeScript preprocessing, import rewriting
+//! - **Vue**: SFC compilation with template extraction
+//! - **Minimal**: Standard TypeScript/JavaScript bundling
+//!
+//! ## Build Pipeline
+//!
+//! ### Dev Mode (`cmd_dev`)
+//! - Locates forge-runtime binary
+//! - Passes `--dev` flag to enable:
+//!   - Hot module reload (HMR) server on port 3001
+//!   - Permissive capability checks
+//!   - Filesystem asset serving
+//! - Runs until terminated (Ctrl+C)
+//!
+//! ### Production Build (`cmd_build`)
+//! 1. **Validation**: Verify manifest.app.toml, src/, web/ structure
+//! 2. **Icon Check**: Validate app icon meets platform requirements
+//! 3. **Framework Detection**: Analyze project structure
+//! 4. **Asset Copying**: Copy web/ and src/ to dist/
+//! 5. **Transform** (if needed):
+//!    - Svelte: Compile `.svelte` → `.js` with TypeScript support
+//!    - Vue: Compile SFCs with `@vue/compiler-sfc`
+//! 6. **Bundle**: Run esbuild via Deno to create `bundle.js`
+//! 7. **HTML Update**: Rewrite `index.html` to reference `bundle.js`
+//!
+//! ### Bundling (`cmd_bundle`)
+//! 1. Ensure `dist/` exists (runs build if missing)
+//! 2. Compile `forge-runtime` with `FORGE_EMBED_DIR` set
+//! 3. Call platform-specific bundler:
+//!    - **macOS**: Create `.app` bundle + DMG (see [`bundler::macos`])
+//!    - **Windows**: Generate MSIX package (see [`bundler::windows`])
+//!    - **Linux**: Create AppImage or tarball (see [`bundler::linux`])
+//!
+//! ## Error Handling
+//!
+//! All commands return `anyhow::Result<()>` for consistent error propagation.
+//! User-facing errors include:
+//! - Missing structure validation with fix suggestions
+//! - Icon validation with detailed requirements
+//! - Build failures with framework-specific context
+//!
+//! # Examples
+//!
+//! ```bash
+//! # Start development server
+//! forge dev examples/react-app
+//!
+//! # Build production assets
+//! forge build my-app
+//!
+//! # Create distributable
+//! forge bundle my-app
+//!
+//! # Sign for macOS distribution
+//! forge sign --identity "Developer ID Application: Name (TEAM)" my-app/bundle/MyApp.dmg
+//! ```
+//!
+//! # Module Organization
+//!
+//! - [`bundler`] - Platform-specific packaging backends
+//! - [`docs`] - API documentation generation
+//! - Main module - Command dispatch and build orchestration
+
 use anyhow::{anyhow, bail, Context, Result};
 use std::{
     env, fs,
@@ -6,9 +102,10 @@ use std::{
 };
 
 mod bundler;
+mod docs;
 
 fn usage() {
-    eprintln!("forge <dev|build|bundle|sign|icon> [options] <app-dir>");
+    eprintln!("forge <dev|build|bundle|sign|icon|docs> [options] <app-dir>");
     eprintln!();
     eprintln!("Commands:");
     eprintln!("  dev <app-dir>                       Run in development mode");
@@ -16,10 +113,17 @@ fn usage() {
     eprintln!("  bundle <app-dir>                    Package into distributable");
     eprintln!("  sign <artifact>                     Sign a package artifact");
     eprintln!("  icon <subcommand>                   Manage app icons");
+    eprintln!("  docs [options] [target]             Generate API documentation");
     eprintln!();
     eprintln!("Icon subcommands:");
     eprintln!("  icon create <path>                  Create a placeholder icon");
     eprintln!("  icon validate <app-dir>             Validate app icon requirements");
+    eprintln!();
+    eprintln!("Docs options:");
+    eprintln!("  --all-extensions                    Generate docs for all extensions");
+    eprintln!("  --extension, -e <name>              Generate docs for specific extension");
+    eprintln!("  --output, -o <dir>                  Output directory (default: docs)");
+    eprintln!("  --format, -f <astro|html|both>      Output format (default: astro)");
     eprintln!();
     eprintln!("Getting Started:");
     eprintln!("  Copy an example from the examples/ folder to start a new app:");
@@ -43,6 +147,43 @@ fn usage() {
 /// 2. ~/.forge/bin/ (standard install location)
 /// 3. PATH (for manual installations)
 /// 4. Development fallback (cargo run)
+///
+/// # Returns
+///
+/// The path to the forge-runtime binary, or a sentinel value `__cargo_run__`
+/// if running in development mode.
+///
+/// # Errors
+///
+/// Returns `anyhow::Error` when forge-runtime cannot be located:
+///
+/// - **Binary not found in any location**
+///   - Searched: same directory, ~/.forge/bin/, PATH
+///   - Not in development environment (no Cargo.toml)
+///   - **Recovery:** Install Forge or run from workspace root
+///
+/// Error message includes installation instructions:
+/// ```text
+/// forge-runtime not found!
+///
+/// Install Forge with:
+///   curl -fsSL https://forge-deno.com/install.sh | sh
+/// ```
+///
+/// # Examples
+///
+/// ```no_run
+/// # use anyhow::Result;
+/// # use std::path::PathBuf;
+/// # fn find_forge_host() -> Result<PathBuf> { Ok(PathBuf::from("test")) }
+/// let runtime = find_forge_host()?;
+/// if runtime.to_string_lossy() == "__cargo_run__" {
+///     // Development mode: use cargo run
+/// } else {
+///     // Production: use found binary
+/// }
+/// # Ok::<(), anyhow::Error>(())
+/// ```
 fn find_forge_host() -> Result<PathBuf> {
     #[cfg(target_os = "windows")]
     let binary_name = "forge-runtime.exe";
@@ -220,7 +361,7 @@ fn bundle_with_esbuild(app_dir: &Path, dist_dir: &Path, framework: &Framework) -
         "--bundle".to_string(),
         "--format=esm".to_string(),
         "--target=es2020".to_string(),
-        "--outfile".to_string() + &out_file.display().to_string(),
+        format!("--outfile={}", out_file.display()),
     ];
 
     // Add React JSX transform if needed
@@ -561,6 +702,47 @@ fn update_html_for_bundle(dist_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Build application for production
+///
+/// Creates a `dist/` directory with:
+/// - Compiled web assets (bundled JavaScript)
+/// - Original TypeScript source in `src/`
+/// - Application manifest
+///
+/// # Build Process
+///
+/// 1. **Validate Structure**
+///    - Requires: manifest.app.toml, web/, src/
+///    - Icon validation (warns but doesn't fail)
+/// 2. **Detect Framework**
+///    - Analyzes deno.json and file extensions
+///    - Determines compilation strategy
+/// 3. **Transform Assets**
+///    - Svelte/Vue: Compile components to JS
+///    - Copy all other assets verbatim
+/// 4. **Bundle with esbuild**
+///    - Create single bundle.js via Deno
+///    - Apply framework-specific transforms
+///    - Minify and generate source maps
+/// 5. **Update HTML**
+///    - Rewrite script tags to reference bundle.js
+///
+/// # Errors
+///
+/// Returns `anyhow::Error` if:
+/// - `manifest.app.toml` not found
+/// - Missing `web/` or `src/` directories
+/// - Framework compilation fails (Svelte/Vue)
+/// - esbuild bundling fails
+///
+/// Icon validation errors are logged as warnings but don't fail the build.
+///
+/// # Examples
+///
+/// ```bash
+/// forge build my-app
+/// # Creates my-app/dist/ with production assets
+/// ```
 fn cmd_build(app_dir: &Path) -> Result<()> {
     use bundler::{AppManifest, IconProcessor, RECOMMENDED_ICON_SIZE};
 
@@ -1073,6 +1255,13 @@ fn main() -> Result<()> {
         }
         "icon" => {
             cmd_icon(&args)?;
+        }
+        "docs" => {
+            if args.is_empty() || args.iter().any(|a| a == "--help" || a == "-h") {
+                docs::usage();
+            } else {
+                docs::run(&args)?;
+            }
         }
         _ => usage(),
     }

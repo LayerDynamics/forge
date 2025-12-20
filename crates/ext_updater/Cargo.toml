@@ -5,12 +5,31 @@ edition = "2021"
 publish = false
 build = "build.rs"
 
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
 [dependencies]
 deno_core = "0.373"
+deno_error = "0.7"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 forge-weld = { path = "../forge-weld" }
 forge-weld-macro = { path = "../forge-weld-macro" }
 linkme = "0.3"
+thiserror = "2"
+tokio = { version = "1", features = ["sync", "time", "fs", "io-util"] }
+tokio-util = "0.7"
+tracing = "0.1"
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
+semver = "1"
+sha2 = "0.10"
+tempfile = "3"
+url = "2"
+futures-util = "0.3"
 
 [build-dependencies]
 forge-weld = { path = "../forge-weld" }
+
+[lib]
+crate-type = ["lib"]

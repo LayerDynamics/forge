@@ -1,0 +1,16 @@
+[package]
+name = "ext_encoding"
+version = "0.1.0"
+edition = "2021"
+description = "TextEncoder/TextDecoder encoding extension for Forge runtime"
+build = "build.rs"
+
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
+[dependencies]
+deno_core = "0.373"
+
+[build-dependencies]
+forge-weld = { path = "../forge-weld" }

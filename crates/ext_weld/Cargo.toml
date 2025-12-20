@@ -1,0 +1,37 @@
+[package]
+name = "ext_weld"
+version = "0.1.0-alpha.1"
+edition = "2021"
+description = "Forge Weld extension - code generation and TypeScript binding utilities"
+license = "MIT"
+build = "build.rs"
+
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
+[dependencies]
+# Deno runtime
+deno_core = "0.373"
+deno_error = "0.7"
+
+# Forge
+forge-weld = { path = "../forge-weld" }
+forge-weld-macro = { path = "../forge-weld-macro" }
+forge-etch = { path = "../forge-etch" }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+thiserror = "1"
+
+# Tracing
+tracing = "0.1"
+
+# Inventory for weld macros
+linkme = "0.3"
+
+[build-dependencies]
+forge-weld = { path = "../forge-weld" }

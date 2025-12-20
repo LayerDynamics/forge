@@ -43,6 +43,7 @@ forge dev <app-dir>
 ```
 
 Features:
+
 - Live reload on file changes
 - Development-friendly CSP settings
 - Console output in terminal
@@ -56,6 +57,7 @@ forge build <app-dir>
 ```
 
 Process:
+
 1. Detect framework (React, Vue, Svelte, Minimal)
 2. Bundle with esbuild via Deno
 3. Transform SFC files (Vue/Svelte)
@@ -70,6 +72,7 @@ forge bundle <app-dir>
 ```
 
 **Output formats:**
+
 - **macOS:** `.app` bundle + `.dmg` disk image
 - **Windows:** `.msix` package
 - **Linux:** `.AppImage` or `.tar.gz`
@@ -83,6 +86,7 @@ forge sign [--identity <IDENTITY>] <artifact>
 ```
 
 Supports:
+
 - macOS code signing with Developer ID
 - Windows code signing with certificates
 - Notarization for macOS
@@ -97,6 +101,7 @@ forge icon validate <app-dir> # Validate icon requirements
 ```
 
 **Icon requirements:**
+
 - Format: PNG with transparency (RGBA)
 - Size: 1024x1024 pixels (minimum 512x512)
 - Shape: Square (1:1 aspect ratio)

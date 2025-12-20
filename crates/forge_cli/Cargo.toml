@@ -8,6 +8,10 @@ build = "build.rs"
 name = "forge"
 path = "src/main.rs"
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
+
 [dependencies]
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
@@ -20,3 +24,6 @@ walkdir = "2"         # Directory traversal
 chrono = "0.4"        # Timestamps for Info.plist
 dirs = "5"            # Cache directory resolution
 which = "7.0"         # Find forge-host binary in PATH
+
+# Documentation generation
+forge-etch = { path = "../forge-etch" }

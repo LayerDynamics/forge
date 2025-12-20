@@ -2,7 +2,7 @@
 // Demonstrates: Full runtime:fs, dialogs, context menus, clipboard, file watching
 
 import { createWindow, menu, dialog } from "runtime:window";
-import { ipcEvents, sendToWindow } from "runtime:ipc";
+import { windowEvents, sendToWindow } from "runtime:ipc";
 import { readTextFile, writeTextFile, watch, exists } from "runtime:fs";
 import { clipboard, notify } from "runtime:sys";
 
@@ -321,7 +321,7 @@ async function main() {
   });
 
   // Handle window events
-  for await (const event of ipcEvents()) {
+  for await (const event of windowEvents()) {
     console.log("Window event:", event.channel);
 
     switch (event.channel) {

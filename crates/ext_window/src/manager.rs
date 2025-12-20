@@ -18,6 +18,7 @@ use std::time::Instant;
 use tao::event_loop::EventLoopWindowTarget;
 use tao::window::{Window, WindowBuilder, WindowId};
 use tokio::sync::mpsc;
+use tracing::{debug, warn};
 use wry::http::{Response, StatusCode};
 use wry::WebView;
 
@@ -68,6 +69,9 @@ pub struct WindowManager<U: 'static> {
     // IPC sender for renderer -> Deno messages
     to_deno_tx: mpsc::Sender<IpcEvent>,
 
+    // Channel to send commands back to event loop (for renderer ready signals)
+    window_cmd_tx: mpsc::Sender<WindowCmd>,
+
     // Capability checker for channel filtering
     capabilities: Option<Arc<dyn ChannelChecker>>,
 
@@ -76,6 +80,13 @@ pub struct WindowManager<U: 'static> {
 
     // Asset provider (provided by forge-host)
     asset_provider: Arc<dyn AssetProvider>,
+
+    // Renderer ready tracking - windows signal when their JS context is ready
+    renderer_ready: HashMap<String, bool>,
+
+    // Queue of messages for windows that aren't ready yet
+    // Key: window_id, Value: Vec<(channel, payload)>
+    pending_messages: HashMap<String, Vec<(String, String)>>,
 
     // Phantom for UserEvent type
     _phantom: std::marker::PhantomData<U>,
@@ -92,6 +103,7 @@ impl<U: 'static> WindowManager<U> {
         config: WindowManagerConfig,
         window_events_tx: mpsc::Sender<WindowSystemEvent>,
         to_deno_tx: mpsc::Sender<IpcEvent>,
+        window_cmd_tx: mpsc::Sender<WindowCmd>,
         capabilities: Option<Arc<dyn ChannelChecker>>,
         preload_js: String,
         asset_provider: Arc<dyn AssetProvider>,
@@ -110,9 +122,12 @@ impl<U: 'static> WindowManager<U> {
             config,
             window_events_tx,
             to_deno_tx,
+            window_cmd_tx,
             capabilities,
             preload_js,
             asset_provider,
+            renderer_ready: HashMap::new(),
+            pending_messages: HashMap::new(),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -235,7 +250,10 @@ impl<U: 'static> WindowManager<U> {
     }
 
     /// Send message to renderer
-    pub fn send_to_renderer(&self, window_id: &str, channel: &str, payload: &str) {
+    ///
+    /// If the renderer hasn't signaled it's ready yet, the message is queued
+    /// and will be delivered when the renderer sends __renderer_ready__.
+    pub fn send_to_renderer(&mut self, window_id: &str, channel: &str, payload: &str) {
         // Check if channel is allowed for this window
         let win_allowed_channels = self.window_channels.get(window_id).and_then(|c| c.clone());
 
@@ -253,12 +271,60 @@ impl<U: 'static> WindowManager<U> {
             }
         }
 
+        // Check if renderer is ready to receive messages
+        let is_ready = self.renderer_ready.get(window_id).copied().unwrap_or(false);
+
+        if !is_ready {
+            // Queue the message for later delivery
+            tracing::debug!(
+                "Queuing message for window {} (renderer not ready): channel={}",
+                window_id,
+                channel
+            );
+            self.pending_messages
+                .entry(window_id.to_string())
+                .or_default()
+                .push((channel.to_string(), payload.to_string()));
+            return;
+        }
+
+        // Renderer is ready, send immediately
         if let Some(wv) = self.webviews.get(window_id) {
             let js = format!(
                 "window.__host_dispatch && window.__host_dispatch({{channel:{:?},payload:{}}});",
                 channel, payload
             );
             let _ = wv.evaluate_script(&js);
+        }
+    }
+
+    /// Mark a window's renderer as ready and flush any queued messages.
+    ///
+    /// Called when the renderer sends __renderer_ready__ via IPC,
+    /// indicating that window.__host_dispatch is defined and ready.
+    pub fn mark_renderer_ready(&mut self, window_id: &str) {
+        // Mark as ready
+        self.renderer_ready.insert(window_id.to_string(), true);
+
+        // Flush queued messages
+        if let Some(messages) = self.pending_messages.remove(window_id) {
+            let count = messages.len();
+            if count > 0 {
+                tracing::info!(
+                    "Flushing {} queued message(s) to window {}",
+                    count,
+                    window_id
+                );
+            }
+            for (channel, payload) in messages {
+                if let Some(wv) = self.webviews.get(window_id) {
+                    let js = format!(
+                        "window.__host_dispatch && window.__host_dispatch({{channel:{:?},payload:{}}});",
+                        channel, payload
+                    );
+                    let _ = wv.evaluate_script(&js);
+                }
+            }
         }
     }
 
@@ -327,6 +393,7 @@ impl<U: 'static> WindowManager<U> {
 
         // IPC handler
         let to_deno_tx_clone = self.to_deno_tx.clone();
+        let window_cmd_tx_clone = self.window_cmd_tx.clone();
         let win_id_for_ipc = win_id.clone();
         let capabilities = self.capabilities.clone();
         let ipc_allowed_channels = win_channels.clone();
@@ -337,6 +404,14 @@ impl<U: 'static> WindowManager<U> {
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown")
                     .to_string();
+
+                // Intercept renderer ready signal - don't forward to Deno app
+                if channel == "__renderer_ready__" {
+                    let _ = window_cmd_tx_clone.try_send(WindowCmd::RendererReady {
+                        window_id: win_id_for_ipc.clone(),
+                    });
+                    return;
+                }
 
                 let allowed = if let Some(ref caps) = capabilities {
                     caps.check_channel(&channel, ipc_allowed_channels.as_deref())
@@ -372,12 +447,17 @@ impl<U: 'static> WindowManager<U> {
                 .trim_start_matches('/')
                 .trim_end_matches('/');
 
+            // Handle edge case: URLs like app://index.html/subpath - strip the html filename
+            // This allows SPA-style routing where index.html handles all sub-routes
             if let Some(slash_pos) = path.find('/') {
                 let first_part = &path[..slash_pos];
                 if first_part.ends_with(".html") || first_part.ends_with(".htm") {
+                    debug!("app:// path rewrite: stripping '{}' from path", first_part);
                     path = &path[slash_pos + 1..];
                 }
             }
+
+            debug!("app:// protocol request - URI: '{}', resolved path: '{}'", uri, path);
 
             let csp = if is_dev_mode {
                 "default-src 'self' app:; \
@@ -397,6 +477,7 @@ impl<U: 'static> WindowManager<U> {
 
             // Try asset provider first (handles both embedded and filesystem)
             if let Some(bytes) = asset_provider.get_asset(path) {
+                debug!("app:// asset found via provider: '{}' ({} bytes)", path, bytes.len());
                 let (content_type, body) = maybe_transpile_ts(path, bytes);
                 return Response::builder()
                     .status(StatusCode::OK)
@@ -409,8 +490,10 @@ impl<U: 'static> WindowManager<U> {
 
             // Fallback to direct filesystem (for dev mode if provider doesn't handle path)
             let file_path = app_dir.join("web").join(path);
+            debug!("app:// asset provider returned None, trying filesystem: {:?} (exists: {})", file_path, file_path.exists());
             if file_path.exists() {
                 if let Ok(bytes) = std::fs::read(&file_path) {
+                    debug!("app:// asset found via filesystem: {:?} ({} bytes)", file_path, bytes.len());
                     let (content_type, body) = maybe_transpile_ts(path, bytes);
                     return Response::builder()
                         .status(StatusCode::OK)
@@ -423,6 +506,7 @@ impl<U: 'static> WindowManager<U> {
             }
 
             // 404
+            warn!("app:// 404 Not Found - path: '{}', tried filesystem: {:?}", path, file_path);
             Response::builder()
                 .status(StatusCode::NOT_FOUND)
                 .header("Content-Type", "text/plain; charset=utf-8")
@@ -443,6 +527,8 @@ impl<U: 'static> WindowManager<U> {
         self.webviews.insert(win_id.clone(), webview);
         self.tao_windows.insert(win_id.clone(), window);
         self.window_channels.insert(win_id.clone(), win_channels);
+        // Initialize renderer as not ready - will be marked ready when preload sends __renderer_ready__
+        self.renderer_ready.insert(win_id.clone(), false);
 
         if opts.devtools.unwrap_or(false) {
             let _ = self.open_devtools(&win_id);
@@ -465,6 +551,9 @@ impl<U: 'static> WindowManager<U> {
             self.windows.remove(&tao_id);
             self.webviews.remove(window_id);
             self.window_channels.remove(window_id);
+            // Clean up renderer ready state and any queued messages
+            self.renderer_ready.remove(window_id);
+            self.pending_messages.remove(window_id);
 
             let _ = self.window_events_tx.try_send(WindowSystemEvent {
                 window_id: window_id.to_string(),
@@ -972,9 +1061,56 @@ impl<U: 'static> WindowManager<U> {
     /// Update an existing tray icon
     pub fn update_tray(&mut self, tray_id: &str, opts: TrayOpts) -> bool {
         if let Some(tray) = self.trays.get_mut(tray_id) {
+            // Update tooltip if provided
             if let Some(ref tooltip) = opts.tooltip {
                 let _ = tray.set_tooltip(Some(tooltip));
             }
+
+            // Update icon if provided
+            if let Some(ref icon_path) = opts.icon {
+                let full_path = if std::path::Path::new(icon_path).is_absolute() {
+                    std::path::PathBuf::from(icon_path)
+                } else {
+                    self.config.app_dir.join(icon_path)
+                };
+
+                match std::fs::read(&full_path) {
+                    Ok(bytes) => match image::load_from_memory(&bytes) {
+                        Ok(img) => {
+                            let resized =
+                                img.resize_exact(22, 22, image::imageops::FilterType::Lanczos3);
+                            let rgba = resized.to_rgba8();
+                            let (width, height) = rgba.dimensions();
+                            if let Ok(icon) =
+                                tray_icon::Icon::from_rgba(rgba.into_raw(), width, height)
+                            {
+                                let _ = tray.set_icon(Some(icon));
+                                tracing::debug!("Updated tray icon: {}", tray_id);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to load tray icon image: {}", e);
+                        }
+                    },
+                    Err(e) => {
+                        tracing::warn!("Failed to read tray icon file: {}", e);
+                    }
+                }
+            }
+
+            // Update menu if provided
+            if let Some(ref menu_items) = opts.menu {
+                if !menu_items.is_empty() {
+                    let menu = muda::Menu::new();
+                    {
+                        let mut map = self.menu_id_map.lock().unwrap();
+                        add_tray_menu_items(&menu, menu_items, &mut map, tray_id);
+                    }
+                    let _ = tray.set_menu(Some(Box::new(menu)));
+                    tracing::debug!("Updated tray menu: {}", tray_id);
+                }
+            }
+
             tracing::debug!("Updated tray: {}", tray_id);
             true
         } else {
@@ -1475,6 +1611,12 @@ impl<U: 'static> WindowManager<U> {
             WindowCmd::GetMonitors { respond } => {
                 let result = self.get_monitors();
                 let _ = respond.send(result);
+            }
+
+            // Internal/System
+            WindowCmd::RendererReady { window_id } => {
+                tracing::debug!("WindowCmd::RendererReady {}", window_id);
+                self.mark_renderer_ready(&window_id);
             }
         }
     }

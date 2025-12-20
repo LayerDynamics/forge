@@ -658,7 +658,7 @@ mod tests {
         assert!(valid);
 
         // Wrong signature should fail
-        let invalid = verify_impl("sha256", key, data, &vec![0u8; 32]).unwrap();
+        let invalid = verify_impl("sha256", key, data, &[0u8; 32]).unwrap();
         assert!(!invalid);
     }
 

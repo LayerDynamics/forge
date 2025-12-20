@@ -1,5 +1,5 @@
 import { createWindow } from "runtime:window";
-import { ipcEventsFor, sendToWindow } from "runtime:ipc";
+import { windowEventsFor, sendToWindow } from "runtime:ipc";
 import { compile, instantiate, types } from "runtime:wasm";
 import { readBytes } from "runtime:fs";
 
@@ -264,10 +264,19 @@ async function runWasmDemo(): Promise<WasmResult[]> {
     });
 
   } catch (error) {
+    // Enhanced error logging for debugging
     console.error("WASM Demo error:", error);
+    console.error("Error type:", typeof error);
+    console.error("Error constructor:", error?.constructor?.name);
+    if (error instanceof Error) {
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+    }
+    console.error("JSON stringify attempt:", JSON.stringify(error, Object.getOwnPropertyNames(error || {})));
+
     results.push({
       operation: "Error",
-      result: String(error),
+      result: error instanceof Error ? error.message : String(error),
       success: false,
     });
   }
@@ -286,7 +295,7 @@ const win = await createWindow({
 console.log("Window opened, waiting for ready signal...");
 
 // Handle window events
-for await (const event of ipcEventsFor(win.id)) {
+for await (const event of windowEventsFor(win.id)) {
   console.log(`Received event: ${event.channel}`, event.payload);
 
   if (event.channel === "ready") {

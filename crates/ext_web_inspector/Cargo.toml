@@ -1,0 +1,33 @@
+[package]
+name = "ext_web_inspector"
+version = "0.1.0-alpha.1"
+edition = "2021"
+publish = false
+build = "build.rs"
+description = "WebView DevTools inspector extension for Forge with custom CDP domains"
+
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
+[dependencies]
+deno_core = "0.373"
+deno_error = "0.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+forge-weld = { path = "../forge-weld" }
+forge-weld-macro = { path = "../forge-weld-macro" }
+linkme = "0.3"
+thiserror = "2"
+tracing = "0.1"
+tokio = { version = "1", features = ["sync", "time", "rt"] }
+async-trait = "0.1"
+
+# Extension dependencies for bridges
+ext_monitor = { path = "../ext_monitor" }
+ext_trace = { path = "../ext_trace" }
+ext_signals = { path = "../ext_signals" }
+ext_debugger = { path = "../ext_debugger" }
+
+[build-dependencies]
+forge-weld = { path = "../forge-weld" }

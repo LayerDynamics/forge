@@ -2,15 +2,31 @@
 name = "ext_protocol"
 version = "0.1.0-alpha.1"
 edition = "2021"
+description = "Custom URL protocol handler extension for Forge runtime"
+license = "MIT"
 publish = false
 build = "build.rs"
 
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
 [dependencies]
 deno_core = "0.373"
+deno_error = "0.7"
+thiserror = "1"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tokio = { version = "1", features = ["process", "sync", "fs"] }
+linkme = "0.3"
 forge-weld = { path = "../forge-weld" }
 forge-weld-macro = { path = "../forge-weld-macro" }
-linkme = "0.3"
+url = "2"
+urlencoding = "2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winreg = "0.52"
 
 [build-dependencies]
 forge-weld = { path = "../forge-weld" }

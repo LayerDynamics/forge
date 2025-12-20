@@ -3,7 +3,10 @@
 use crate::type_parser::rust_type_to_weld_type;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse2, punctuated::Punctuated, FnArg, ItemFn, Pat, ReturnType, Token, Type};
+use syn::{
+    parse2, punctuated::Punctuated, Attribute, Expr, ExprLit, FnArg, ItemFn, Lit, Meta, Pat,
+    ReturnType, Token, Type,
+};
 
 /// Parse weld_op attributes
 struct WeldOpAttrs {
@@ -117,6 +120,35 @@ fn op_name_to_ts(rust_name: &str) -> String {
     }
 }
 
+/// Extract documentation comments from function attributes
+///
+/// Rust doc comments (`///` or `/** */`) are converted to `#[doc = "..."]` attributes
+/// by the compiler. This function extracts those doc strings and joins them.
+fn extract_doc_comments(attrs: &[Attribute]) -> Option<String> {
+    let docs: Vec<String> = attrs
+        .iter()
+        .filter_map(|attr| {
+            if attr.path().is_ident("doc") {
+                if let Meta::NameValue(meta) = &attr.meta {
+                    if let Expr::Lit(ExprLit {
+                        lit: Lit::Str(s), ..
+                    }) = &meta.value
+                    {
+                        return Some(s.value().trim().to_string());
+                    }
+                }
+            }
+            None
+        })
+        .collect();
+
+    if docs.is_empty() {
+        None
+    } else {
+        Some(docs.join("\n"))
+    }
+}
+
 pub fn weld_op_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input: ItemFn = match parse2(item.clone()) {
         Ok(input) => input,
@@ -137,6 +169,9 @@ pub fn weld_op_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Determine TypeScript name
     let ts_name = attrs.ts_name.unwrap_or_else(|| op_name_to_ts(&fn_name_str));
+
+    // Extract doc comments from function attributes
+    let doc_comment = extract_doc_comments(&input.attrs);
 
     // Extract parameters
     let params = extract_params(&input.sig.inputs);
@@ -178,6 +213,12 @@ pub fn weld_op_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error(),
     };
 
+    // Generate the doc field tokens
+    let doc_tokens = match doc_comment {
+        Some(ref doc) => quote! { Some(#doc.to_string()) },
+        None => quote! { None },
+    };
+
     // Generate the metadata function and registration
     let expanded = quote! {
         #stripped
@@ -190,7 +231,7 @@ pub fn weld_op_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                 is_async: #is_async,
                 params: vec![#(#param_tokens),*],
                 return_type: #return_type_tokens,
-                doc: None,
+                doc: #doc_tokens,
                 op2_attrs: forge_weld::Op2Attrs::default(),
                 module: None,
             }

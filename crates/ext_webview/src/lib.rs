@@ -1,8 +1,196 @@
-//! runtime:webview extension
+//! runtime:webview extension - Lightweight WebView creation and management
 //!
-//! Lightweight wrapper that reuses the runtime:window runtime to create and control
-//! webviews from Deno. Provides a small API similar to the reference Deno plugin
-//! shown in the request (new/exit/eval/title/fullscreen/background color).
+//! Provides a simple API for creating and controlling WebView windows, built as a
+//! wrapper around the [`ext_window`] runtime. This extension offers a streamlined
+//! interface for common WebView operations without requiring direct window management.
+//!
+//! **Runtime Module:** `runtime:webview`
+//!
+//! ## Overview
+//!
+//! `ext_webview` is a lightweight wrapper around the window management system that
+//! simplifies WebView creation and control. It translates WebView-specific operations
+//! into [`WindowCmd`] messages sent through the ext_window command channel.
+//!
+//! This design provides:
+//! - **Simplified API**: Focus on WebView concerns without window management complexity
+//! - **Centralized Event Loop**: All window events handled by Forge's main loop
+//! - **Type Safety**: Strongly-typed operations with automatic error handling
+//! - **Permission Integration**: Uses ext_window's capability-based security
+//!
+//! ## Architecture
+//!
+//! ```text
+//! ┌──────────────────────────────────────────────────────────────┐
+//! │ TypeScript Application (runtime:webview)                     │
+//! │  - webviewNew(), webviewEval()                               │
+//! │  - webviewSetTitle(), webviewSetFullscreen()                 │
+//! └────────────────┬─────────────────────────────────────────────┘
+//!                  │ Deno Ops (op_host_webview_*)
+//!                  ↓
+//! ┌──────────────────────────────────────────────────────────────┐
+//! │ ext_webview Operations                                       │
+//! │  - Convert to WindowCmd messages                             │
+//! │  - Check permissions via WindowCapabilities                  │
+//! │  - Forward to ext_window command channel                     │
+//! └────────────────┬─────────────────────────────────────────────┘
+//!                  │ WindowCmd::{Create, Close, EvalJs, ...}
+//!                  ↓
+//! ┌──────────────────────────────────────────────────────────────┐
+//! │ ext_window (WindowRuntimeState)                              │
+//! │  - Process window commands                                   │
+//! │  - Manage wry/tao window instances                           │
+//! │  - Handle window events                                      │
+//! └────────────────┬─────────────────────────────────────────────┘
+//!                  │ wry/tao native window APIs
+//!                  ↓
+//! ┌──────────────────────────────────────────────────────────────┐
+//! │ Native Window System (WebKit/WebView2/WebKitGTK)             │
+//! └──────────────────────────────────────────────────────────────┘
+//! ```
+//!
+//! ## Operations
+//!
+//! The extension provides 8 operations, each mapped to a window command:
+//!
+//! | Operation | Window Command | Purpose |
+//! |-----------|---------------|---------|
+//! | `op_host_webview_new` | `WindowCmd::Create` | Create new WebView window |
+//! | `op_host_webview_exit` | `WindowCmd::Close` | Close WebView window |
+//! | `op_host_webview_eval` | `WindowCmd::EvalJs` | Execute JavaScript in WebView |
+//! | `op_host_webview_set_color` | `WindowCmd::InjectCss` | Set background color |
+//! | `op_host_webview_set_title` | `WindowCmd::SetTitle` | Update window title |
+//! | `op_host_webview_set_fullscreen` | `WindowCmd::SetFullscreen` | Toggle fullscreen |
+//! | `op_host_webview_loop` | *No-op* | Event loop compatibility shim |
+//! | `op_host_webview_run` | *No-op* | Run loop compatibility shim |
+//!
+//! ## Error Handling
+//!
+//! All operations use the [`WebViewError`] enum with two error codes:
+//!
+//! | Code | Error | Description |
+//! |------|-------|-------------|
+//! | 9000 | Generic | General WebView operation failure |
+//! | 9001 | PermissionDenied | Window creation permission denied |
+//!
+//! Errors are automatically converted to JavaScript exceptions via the `#[derive(JsError)]`
+//! macro from `deno_error`.
+//!
+//! ## Permission Model
+//!
+//! WebView operations require window creation permissions checked via
+//! [`WindowCapabilities`]. The permission is defined in the app's `manifest.app.toml`:
+//!
+//! ```toml
+//! [permissions.ui]
+//! windows = true
+//! ```
+//!
+//! Operations fail with error code 9001 if permissions are not granted.
+//!
+//! ## Event Loop Integration
+//!
+//! Unlike standalone WebView libraries, ext_webview does not provide its own event loop.
+//! The `op_host_webview_loop` and `op_host_webview_run` operations are no-ops that exist
+//! only for API compatibility with reference WebView plugins.
+//!
+//! All window and WebView events are handled by Forge's centralized event loop in the
+//! runtime, eliminating the need for manual event loop management.
+//!
+//! ## TypeScript Usage
+//!
+//! ```typescript
+//! import { webviewNew, webviewEval, webviewExit } from "runtime:webview";
+//!
+//! // Create WebView window
+//! const webview = await webviewNew({
+//!   title: "My App",
+//!   url: "https://example.com",
+//!   width: 800,
+//!   height: 600,
+//!   resizable: true,
+//!   debug: false,
+//!   frameless: false
+//! });
+//!
+//! // Execute JavaScript
+//! await webviewEval(webview.id, "console.log('Hello from WebView!')");
+//!
+//! // Close when done
+//! await webviewExit(webview.id);
+//! ```
+//!
+//! ## Implementation Details
+//!
+//! ### Window Creation
+//!
+//! `op_host_webview_new` converts [`WebViewNewParams`] to [`WindowOpts`] and sends a
+//! `WindowCmd::Create` command:
+//!
+//! 1. Check permissions via `check_window_caps()`
+//! 2. Convert parameters (frameless -> !decorations, debug -> devtools)
+//! 3. Send `WindowCmd::Create` to ext_window command channel
+//! 4. Await response with window ID
+//! 5. Return [`WebViewNewResult`] containing window ID
+//!
+//! ### JavaScript Evaluation
+//!
+//! `op_host_webview_eval` sends the JavaScript code through the window command channel:
+//!
+//! 1. Check permissions
+//! 2. Send `WindowCmd::EvalJs` with window ID and script
+//! 3. Await completion (no return value captured)
+//!
+//! ### Background Color Setting
+//!
+//! `op_host_webview_set_color` uses CSS injection to set the body background:
+//!
+//! 1. Convert RGBA values to CSS rgba() format
+//! 2. Generate CSS rule: `body { background-color: rgba(...); }`
+//! 3. Send `WindowCmd::InjectCss` to inject the rule
+//!
+//! ## Platform Support
+//!
+//! | Platform | WebView Backend | Status |
+//! |----------|----------------|--------|
+//! | macOS | WebKit (WKWebView) | ✅ Full support |
+//! | Windows | WebView2 (Edge) | ✅ Full support |
+//! | Linux | WebKitGTK | ✅ Full support |
+//!
+//! Platform-specific behavior is handled by the underlying `wry` crate.
+//!
+//! ## Dependencies
+//!
+//! | Dependency | Version | Purpose |
+//! |-----------|---------|---------|
+//! | `deno_core` | 0.373 | Op definitions and runtime integration |
+//! | `ext_window` | 0.1.0-alpha.1 | Window management and command channel |
+//! | `tokio` | 1.x | Async oneshot channels for command responses |
+//! | `serde` | 1.x | Serialization framework |
+//! | `thiserror` | 2.x | Error type definitions |
+//! | `deno_error` | 0.x | JavaScript error conversion |
+//! | `forge-weld-macro` | 0.1 | TypeScript binding generation |
+//!
+//! ## Testing
+//!
+//! ```bash
+//! # Run all tests
+//! cargo test -p ext_webview
+//!
+//! # Run with output
+//! cargo test -p ext_webview -- --nocapture
+//!
+//! # With debug logging
+//! RUST_LOG=ext_webview=debug cargo test -p ext_webview -- --nocapture
+//! ```
+//!
+//! ## See Also
+//!
+//! - [`ext_window`] - Window management extension
+//! - [`ext_ipc`] - IPC communication extension
+//! - [`ext_devtools`] - Developer tools extension
+//! - [wry documentation](https://docs.rs/wry) - WebView rendering library
+//! - [tao documentation](https://docs.rs/tao) - Cross-platform window creation
 
 use deno_core::{op2, Extension, OpState};
 use ext_window::{WindowCapabilities, WindowCmd, WindowOpts, WindowRuntimeState};

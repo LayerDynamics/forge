@@ -8,60 +8,88 @@ This document outlines the Forge SDK development roadmap, including planned exte
 
 ## Current State
 
-Forge currently has **8 fully implemented extension modules**:
+Forge currently has **20 implemented extension modules**:
+
+### Core Extensions (Fully Implemented)
 
 | Module | Crate | Operations | Status |
 |--------|-------|------------|--------|
 | `runtime:fs` | ext_fs | 11 | Complete |
 | `runtime:window` | ext_window | 37 | Complete |
 | `runtime:ipc` | ext_ipc | 2 | Complete |
-| `runtime:net` | ext_net | 2 | Complete |
+| `runtime:net` | ext_net | 7 | Complete |
 | `runtime:process` | ext_process | 7 | Complete |
 | `runtime:sys` | ext_sys | 11 | Complete |
 | `runtime:wasm` | ext_wasm | 10 | Complete |
-| `runtime:ui` | ext_ui | - | Legacy (use runtime:window) |
+| `runtime:crypto` | ext_crypto | 10 | Complete |
+| `runtime:storage` | ext_storage | 10 | Complete |
+| `runtime:app` | ext_app | 16 | Complete |
+| `runtime:shell` | ext_shell | 7 | Complete |
+
+### Support Extensions (Implemented)
+
+| Module | Crate | Operations | Status |
+|--------|-------|------------|--------|
+| `runtime:log` | ext_log | 2 | Complete |
+| `runtime:trace` | ext_trace | 5 | Complete |
+| `runtime:timers` | ext_timers | 6 | Complete |
+| `runtime:lock` | ext_lock | 4 | Complete |
+| `runtime:signals` | ext_signals | 4 | Complete |
+| `runtime:path` | ext_path | 5 | Complete |
+| `runtime:webview` | ext_webview | 8 | Complete |
+| `runtime:devtools` | ext_devtools | 3 | Complete |
+| `runtime:os_compat` | ext_os_compat | 2 | Complete |
+
+### Build/Tooling Extensions
+
+| Module | Crate | Purpose | Status |
+|--------|-------|---------|--------|
+| `runtime:bundler` | ext_bundler | App bundling operations | Complete |
+| `runtime:weld` | ext_weld | TypeScript binding generation | Complete |
 
 ---
 
-## Phase 1: High Priority Modules
+## Completed Modules (Previously Phase 1)
 
-### runtime:crypto - Cryptography & Security
+The following high-priority modules have been fully implemented:
+
+### runtime:crypto - Cryptography & Security ✅
 
 Cryptographic operations for secure applications.
 
-| Operation | Description | Signature |
-|-----------|-------------|-----------|
-| `randomBytes` | Cryptographically secure random bytes | `(size: number) => Uint8Array` |
-| `randomUUID` | Generate UUID v4 | `() => string` |
-| `hash` | Hash data (SHA-256, SHA-512, MD5) | `(algorithm: string, data: Uint8Array \| string) => Uint8Array` |
-| `hashHex` | Hash returning hex string | `(algorithm: string, data: Uint8Array \| string) => string` |
-| `hmac` | HMAC signature | `(algorithm: string, key: Uint8Array, data: Uint8Array) => Uint8Array` |
-| `encrypt` | Symmetric encryption (AES-GCM) | `(algorithm: string, key: Uint8Array, data: Uint8Array, iv?: Uint8Array) => EncryptedData` |
-| `decrypt` | Symmetric decryption | `(algorithm: string, key: Uint8Array, encrypted: EncryptedData) => Uint8Array` |
-| `generateKey` | Generate encryption key | `(algorithm: string, length?: number) => Uint8Array` |
-| `deriveKey` | Derive key from password (PBKDF2) | `(password: string, salt: Uint8Array, iterations: number, keyLength: number) => Uint8Array` |
-| `verify` | Verify HMAC/signature | `(algorithm: string, key: Uint8Array, data: Uint8Array, signature: Uint8Array) => boolean` |
+| Operation | Description | Status |
+|-----------|-------------|--------|
+| `randomBytes` | Cryptographically secure random bytes | ✅ |
+| `randomUUID` | Generate UUID v4 | ✅ |
+| `hash` | Hash data (SHA-256, SHA-384, SHA-512) | ✅ |
+| `hashHex` | Hash returning hex string | ✅ |
+| `hmac` | HMAC signature | ✅ |
+| `encrypt` | Symmetric encryption (AES-256-GCM) | ✅ |
+| `decrypt` | Symmetric decryption | ✅ |
+| `generateKey` | Generate encryption key | ✅ |
+| `deriveKey` | Derive key from password (PBKDF2) | ✅ |
+| `verify` | Verify HMAC signature | ✅ |
 
 **Error codes:** 8000-8009
 
 ---
 
-### runtime:storage - Persistent Key-Value Storage
+### runtime:storage - Persistent Key-Value Storage ✅
 
 App state persistence with SQLite-backed storage.
 
-| Operation | Description | Signature |
-|-----------|-------------|-----------|
-| `get` | Get value by key | `<T>(key: string) => Promise<T \| null>` |
-| `set` | Set value by key | `<T>(key: string, value: T) => Promise<void>` |
-| `delete` | Delete key | `(key: string) => Promise<boolean>` |
-| `has` | Check if key exists | `(key: string) => Promise<boolean>` |
-| `keys` | List all keys | `() => Promise<string[]>` |
-| `clear` | Clear all data | `() => Promise<void>` |
-| `size` | Get storage size in bytes | `() => Promise<number>` |
-| `getMany` | Batch get | `(keys: string[]) => Promise<Map<string, unknown>>` |
-| `setMany` | Batch set | `(entries: Record<string, unknown>) => Promise<void>` |
-| `deleteMany` | Batch delete | `(keys: string[]) => Promise<number>` |
+| Operation | Description | Status |
+|-----------|-------------|--------|
+| `get` | Get value by key | ✅ |
+| `set` | Set value by key | ✅ |
+| `delete` | Delete key | ✅ |
+| `has` | Check if key exists | ✅ |
+| `keys` | List all keys | ✅ |
+| `clear` | Clear all data | ✅ |
+| `size` | Get storage size in bytes | ✅ |
+| `getMany` | Batch get | ✅ |
+| `setMany` | Batch set | ✅ |
+| `deleteMany` | Batch delete | ✅ |
 
 **Storage location:** `~/.forge/<app-identifier>/storage.db`
 **Error codes:** 8100-8109
@@ -69,59 +97,59 @@ App state persistence with SQLite-backed storage.
 
 ---
 
-### runtime:shell - Shell & OS Integration
+### runtime:shell - Shell & OS Integration ✅
 
 Common desktop app integrations for opening files, URLs, and system interactions.
 
-| Operation | Description | Signature |
-|-----------|-------------|-----------|
-| `openExternal` | Open URL in default browser | `(url: string) => Promise<void>` |
-| `openPath` | Open file/folder with default app | `(path: string) => Promise<void>` |
-| `showItemInFolder` | Reveal file in file manager | `(path: string) => Promise<void>` |
-| `moveToTrash` | Move file to recycle bin/trash | `(path: string) => Promise<void>` |
-| `beep` | System beep sound | `() => void` |
-| `getFileIcon` | Get file type icon | `(path: string, size?: number) => Promise<Uint8Array>` |
-| `getDefaultApp` | Get default app for file type | `(extension: string) => Promise<string \| null>` |
+| Operation | Description | Status |
+|-----------|-------------|--------|
+| `openExternal` | Open URL in default browser | ✅ |
+| `openPath` | Open file/folder with default app | ✅ |
+| `showItemInFolder` | Reveal file in file manager | ✅ |
+| `moveToTrash` | Move file to recycle bin/trash | ✅ |
+| `beep` | System beep sound | ✅ |
+| `getFileIcon` | Get file type icon | ⚠️ Partial |
+| `getDefaultApp` | Get default app for file type | ✅ |
 
 **Error codes:** 8200-8209
 **Capability:** `[capabilities.shell]`
 
 ---
 
-### runtime:app - Application Lifecycle
+### runtime:app - Application Lifecycle ✅
 
 Core application management and lifecycle control.
 
-| Operation | Description | Signature |
-|-----------|-------------|-----------|
-| `quit` | Quit application | `(exitCode?: number) => void` |
-| `exit` | Force exit (no cleanup) | `(exitCode?: number) => void` |
-| `relaunch` | Restart application | `(options?: { args?: string[] }) => void` |
-| `getVersion` | Get app version | `() => string` |
-| `getName` | Get app name | `() => string` |
-| `getIdentifier` | Get app identifier | `() => string` |
-| `getPath` | Get special path | `(name: PathName) => string` |
-| `isPackaged` | Check if running packaged | `() => boolean` |
-| `getLocale` | Get system locale | `() => string` |
-| `setAppUserModelId` | Set Windows taskbar ID | `(id: string) => void` |
-| `requestSingleInstanceLock` | Ensure single instance | `() => boolean` |
-| `releaseSingleInstanceLock` | Release instance lock | `() => void` |
-| `focus` | Bring app to foreground | `() => void` |
-| `hide` | Hide all app windows | `() => void` |
-| `show` | Show all app windows | `() => void` |
-| `setBadgeCount` | Set dock/taskbar badge | `(count: number) => void` |
+| Operation | Description | Status |
+|-----------|-------------|--------|
+| `quit` | Quit application | ✅ |
+| `exit` | Force exit (no cleanup) | ✅ |
+| `relaunch` | Restart application | ✅ |
+| `getVersion` | Get app version | ✅ |
+| `getName` | Get app name | ✅ |
+| `getIdentifier` | Get app identifier | ✅ |
+| `getPath` | Get special path | ✅ |
+| `isPackaged` | Check if running packaged | ✅ |
+| `getLocale` | Get system locale | ✅ |
+| `setAppUserModelId` | Set Windows taskbar ID | ✅ |
+| `requestSingleInstanceLock` | Ensure single instance | ✅ |
+| `releaseSingleInstanceLock` | Release instance lock | ✅ |
+| `focus` | Bring app to foreground | ✅ |
+| `hide` | Hide all app windows | ✅ |
+| `show` | Show all app windows | ✅ |
+| `setBadgeCount` | Set dock/taskbar badge | ✅ |
 
-**Path names:** `home`, `appData`, `userData`, `temp`, `exe`, `desktop`, `documents`, `downloads`, `music`, `pictures`, `videos`, `logs`
+**Path names:** `home`, `appData`, `documents`, `downloads`, `desktop`, `music`, `pictures`, `videos`, `temp`, `exe`, `resources`, `logs`, `cache`
 
-**Error codes:** 8300-8309
+**Error codes:** 8300-8319
 
 ---
 
-## Phase 2: Medium Priority Modules
+## Phase 1: High Priority Modules (In Progress)
 
 ### runtime:screen - Display Information
 
-Multi-monitor support and display information.
+Multi-monitor support and display information. Currently a stub extension (`ext_display`).
 
 | Operation | Description | Signature |
 |-----------|-------------|-----------|
@@ -150,7 +178,7 @@ interface Display {
 
 ### runtime:globalShortcut - Global Keyboard Shortcuts
 
-System-wide keyboard shortcut registration.
+System-wide keyboard shortcut registration. Currently a stub extension (`ext_shortcuts`).
 
 | Operation | Description | Signature |
 |-----------|-------------|-----------|
@@ -169,7 +197,7 @@ System-wide keyboard shortcut registration.
 
 ### runtime:autoUpdater - Application Updates
 
-Automatic application update system.
+Automatic application update system. Currently a stub extension (`ext_updater`).
 
 | Operation | Description | Signature |
 |-----------|-------------|-----------|
@@ -201,6 +229,30 @@ type UpdateEvent =
 
 ---
 
+### runtime:database - Embedded SQLite Database
+
+Full SQLite database support for complex data storage. Currently a stub extension.
+
+| Operation | Description | Signature |
+|-----------|-------------|-----------|
+| `open` | Open/create database | `(name: string, options?: DbOptions) => Promise<Database>` |
+| `close` | Close database | `(db: Database) => Promise<void>` |
+| `execute` | Execute SQL (no return) | `(db: Database, sql: string, params?: unknown[]) => Promise<number>` |
+| `query` | Query with results | `<T>(db: Database, sql: string, params?: unknown[]) => Promise<T[]>` |
+| `queryOne` | Query single row | `<T>(db: Database, sql: string, params?: unknown[]) => Promise<T \| null>` |
+| `batch` | Execute multiple statements | `(db: Database, statements: string[]) => Promise<void>` |
+| `transaction` | Run in transaction | `<T>(db: Database, fn: () => Promise<T>) => Promise<T>` |
+| `prepare` | Prepare statement | `(db: Database, sql: string) => PreparedStatement` |
+
+**Database location:** `~/.forge/<app-identifier>/databases/<name>.db`
+
+**Error codes:** 9000-9019
+**Capability:** `[capabilities.database]`
+
+---
+
+## Phase 2: Medium Priority Modules
+
 ### runtime:theme - Native Theme Detection
 
 System theme detection and preference management.
@@ -218,25 +270,21 @@ System theme detection and preference management.
 
 ---
 
-### runtime:database - Embedded SQLite Database
+### runtime:protocol - Custom Protocol Handlers
 
-Full SQLite database support for complex data storage.
+Deep linking and custom URL scheme support. Currently a stub extension.
 
 | Operation | Description | Signature |
 |-----------|-------------|-----------|
-| `open` | Open/create database | `(name: string, options?: DbOptions) => Promise<Database>` |
-| `close` | Close database | `(db: Database) => Promise<void>` |
-| `execute` | Execute SQL (no return) | `(db: Database, sql: string, params?: unknown[]) => Promise<number>` |
-| `query` | Query with results | `<T>(db: Database, sql: string, params?: unknown[]) => Promise<T[]>` |
-| `queryOne` | Query single row | `<T>(db: Database, sql: string, params?: unknown[]) => Promise<T \| null>` |
-| `batch` | Execute multiple statements | `(db: Database, statements: string[]) => Promise<void>` |
-| `transaction` | Run in transaction | `<T>(db: Database, fn: () => Promise<T>) => Promise<T>` |
-| `prepare` | Prepare statement | `(db: Database, sql: string) => PreparedStatement` |
+| `registerScheme` | Register URL scheme | `(scheme: string) => Promise<boolean>` |
+| `unregisterScheme` | Unregister scheme | `(scheme: string) => Promise<void>` |
+| `isSchemeRegistered` | Check registration | `(scheme: string) => boolean` |
+| `setAsDefaultProtocolClient` | Set as OS default | `(scheme: string) => Promise<boolean>` |
+| `removeAsDefaultProtocolClient` | Remove as default | `(scheme: string) => Promise<boolean>` |
+| `isDefaultProtocolClient` | Check if default | `(scheme: string) => boolean` |
+| `protocolEvents` | Incoming URL events | `() => AsyncGenerator<ProtocolEvent>` |
 
-**Database location:** `~/.forge/<app-identifier>/databases/<name>.db`
-
-**Error codes:** 9000-9019
-**Capability:** `[capabilities.database]`
+**Error codes:** 9100-9109
 
 ---
 
@@ -280,24 +328,6 @@ Windows-specific taskbar customization.
 
 ---
 
-### runtime:protocol - Custom Protocol Handlers
-
-Deep linking and custom URL scheme support.
-
-| Operation | Description | Signature |
-|-----------|-------------|-----------|
-| `registerScheme` | Register URL scheme | `(scheme: string) => Promise<boolean>` |
-| `unregisterScheme` | Unregister scheme | `(scheme: string) => Promise<void>` |
-| `isSchemeRegistered` | Check registration | `(scheme: string) => boolean` |
-| `setAsDefaultProtocolClient` | Set as OS default | `(scheme: string) => Promise<boolean>` |
-| `removeAsDefaultProtocolClient` | Remove as default | `(scheme: string) => Promise<boolean>` |
-| `isDefaultProtocolClient` | Check if default | `(scheme: string) => boolean` |
-| `protocolEvents` | Incoming URL events | `() => AsyncGenerator<ProtocolEvent>` |
-
-**Error codes:** 9100-9109
-
----
-
 ### runtime:session - WebView Session Management
 
 WebView session and cookie management.
@@ -334,25 +364,6 @@ File download tracking and management.
 
 ---
 
-### runtime:log - Structured Logging
-
-Production-ready logging with file rotation.
-
-| Operation | Description | Signature |
-|-----------|-------------|-----------|
-| `debug` | Debug level log | `(message: string, ...args: unknown[]) => void` |
-| `info` | Info level log | `(message: string, ...args: unknown[]) => void` |
-| `warn` | Warning level log | `(message: string, ...args: unknown[]) => void` |
-| `error` | Error level log | `(message: string, ...args: unknown[]) => void` |
-| `setLevel` | Set minimum level | `(level: 'debug' \| 'info' \| 'warn' \| 'error') => void` |
-| `setFile` | Enable file logging | `(path: string, options?: LogFileOptions) => void` |
-| `flush` | Flush log buffer | `() => Promise<void>` |
-
-**Log location:** `~/.forge/<app-identifier>/logs/`
-**Error codes:** 9400-9409
-
----
-
 ## Phase 4: Features & Processes
 
 ### Hot Reload System
@@ -360,6 +371,7 @@ Production-ready logging with file rotation.
 Live reload for development workflow.
 
 **Components:**
+
 - File watcher for `src/` and `web/` directories
 - WebSocket server for reload signals
 - Deno module cache invalidation
@@ -367,25 +379,27 @@ Live reload for development workflow.
 
 ---
 
-### Single Instance Lock
+### Single Instance Lock ✅
 
-Prevent multiple app instances.
+Prevent multiple app instances. **Implemented in `ext_app`.**
 
 **Components:**
-- Lock file or socket-based detection
-- IPC to existing instance
-- Focus existing window on duplicate launch
+
+- Lock file-based detection ✅
+- IPC to existing instance (partial)
+- Focus existing window on duplicate launch ✅
 
 ---
 
-### Error Code Standardization
+### Error Code Standardization ✅
 
-Consistent error codes across all modules.
+Consistent error codes across all modules. **Implemented across all new extensions.**
 
-**Modules requiring updates:**
-- `ext_net` - Add codes 4000-4009
-- `ext_process` - Add codes 5000-5009
-- `ext_sys` - Add codes 5500-5509
+All new extensions use standardized error code ranges:
+- `ext_crypto`: 8000-8009
+- `ext_storage`: 8100-8109
+- `ext_shell`: 8200-8209
+- `ext_app`: 8300-8319
 
 ---
 
@@ -394,6 +408,7 @@ Consistent error codes across all modules.
 OS-level URL scheme handling.
 
 **Components:**
+
 - Integrate with `runtime:protocol`
 - Startup argument parsing for URLs
 - Event dispatch to running app
@@ -405,6 +420,7 @@ OS-level URL scheme handling.
 Screen reader and accessibility support.
 
 **Components:**
+
 - Screen reader announcements
 - Accessibility tree access
 - High contrast detection
@@ -416,7 +432,8 @@ Screen reader and accessibility support.
 Locale and RTL support.
 
 **Components:**
-- Locale detection
+
+- Locale detection ✅ (in `ext_app`)
 - RTL support hints
 - Number/date formatting
 
@@ -426,39 +443,50 @@ Locale and RTL support.
 
 | Category | Count |
 |----------|-------|
-| New extension modules | 15 |
-| New operations | ~116 |
-| New error code ranges | 15 |
-| New capabilities | 8 |
-| Features/processes | 6 |
+| Implemented extension modules | 22 |
+| Stub extension modules (need implementation) | 5 |
+| Implemented operations | ~150+ |
+| Planned operations (stubs) | ~32 |
+| Features completed | 3 |
+| Features in progress | 4 |
 
-### Implementation Order
+### Implementation Status
 
-**Phase 1 (High Priority):**
-1. `ext_crypto` (10 ops)
-2. `ext_storage` (10 ops)
-3. `ext_shell` (7 ops)
-4. `ext_app` (16 ops)
+**Completed:**
+1. `ext_crypto` (10 ops) ✅
+2. `ext_storage` (10 ops) ✅
+3. `ext_shell` (7 ops) ✅
+4. `ext_app` (16 ops) ✅
+5. `ext_log` (2 ops) ✅
+6. `ext_trace` (5 ops) ✅
+7. `ext_timers` (6 ops) ✅
+8. `ext_lock` (4 ops) ✅
+9. `ext_signals` (4 ops) ✅
+10. `ext_path` (5 ops) ✅
+11. `ext_webview` (8 ops) ✅
+12. `ext_devtools` (3 ops) ✅
+13. `ext_os_compat` (2 ops) ✅
+14. `ext_bundler` (build tooling) ✅
+15. `ext_weld` (TypeScript generation) ✅
 
-**Phase 2 (Medium Priority):**
-5. `ext_screen` (6 ops)
-6. `ext_globalshortcut` (5 ops)
-7. `ext_autoupdater` (6 ops)
-8. `ext_theme` (6 ops)
-9. `ext_database` (8 ops)
+**Phase 1 - High Priority (Stub → Full Implementation):**
+1. `ext_display` (screen) - 6 ops planned
+2. `ext_shortcuts` (globalShortcut) - 5 ops planned
+3. `ext_updater` (autoUpdater) - 6 ops planned
+4. `ext_database` - 8 ops planned
 
-**Phase 3 (Low Priority):**
-10. `ext_dock` (9 ops)
-11. `ext_taskbar` (5 ops)
-12. `ext_protocol` (7 ops)
-13. `ext_session` (8 ops)
-14. `ext_download` (6 ops)
-15. `ext_log` (7 ops)
+**Phase 2 - Medium Priority (New Modules):**
+5. `ext_theme` - 6 ops planned
+6. `ext_protocol` - 7 ops planned (stub exists)
 
-**Phase 4 (Features):**
-16. Error code standardization
-17. Hot reload system
-18. Single instance lock
-19. Deep linking
-20. Accessibility APIs
-21. Internationalization support
+**Phase 3 - Low Priority (Platform-Specific):**
+7. `ext_dock` (macOS) - 9 ops planned
+8. `ext_taskbar` (Windows) - 5 ops planned
+9. `ext_session` - 8 ops planned
+10. `ext_download` - 6 ops planned
+
+**Phase 4 - Features:**
+- Hot reload system
+- Deep linking
+- Accessibility APIs
+- Internationalization support

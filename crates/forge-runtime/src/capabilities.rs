@@ -1,7 +1,162 @@
 //! Capabilities/permissions system for Forge apps
 //!
-//! In dev mode, all operations are allowed.
+//! In dev mode (`forge dev`), all operations are allowed.
 //! In production mode, operations are checked against manifest permissions.
+//!
+//! # Permission Model
+//!
+//! Forge uses a **capability-based security model** where apps must explicitly
+//! declare required permissions in `manifest.app.toml`. Each extension checks
+//! permissions before performing sensitive operations.
+//!
+//! ## Permission Categories
+//!
+//! - **Filesystem** (`permissions.fs`): Read/write file access with glob patterns
+//! - **Network** (`permissions.net`): Outbound connections and server listening
+//! - **UI** (`permissions.ui`): Window, menu, dialog, tray operations
+//! - **System** (`permissions.sys`): Clipboard, notifications, power info
+//! - **Process** (`permissions.process`): Spawn child processes
+//! - **WASM** (`permissions.wasm`): Load and execute WebAssembly
+//! - **Code Signing** (`permissions.codesign`): Sign and verify code
+//!
+//! # Glob Pattern Syntax
+//!
+//! Filesystem and process permissions support glob patterns:
+//!
+//! - `*` - Match any characters except path separators (`/` or `\`)
+//! - `**` - Match any characters including path separators (recursive)
+//! - `?` - Match single character
+//! - `[abc]` - Match character class
+//! - `{a,b}` - Match alternatives
+//!
+//! **Examples:**
+//! ```toml
+//! [permissions.fs]
+//! read = [
+//!     "./data/**",           # All files in data/ recursively
+//!     "./config/*.json",     # JSON files in config/ (not subdirs)
+//!     "~/.myapp/**",         # User home directory
+//! ]
+//! write = [
+//!     "./data/*.db",         # Database files only
+//!     "/tmp/myapp-*",        # Temp files with prefix
+//! ]
+//! ```
+//!
+//! # Network Permissions
+//!
+//! Network permissions control both outbound connections and server listening:
+//!
+//! ```toml
+//! [permissions.net]
+//! allow = [
+//!     "api.example.com",     # Specific domain
+//!     "*.trusted.com",       # Wildcard subdomain matching
+//!     "192.168.1.*",         # Local network
+//! ]
+//! deny = [
+//!     "evil.com",            # Explicit block (takes precedence)
+//! ]
+//! listen = [8080, 3000]      # Allowed ports for binding servers
+//! # listen = [0]            # Port 0 means any port allowed
+//! ```
+//!
+//! ## Deny List Precedence
+//!
+//! Denied domains are checked **before** allowed domains. This enables
+//! allow-all-except patterns:
+//! ```toml
+//! allow = ["*"]              # Allow everything
+//! deny = ["malware.com"]     # Except this
+//! ```
+//!
+//! # IPC Channel Filtering
+//!
+//! Control which IPC channels windows can use:
+//!
+//! ```toml
+//! [permissions.ui]
+//! channels = [
+//!     "app:config",          # Specific channels
+//!     "app:data",
+//!     "private:*",           # Wildcard prefix
+//! ]
+//! # channels = ["*"]        # Allow all channels
+//! ```
+//!
+//! Per-window channel allowlists override the default:
+//! ```rust
+//! WindowOptions::new()
+//!     .allowed_channels(vec!["secure:*".to_string()])
+//! ```
+//!
+//! # Common Permission Patterns
+//!
+//! ## Data Directory Access
+//! ```toml
+//! [permissions.fs]
+//! read = ["./data/**"]
+//! write = ["./data/**"]
+//! ```
+//!
+//! ## Configuration Files
+//! ```toml
+//! [permissions.fs]
+//! read = ["./config/**", "~/.myapp/config.json"]
+//! write = ["~/.myapp/config.json"]
+//! ```
+//!
+//! ## API-Only Network Access
+//! ```toml
+//! [permissions.net]
+//! allow = ["api.myapp.com", "cdn.myapp.com"]
+//! listen = []  # No server listening
+//! ```
+//!
+//! ## Trusted Process Execution
+//! ```toml
+//! [permissions.process]
+//! allow = ["/usr/bin/git", "/usr/local/bin/ffmpeg"]
+//! env = ["HOME", "PATH"]  # Allowed env vars to pass
+//! max_processes = 5
+//! ```
+//!
+//! # Usage in Extensions
+//!
+//! Extensions receive capability adapters that implement permission checks:
+//!
+//! ```rust,ignore
+//! #[weld_op]
+//! #[op2(async)]
+//! async fn op_fs_read_text(
+//!     state: Rc<RefCell<OpState>>,
+//!     #[string] path: String,
+//! ) -> Result<String, FsError> {
+//!     // Get the capability adapter from OpState
+//!     let adapter = state.borrow().borrow::<Arc<dyn FsCapabilityChecker>>().clone();
+//!
+//!     // Check permission before operation
+//!     adapter.check_read(&path)
+//!         .map_err(|e| FsError::permission_denied(e))?;
+//!
+//!     // Perform the operation
+//!     tokio::fs::read_to_string(&path)
+//!         .await
+//!         .map_err(|e| FsError::io(e.to_string()))
+//! }
+//! ```
+//!
+//! # Dev Mode vs Production
+//!
+//! **Dev Mode** (`forge dev`):
+//! - All permissions granted automatically
+//! - No manifest validation
+//! - Enables rapid development and testing
+//!
+//! **Production** (`forge bundle`):
+//! - Strict permission enforcement
+//! - Missing permissions cause runtime errors
+//! - Apps must declare all required capabilities
 
 use globset::{GlobSet, GlobSetBuilder};
 use serde::Deserialize;
@@ -16,6 +171,7 @@ pub struct Permissions {
     pub sys: Option<SysPermissions>,
     pub process: Option<ProcessPermissions>,
     pub wasm: Option<WasmPermissions>,
+    pub codesign: Option<CodesignPermissions>,
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
@@ -81,6 +237,15 @@ pub struct WasmPermissions {
     pub max_instances: Option<usize>,
 }
 
+/// Code signing permissions
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct CodesignPermissions {
+    /// Allow code signing operations
+    pub sign: Option<bool>,
+    /// Allow listing signing identities/certificates
+    pub list_identities: Option<bool>,
+}
+
 /// Runtime capabilities checker
 #[derive(Debug, Clone)]
 pub struct Capabilities {
@@ -107,6 +272,8 @@ pub struct Capabilities {
     wasm_load_patterns: Option<GlobSet>,
     wasm_preopen_patterns: Option<GlobSet>,
     pub wasm_max_instances: usize,
+    codesign_sign: bool,
+    codesign_list_identities: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -123,6 +290,54 @@ pub enum CapabilityError {
 
 impl Capabilities {
     /// Create capabilities from manifest permissions
+    ///
+    /// # Arguments
+    ///
+    /// - `permissions` - Optional permissions from manifest.app.toml
+    /// - `dev_mode` - If true, all operations are allowed
+    ///
+    /// # Returns
+    ///
+    /// A configured [`Capabilities`] instance with compiled glob patterns.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapabilityError::InvalidPattern`] when glob compilation fails:
+    ///
+    /// - **Malformed glob syntax**
+    ///   - Example: `"data/[unclosed"` (unclosed character class)
+    ///   - Example: `"data/{a,b"` (unclosed brace expansion)
+    ///   - **Recovery:** Fix glob pattern in manifest.app.toml
+    ///
+    /// - **Invalid regex in pattern**
+    ///   - Example: `"data/(?!invalid)"` (lookahead not supported)
+    ///   - **Recovery:** Use simpler glob patterns (* and **)
+    ///
+    /// - **Pattern compilation failed**
+    ///   - Internal globset error (rare)
+    ///   - **Recovery:** Simplify patterns, check for edge cases
+    ///
+    /// # Common Pattern Errors
+    ///
+    /// ```toml
+    /// # ❌ Wrong - unclosed brace
+    /// [permissions.fs]
+    /// read = ["./data/{json,xml"]
+    ///
+    /// # ✓ Correct
+    /// [permissions.fs]
+    /// read = ["./data/{json,xml}"]
+    /// ```
+    ///
+    /// # Error Propagation
+    ///
+    /// Capability initialization errors are **fatal** - the runtime cannot start
+    /// without valid permission configuration:
+    ///
+    /// ```rust,ignore
+    /// let caps = Capabilities::from_permissions(manifest.permissions.as_ref(), dev_mode)
+    ///     .expect("Failed to initialize capabilities - check manifest.app.toml");
+    /// ```
     pub fn from_permissions(
         permissions: Option<&Permissions>,
         dev_mode: bool,
@@ -140,6 +355,7 @@ impl Capabilities {
         let sys = permissions.sys.unwrap_or_default();
         let process = permissions.process.unwrap_or_default();
         let wasm = permissions.wasm.unwrap_or_default();
+        let codesign = permissions.codesign.unwrap_or_default();
 
         // Compile network host patterns (for wildcard matching like *.example.com)
         let net_allow_patterns = Self::compile_host_patterns(net.allow.as_ref())?;
@@ -182,6 +398,8 @@ impl Capabilities {
             wasm_load_patterns,
             wasm_preopen_patterns,
             wasm_max_instances: wasm.max_instances.unwrap_or(10),
+            codesign_sign: codesign.sign.unwrap_or(false),
+            codesign_list_identities: codesign.list_identities.unwrap_or(false),
         })
     }
 
@@ -654,6 +872,30 @@ impl Capabilities {
     pub fn get_max_wasm_instances(&self) -> usize {
         self.wasm_max_instances
     }
+
+    /// Check if code signing operations are allowed
+    pub fn check_codesign_sign(&self) -> Result<(), CapabilityError> {
+        if self.dev_mode || self.codesign_sign {
+            Ok(())
+        } else {
+            Err(CapabilityError::Denied {
+                capability: "codesign.sign".to_string(),
+                resource: "signing operation".to_string(),
+            })
+        }
+    }
+
+    /// Check if listing signing identities is allowed
+    pub fn check_codesign_list_identities(&self) -> Result<(), CapabilityError> {
+        if self.dev_mode || self.codesign_list_identities {
+            Ok(())
+        } else {
+            Err(CapabilityError::Denied {
+                capability: "codesign.list_identities".to_string(),
+                resource: "identity listing".to_string(),
+            })
+        }
+    }
 }
 
 // ============================================================================
@@ -671,6 +913,7 @@ pub struct CapabilityAdapters {
     pub window: Arc<dyn ext_window::WindowCapabilityChecker>,
     pub process: Arc<dyn ext_process::ProcessCapabilityChecker>,
     pub wasm: Arc<dyn ext_wasm::WasmCapabilityChecker>,
+    pub codesign: Arc<dyn ext_codesign::CodesignCapabilityChecker>,
 }
 
 /// Adapter that implements ext_fs::FsCapabilityChecker using Capabilities
@@ -885,6 +1128,36 @@ impl ext_wasm::WasmCapabilityChecker for WasmCapabilityAdapter {
     }
 }
 
+/// Adapter that implements ext_codesign::CodesignCapabilityChecker using Capabilities
+pub struct CodesignCapabilityAdapter {
+    capabilities: Arc<Capabilities>,
+}
+
+impl CodesignCapabilityAdapter {
+    pub fn new(capabilities: Arc<Capabilities>) -> Self {
+        Self { capabilities }
+    }
+}
+
+impl ext_codesign::CodesignCapabilityChecker for CodesignCapabilityAdapter {
+    fn check_sign(&self) -> Result<(), String> {
+        self.capabilities
+            .check_codesign_sign()
+            .map_err(|e| e.to_string())
+    }
+
+    fn check_verify(&self) -> Result<(), String> {
+        // Verify is always allowed (read-only operation)
+        Ok(())
+    }
+
+    fn check_list_identities(&self) -> Result<(), String> {
+        self.capabilities
+            .check_codesign_list_identities()
+            .map_err(|e| e.to_string())
+    }
+}
+
 /// Create all capability adapters from Capabilities
 pub fn create_capability_adapters(capabilities: Capabilities) -> CapabilityAdapters {
     let caps = Arc::new(capabilities);
@@ -895,7 +1168,8 @@ pub fn create_capability_adapters(capabilities: Capabilities) -> CapabilityAdapt
         sys: Arc::new(SysCapabilityAdapter::new(caps.clone())),
         window: Arc::new(WindowCapabilityAdapter::new(caps.clone())),
         process: Arc::new(ProcessCapabilityAdapter::new(caps.clone())),
-        wasm: Arc::new(WasmCapabilityAdapter::new(caps)),
+        wasm: Arc::new(WasmCapabilityAdapter::new(caps.clone())),
+        codesign: Arc::new(CodesignCapabilityAdapter::new(caps)),
     }
 }
 

@@ -33,7 +33,9 @@ pub enum TranspileError {
 /// The transpiled JavaScript code
 ///
 /// # Example
-/// ```ignore
+/// ```
+/// use forge_weld::transpile_ts;
+///
 /// let js = transpile_ts(
 ///     "const x: string = 'hello';",
 ///     "file:///test.ts"
@@ -72,7 +74,9 @@ pub fn transpile_ts(ts_code: &str, specifier: &str) -> Result<String, TranspileE
 /// The transpiled JavaScript code
 ///
 /// # Example
-/// ```ignore
+/// ```no_run
+/// use forge_weld::transpile_file;
+///
 /// let js = transpile_file("ts/init.ts").unwrap();
 /// ```
 pub fn transpile_file(path: impl AsRef<Path>) -> Result<String, TranspileError> {

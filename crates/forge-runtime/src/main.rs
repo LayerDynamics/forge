@@ -1,3 +1,99 @@
+//! Forge Runtime - Desktop application runtime using Deno + WebView
+//!
+//! The Forge runtime embeds a Deno JavaScript runtime within a native window,
+//! enabling desktop applications built with web technologies while maintaining
+//! full access to system APIs through Rust extensions.
+//!
+//! # Architecture Overview
+//!
+//! ```text
+//! ┌─────────────────────────────────────────────────┐
+//! │              Tao Event Loop (OS)                │
+//! └───────────┬─────────────────────┬───────────────┘
+//!             │                     │
+//!     ┌───────▼────────┐    ┌──────▼─────────┐
+//!     │ Deno JsRuntime │    │  Wry WebView   │
+//!     │  (src/main.ts) │◄──►│ (web/index.html)│
+//!     └────────┬───────┘    └────────────────┘
+//!              │
+//!      ┌───────┴────────┐
+//!      │   Extensions   │
+//!      │  (runtime:*)   │
+//!      └────────────────┘
+//! ```
+//!
+//! # Initialization Flow
+//!
+//! 1. **Parse manifest.app.toml** - Read app configuration, permissions
+//! 2. **Initialize capabilities** - Create permission adapters from manifest
+//! 3. **Build extension registry** - Register all ext_* crates by tier (0-3)
+//! 4. **Create Deno runtime** - Instantiate JsRuntime with extensions
+//! 5. **Setup module loader** - Map `runtime:*` specifiers to extensions
+//! 6. **Execute src/main.ts** - Run app entry point
+//! 7. **Create event loop** - Start tao event loop with windows
+//! 8. **Asset serving** - Serve web/ via `app://` protocol
+//!
+//! # Extension System
+//!
+//! Extensions are initialized in tiers based on complexity:
+//! - **Tier 0** (ExtensionOnly): No state (e.g., ext_timers)
+//! - **Tier 1** (SimpleState): Basic state (e.g., ext_fs, ext_net)
+//! - **Tier 2** (CapabilityBased): Requires capability adapters (most extensions)
+//! - **Tier 3** (ComplexContext): Needs channels, app info (ext_ipc, ext_window)
+//!
+//! See [`ext_registry`] for the complete extension registry.
+//!
+//! # IPC Communication
+//!
+//! **Renderer → Deno:**
+//! ```text
+//! window.host.send(channel, data)
+//!   → WebView IPC
+//!   → mpsc channel
+//!   → Deno runtime.windowEvents()
+//! ```
+//!
+//! **Deno → Renderer:**
+//! ```text
+//! runtime.sendToWindow(windowId, channel, data)
+//!   → evaluate_script()
+//!   → window.__host_dispatch(channel, data)
+//! ```
+//!
+//! # Hot Module Reload (Dev Mode)
+//!
+//! When launched with `--dev`:
+//! - WebSocket server on port 3001
+//! - File watcher on `web/` directory
+//! - Auto-reload on changes
+//! - All permissions allowed
+//!
+//! # Asset Serving
+//!
+//! **Dev Mode:** Assets served from filesystem (`web/` directory)
+//! **Production:** Assets embedded in binary (via `FORGE_EMBED_DIR` at build time)
+//!
+//! See [`ForgeAssetProvider`] for implementation.
+//!
+//! # Module Loading
+//!
+//! The [`ForgeModuleLoader`] maps specifiers:
+//! - `runtime:fs` → `ext:runtime_fs/init.js`
+//! - `runtime:window` → `ext:runtime_window/init.js`
+//! - File URLs → Filesystem paths
+//!
+//! # Environment Variables
+//!
+//! - `FORGE_LOG` - Log level (default: "info")
+//! - `RUST_BACKTRACE` - Enable backtraces on panic
+//!
+//! # Examples
+//!
+//! See `examples/` directory for sample apps:
+//! - `examples/react-app` - React-based UI
+//! - `examples/svelte-app` - Svelte components
+//! - `examples/text-editor` - Simple editor
+
 use anyhow::{Context, Result};
 use deno_ast::{MediaType, ParseParams};
 use deno_core::error::ModuleLoaderError;
@@ -11,7 +107,7 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::thread;
 use tao::event::{Event, WindowEvent};
@@ -21,55 +117,62 @@ use tokio_tungstenite::tungstenite::Message;
 use wry::http::{Response, StatusCode};
 use wry::WebViewBuilder;
 
-use ext_ipc::{init_ipc_capabilities, init_ipc_state, IpcEvent, ToRendererCmd};
-
-use ext_database::database_extension;
-use ext_debugger::debugger_extension;
-use ext_devtools::devtools_extension;
-use ext_display::display_extension;
-use ext_lock::lock_extension;
-use ext_log::log_extension;
-use ext_monitor::monitor_extension;
-use ext_os_compat::os_compat_extension;
-use ext_path::path_extension;
-use ext_protocol::protocol_extension;
-use ext_shortcuts::shortcuts_extension;
-use ext_signals::signals_extension;
-use ext_timers::timers_extension;
-use ext_trace::trace_extension;
-use ext_updater::updater_extension;
-use ext_webview::webview_extension;
+use ext_ipc::{IpcEvent, ToRendererCmd};
 use ext_window::{
     add_context_menu_items, add_menu_items_with_tracking, add_tray_menu_items,
-    create_default_tray_icon, init_window_capabilities, init_window_state, mime_for, AssetProvider,
-    ChannelChecker, FileDialogOpts as WinFileDialogOpts, MenuEvent as WinMenuEvent,
-    MenuItem as WinMenuItem, MessageDialogOpts as WinMessageDialogOpts, TrayOpts as WinTrayOpts,
-    WindowCmd, WindowManager, WindowManagerConfig, WindowOpts, WindowSystemEvent,
-    CONTEXT_MENU_TIMEOUT_SECS,
+    create_default_tray_icon, mime_for, AssetProvider, ChannelChecker,
+    FileDialogOpts as WinFileDialogOpts, MenuEvent as WinMenuEvent, MenuItem as WinMenuItem,
+    MessageDialogOpts as WinMessageDialogOpts, TrayOpts as WinTrayOpts, WindowCmd, WindowManager,
+    WindowManagerConfig, WindowOpts, WindowSystemEvent, CONTEXT_MENU_TIMEOUT_SECS,
 };
 
 mod capabilities;
 mod crash;
-use capabilities::{create_capability_adapters, Capabilities, Permissions};
+mod ext_registry;
 
+use capabilities::{create_capability_adapters, Capabilities, Permissions};
+use ext_registry::{ExtensionInitContext, ExtensionRegistry};
+
+/// Application manifest (manifest.app.toml)
+///
+/// Defines app metadata, window configuration, and permissions.
+/// Loaded at runtime startup.
 #[derive(Debug, Deserialize, Clone)]
 pub struct Manifest {
+    /// App metadata (name, version, identifier)
     pub app: App,
+    /// Default window configuration (optional)
     pub windows: Option<Windows>,
+    /// Permissions/capabilities section. Accepts both `permissions` and `capabilities` keys.
+    #[serde(alias = "capabilities")]
     pub permissions: Option<Permissions>,
 }
+/// Application metadata
+///
+/// Required fields for app identification and distribution.
 #[derive(Debug, Deserialize, Clone)]
 pub struct App {
+    /// Display name of the application
     pub name: String,
+    /// Unique identifier (reverse-DNS format, e.g., "com.example.myapp")
     pub identifier: String,
+    /// Semantic version (e.g., "1.0.0")
     pub version: String,
+    /// Enable crash reporting (default: false)
     pub crash_reporting: Option<bool>,
+    /// Directory for crash reports (default: OS temp dir)
     pub crash_report_dir: Option<String>,
 }
+/// Default window configuration
+///
+/// Settings applied to windows created without explicit options.
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct Windows {
+    /// Default window width in pixels (default: 800)
     pub width: Option<u32>,
+    /// Default window height in pixels (default: 600)
     pub height: Option<u32>,
+    /// Whether windows are resizable (default: true)
     pub resizable: Option<bool>,
 }
 
@@ -86,7 +189,10 @@ include!(concat!(env!("OUT_DIR"), "/assets.rs"));
 // ============================================================================
 
 /// Asset provider for WindowManager
+///
+/// Serves web assets from embedded data (production) or filesystem (dev).
 struct ForgeAssetProvider {
+    /// Base directory for filesystem assets
     app_dir: PathBuf,
 }
 
@@ -109,7 +215,10 @@ impl AssetProvider for ForgeAssetProvider {
 }
 
 /// Channel checker wrapper for WindowManager
+///
+/// Enforces IPC channel permissions based on manifest configuration.
 struct ForgeChannelChecker {
+    /// Capability checker with compiled permission rules
     capabilities: Capabilities,
 }
 
@@ -126,7 +235,7 @@ impl ChannelChecker for ForgeChannelChecker {
 // ============================================================================
 
 /// Run lightweight checks against window helpers to ensure host builds match UI expectations.
-fn warm_up_window_helpers(app_dir: &PathBuf, app_name: &str, default_channels: &[String]) {
+fn warm_up_window_helpers(app_dir: &Path, app_name: &str, default_channels: &[String]) {
     let title: Cow<'_, str> = Cow::Owned(app_name.to_string());
 
     // Touch builders and MIME detection so changes surface as build errors, not runtime surprises.
@@ -194,10 +303,12 @@ fn warm_up_window_helpers(app_dir: &PathBuf, app_name: &str, default_channels: &
     let _mime = mime_for("index.html");
 }
 
-/// Custom module loader that handles:
-/// - `runtime:*` specifiers → maps to extension modules (ext:runtime_*/init.js)
-/// - File paths with TypeScript transpilation
+/// Module loader for Forge runtime
+///
+/// Maps `runtime:*` specifiers to extension init modules.
+/// Handles both extension modules and file URLs.
 struct ForgeModuleLoader {
+    /// Base directory for resolving file URLs
     #[allow(dead_code)]
     app_dir: PathBuf,
 }
@@ -462,8 +573,49 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         }
     }
 
-    let app_dir =
-        app_dir.ok_or_else(|| anyhow::anyhow!("Usage: forge-runtime --app-dir <path> [--dev]"))?;
+    // Auto-detect app_dir from bundle if not provided via arguments
+    let app_dir = match app_dir {
+        Some(dir) => dir,
+        None => {
+            // Try to detect if running from a macOS/Linux bundle
+            if let Ok(exe_path) = env::current_exe() {
+                let exe_path = exe_path.canonicalize().unwrap_or(exe_path);
+
+                // macOS: /path/to/App.app/Contents/MacOS/binary
+                // Resources at: /path/to/App.app/Contents/Resources/app/
+                if let Some(macos_dir) = exe_path.parent() {
+                    if macos_dir.file_name().is_some_and(|n| n == "MacOS") {
+                        if let Some(contents_dir) = macos_dir.parent() {
+                            let resources_app = contents_dir.join("Resources").join("app");
+                            if resources_app.exists() {
+                                tracing::info!(
+                                    "Auto-detected app directory: {}",
+                                    resources_app.display()
+                                );
+                                resources_app
+                            } else {
+                                anyhow::bail!(
+                                    "Bundle detected but Resources/app not found at: {}",
+                                    resources_app.display()
+                                );
+                            }
+                        } else {
+                            anyhow::bail!("Could not find Contents directory in bundle");
+                        }
+                    } else {
+                        anyhow::bail!(
+                            "Usage: forge-runtime --app-dir <path> [--dev]\n\
+                            Note: When running from a macOS bundle, app_dir is auto-detected."
+                        );
+                    }
+                } else {
+                    anyhow::bail!("Usage: forge-runtime --app-dir <path> [--dev]");
+                }
+            } else {
+                anyhow::bail!("Usage: forge-runtime --app-dir <path> [--dev]");
+            }
+        }
+    };
 
     let manifest_path = app_dir.join("manifest.app.toml");
     let manifest_txt = rt
@@ -520,105 +672,69 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     let (window_menu_events_tx, window_menu_events_rx) =
         tokio::sync::mpsc::channel::<WinMenuEvent>(64);
 
-    // Build Deno runtime with extensions (runtime:*)
+    // Build Deno runtime with extensions (runtime:*) using the extension registry
     let module_loader = Rc::new(ForgeModuleLoader::new(app_dir.clone()));
+    let registry = ExtensionRegistry::new();
+
+    tracing::info!(
+        "Extension registry loaded with {} extensions",
+        registry.count()
+    );
+
     let mut js = JsRuntime::new(RuntimeOptions {
         module_loader: Some(module_loader),
-        extensions: vec![
-            ext_fs::fs_extension(),
-            ext_ipc::ipc_extension(),
-            ext_net::net_extension(),
-            ext_sys::sys_extension(),
-            ext_window::window_extension(),
-            ext_process::process_extension(),
-            ext_wasm::wasm_extension(),
-            ext_app::app_extension(),
-            ext_crypto::crypto_extension(),
-            ext_storage::storage_extension(),
-            ext_shell::shell_extension(),
-            database_extension(),
-            debugger_extension(),
-            display_extension(),
-            lock_extension(),
-            log_extension(),
-            monitor_extension(),
-            os_compat_extension(),
-            path_extension(),
-            protocol_extension(),
-            signals_extension(),
-            shortcuts_extension(),
-            trace_extension(),
-            updater_extension(),
-            timers_extension(),
-            webview_extension(),
-            devtools_extension(),
-        ],
+        extensions: registry.build_extensions(None), // None = all extensions enabled
         ..Default::default()
     });
 
-    // Initialize all extension state with capability adapters
+    // Build app info for extensions
+    let app_info = ext_app::AppInfo {
+        name: manifest.app.name.clone(),
+        version: manifest.app.version.clone(),
+        identifier: manifest.app.identifier.clone(),
+        is_packaged: false, // TODO: detect packaged mode
+        exe_path: std::env::current_exe()
+            .ok()
+            .map(|p| p.to_string_lossy().to_string()),
+        resource_path: Some(app_dir.to_string_lossy().to_string()),
+    };
+
+    // Initialize all extension state using the registry
     {
         let op_state = js.op_state();
         let mut state = op_state.borrow_mut();
 
-        // Initialize IPC state (renderer <-> Deno communication)
-        init_ipc_state(&mut state, to_renderer_tx.clone(), to_deno_rx);
+        // Initialize IPC and Window manually (they consume channel receivers)
+        ext_registry::init_ipc_manually(
+            &mut state,
+            to_renderer_tx.clone(),
+            to_deno_rx,
+            Some(&adapters),
+        );
 
-        // Initialize FS state with capability checker
-        ext_fs::init_fs_state(&mut state, Some(adapters.fs));
-
-        // Initialize Net state with capability checker
-        ext_net::init_net_state(&mut state, Some(adapters.net));
-
-        // Initialize Sys state with capability checker
-        ext_sys::init_sys_state(&mut state, Some(adapters.sys));
-
-        // Initialize IPC capabilities
-        init_ipc_capabilities(&mut state, Some(adapters.ipc));
-
-        // Initialize Process state with capability checker
-        let max_processes = capabilities.get_max_processes();
-        ext_process::init_process_state(&mut state, Some(adapters.process), Some(max_processes));
-
-        // Initialize WASM state with capability checker
-        let max_wasm_instances = capabilities.get_max_wasm_instances();
-        ext_wasm::init_wasm_state(&mut state, Some(adapters.wasm), Some(max_wasm_instances));
-
-        // Initialize Window state with capability checker
-        init_window_state(
+        ext_registry::init_window_manually(
             &mut state,
             window_cmd_tx.clone(),
             window_events_rx,
             window_menu_events_rx,
+            Some(&adapters),
         );
-        init_window_capabilities(&mut state, Some(adapters.window));
 
-        // Initialize App state
-        let app_info = ext_app::AppInfo {
-            name: manifest.app.name.clone(),
-            version: manifest.app.version.clone(),
-            identifier: manifest.app.identifier.clone(),
-            is_packaged: false, // TODO: detect packaged mode
-            exe_path: std::env::current_exe()
-                .ok()
-                .map(|p| p.to_string_lossy().to_string()),
-            resource_path: Some(app_dir.to_string_lossy().to_string()),
+        // Build initialization context for remaining extensions
+        let init_ctx = ExtensionInitContext {
+            adapters: Some(adapters),
+            capabilities: Some(std::sync::Arc::new(capabilities.clone())),
+            ipc: None,    // Already consumed above
+            window: None, // Already consumed above
+            app_info: Some(app_info.clone()),
+            dev_mode,
         };
-        ext_app::init_app_state::<ext_app::DefaultAppCapabilityChecker>(
-            &mut state, app_info, None, None,
-        );
 
-        // Initialize Crypto state (no capability checker needed - all ops are safe)
-        ext_crypto::init_crypto_state(&mut state, None);
-
-        // Initialize Storage state
-        ext_storage::init_storage_state(&mut state, manifest.app.identifier.clone(), None);
-
-        // Initialize Shell state
-        ext_shell::init_shell_state::<ext_shell::DefaultShellCapabilityChecker>(&mut state, None);
-
-        // Initialize Timer state for setTimeout/setInterval support
-        ext_timers::init_timer_state(&mut state);
+        // Initialize all other extension states via registry (skips ipc/window)
+        if let Err(e) = registry.init_all_states(&mut state, &init_ctx) {
+            tracing::warn!("Extension state init warning: {}", e);
+            // Continue - some extensions (ipc, window) are expected to skip
+        }
     }
 
     // Load the app's main.ts as an ES module (but don't evaluate yet)
@@ -725,6 +841,7 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         window_manager_config,
         window_events_tx.clone(),
         to_deno_tx.clone(),
+        window_cmd_tx.clone(),
         channel_checker,
         preload_js().to_string(),
         asset_provider,

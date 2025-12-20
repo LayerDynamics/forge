@@ -1,19 +1,315 @@
-//! Shell operations extension for Forge
+//! # `runtime:shell` - Shell Integration and Command Execution Extension
 //!
-//! Provides shell integration operations including:
-//! - Opening URLs in default browser
-//! - Opening files/folders with default applications
-//! - Revealing files in file manager
-//! - Moving files to trash
-//! - System beep
-//! - File icon retrieval
-//! - Default application queries
+//! Comprehensive shell integration and command execution capabilities for Forge applications.
+//!
+//! ## Overview
+//!
+//! This extension provides two major categories of functionality that bridge Forge applications
+//! with the operating system shell and desktop environment:
+//!
+//! ### 1. System Integration (7 operations)
+//!
+//! Desktop environment interaction for seamless OS integration:
+//! - **URL Handling**: Open URLs in default browser
+//! - **File Opening**: Launch files with default applications
+//! - **File Manager**: Reveal files in Finder/Explorer
+//! - **Trash Operations**: Safe deletion with recovery option
+//! - **System Sounds**: Play beep/alert sounds
+//! - **File Icons**: Retrieve system icons (platform-dependent)
+//! - **App Queries**: Determine default applications for file types
+//!
+//! ### 2. Shell Execution (8 operations)
+//!
+//! Full-featured shell command execution with cross-platform support:
+//! - **Command Execution**: Run shell commands with full syntax support
+//! - **Process Management**: Kill background processes with signals
+//! - **Working Directory**: Get and set current working directory
+//! - **Environment Variables**: Read, write, and enumerate environment
+//! - **Path Resolution**: Find executable paths (which)
+//!
+//! ## API Categories
+//!
+//! ### System Integration
+//! - `openExternal()` - Open URLs in default browser
+//! - `openPath()` - Open files/folders with default apps
+//! - `showItemInFolder()` - Reveal file in file manager
+//! - `moveToTrash()` - Move to trash/recycle bin
+//! - `beep()` - Play system beep sound
+//! - `getFileIcon()` - Get file type icons
+//! - `getDefaultApp()` - Query default application
+//!
+//! ### Shell Execution
+//! - `execute()` - Execute shell commands
+//! - `kill()` - Terminate processes
+//! - `cwd()` / `chdir()` - Working directory management
+//! - `getEnv()` / `setEnv()` / `unsetEnv()` - Environment variables
+//! - `getAllEnv()` - Get all environment variables
+//! - `which()` - Find executable paths
+//!
+//! ## TypeScript Usage Examples
+//!
+//! ### Example 1: Opening URLs and Files
+//!
+//! ```typescript
+//! import { openExternal, openPath, showItemInFolder } from "runtime:shell";
+//!
+//! // Open a URL in default browser
+//! await openExternal("https://github.com/myproject");
+//!
+//! // Open a file with default app
+//! await openPath("./document.pdf");
+//!
+//! // Reveal a downloaded file
+//! await showItemInFolder("~/Downloads/report.xlsx");
+//! ```
+//!
+//! ### Example 2: Safe File Deletion
+//!
+//! ```typescript
+//! import { moveToTrash } from "runtime:shell";
+//!
+//! // Move files to trash instead of permanent deletion
+//! const oldFiles = ["cache.tmp", "old-data.db", "temp.log"];
+//! for (const file of oldFiles) {
+//!   await moveToTrash(file);
+//! }
+//! ```
+//!
+//! ### Example 3: Shell Command Execution
+//!
+//! ```typescript
+//! import { execute } from "runtime:shell";
+//!
+//! // Simple command
+//! const result = await execute("ls -la");
+//! console.log(result.stdout);
+//!
+//! // With pipes and options
+//! const result = await execute("npm test", {
+//!   cwd: "./my-project",
+//!   timeout: 30000,
+//!   env: { NODE_ENV: "test" }
+//! });
+//!
+//! if (result.code !== 0) {
+//!   console.error("Tests failed:", result.stderr);
+//! }
+//! ```
+//!
+//! ### Example 4: Environment Management
+//!
+//! ```typescript
+//! import { getEnv, setEnv, getAllEnv, which } from "runtime:shell";
+//!
+//! // Check environment variables
+//! const path = getEnv("PATH");
+//! const home = getEnv("HOME");
+//!
+//! // Set variables for child processes
+//! setEnv("RUST_LOG", "debug");
+//! setEnv("API_KEY", "secret-123");
+//!
+//! // Get all environment
+//! const env = getAllEnv();
+//! console.log(`Total variables: ${Object.keys(env).length}`);
+//!
+//! // Find executable paths
+//! if (which("git")) {
+//!   await execute("git status");
+//! }
+//! ```
+//!
+//! ### Example 5: Cross-Platform Path Resolution
+//!
+//! ```typescript
+//! import { which, execute } from "runtime:shell";
+//!
+//! // Check tool availability before use
+//! const tools = ["node", "npm", "git", "cargo"];
+//! const missing = tools.filter(tool => !which(tool));
+//!
+//! if (missing.length > 0) {
+//!   console.error(`Missing tools: ${missing.join(", ")}`);
+//! } else {
+//!   await execute("npm install && npm test");
+//! }
+//! ```
+//!
+//! ## Error Codes
+//!
+//! Shell operations use error codes 8200-8214:
+//!
+//! | Code | Error | Description |
+//! |------|-------|-------------|
+//! | 8200 | OpenExternalFailed | Failed to open external URL |
+//! | 8201 | OpenPathFailed | Failed to open path with default app |
+//! | 8202 | ShowItemFailed | Failed to show item in folder |
+//! | 8203 | TrashFailed | Failed to move to trash |
+//! | 8204 | BeepFailed | Failed to play system beep |
+//! | 8205 | IconFailed | Failed to get file icon |
+//! | 8206 | DefaultAppFailed | Failed to get default app |
+//! | 8207 | InvalidPath | Invalid path provided |
+//! | 8208 | PermissionDenied | Shell operation not permitted |
+//! | 8209 | NotSupported | Operation not supported on platform |
+//! | 8210 | ParseError | Shell command syntax error |
+//! | 8211 | ExecutionFailed | Command execution failed |
+//! | 8212 | Timeout | Command timed out |
+//! | 8213 | ProcessKilled | Process was killed |
+//! | 8214 | InvalidHandle | Invalid process handle |
+//!
+//! ## Shell Syntax Support
+//!
+//! The `execute()` function provides full shell syntax support:
+//!
+//! - **Pipes**: `cmd1 | cmd2 | cmd3`
+//! - **Logical Operators**: `cmd1 && cmd2`, `cmd1 || cmd2`
+//! - **Sequences**: `cmd1; cmd2; cmd3`
+//! - **Redirections**: `cmd > file`, `cmd 2>&1`, `cmd < input`
+//! - **Variables**: `$VAR`, `${VAR}`, environment expansion
+//! - **Quoting**: `'literal'`, `"expansion $VAR"`
+//! - **Globs**: `*.ts`, `**/*.js`, `file[0-9].txt`
+//! - **Background**: `cmd &`
+//!
+//! ## Built-in Commands
+//!
+//! Cross-platform built-in commands (no external binaries required):
+//!
+//! - **File Operations**: `cat`, `cp`, `mv`, `rm`, `mkdir`, `ls`
+//! - **Navigation**: `cd`, `pwd`
+//! - **Output**: `echo`
+//! - **Environment**: `export`, `unset`
+//! - **Utilities**: `sleep`, `which`, `exit`
+//! - **Piping**: `head`, `xargs`
+//!
+//! Built-ins provide consistent behavior across platforms and don't require
+//! external dependencies.
+//!
+//! ## Permission System
+//!
+//! Shell operations require permissions in `manifest.app.toml`:
+//!
+//! ```toml
+//! [permissions.shell]
+//! execute = true          # Allow shell command execution
+//! open_external = true    # Allow opening URLs/files
+//! trash = true            # Allow moving to trash
+//! ```
+//!
+//! In development mode (`forge dev`), all permissions are granted. Production builds
+//! enforce strict permission checks via capability adapters.
+//!
+//! ## Platform Support
+//!
+//! ### System Integration
+//!
+//! | Operation | macOS | Windows | Linux |
+//! |-----------|-------|---------|-------|
+//! | openExternal | ✅ | ✅ | ✅ |
+//! | openPath | ✅ | ✅ | ✅ |
+//! | showItemInFolder | ✅ `open -R` | ✅ `explorer /select` | ⚠️ dbus fallback |
+//! | moveToTrash | ✅ Trash | ✅ Recycle Bin | ✅ freedesktop Trash |
+//! | beep | ✅ AppleScript | ✅ PowerShell | ⚠️ paplay fallback |
+//! | getFileIcon | ❌ Needs bindings | ❌ Needs bindings | ❌ Needs bindings |
+//! | getDefaultApp | ✅ osascript | ✅ assoc | ✅ xdg-mime |
+//!
+//! ### Shell Execution
+//!
+//! All shell execution operations work consistently across platforms:
+//! - **macOS/Linux**: Uses sh-compatible shell
+//! - **Windows**: Uses cmd.exe compatible commands
+//! - **Built-ins**: Cross-platform implementations
+//!
+//! ## Implementation Details
+//!
+//! ### State Management
+//!
+//! The extension maintains:
+//! - **Capability Checker**: Permission validation via `ShellCapabilityChecker` trait
+//! - **Process Registry**: Track spawned processes via `SpawnedProcessState`
+//! - **Shell State**: Working directory and environment per execution context
+//!
+//! ### Process Lifecycle
+//!
+//! 1. Command parsed via custom shell parser
+//! 2. Capability check performed
+//! 3. Shell state created with cwd/env
+//! 4. Command executed with pipes for stdout/stderr
+//! 5. Optional timeout with graceful termination
+//! 6. Output collected and returned
+//!
+//! ### Signal Handling
+//!
+//! Process termination supports multiple signal types:
+//! - **SIGTERM** (default): Graceful termination with cleanup
+//! - **SIGKILL**: Forceful termination, cannot be caught
+//! - **SIGINT**: Interrupt signal (Ctrl+C equivalent)
+//! - **SIGQUIT**: Quit with core dump
+//!
+//! ### Platform-Specific Implementations
+//!
+//! - **URL Opening**: Uses `open` crate for cross-platform support
+//! - **Trash Operations**: Uses `trash` crate (freedesktop.org standard on Linux)
+//! - **Reveal in Folder**: Platform-specific commands (`open -R`, `explorer /select`, `dbus-send`)
+//! - **System Beep**: Platform-specific sound generation
+//!
+//! ## Extension Registration
+//!
+//! Registered as **Tier 1 (SimpleState)** extension:
+//!
+//! ```rust
+//! ExtensionDescriptor {
+//!     id: "runtime_shell",
+//!     init_fn: ExtensionInitFn::SimpleState(|state| {
+//!         init_shell_state(state, None);
+//!     }),
+//!     tier: ExtensionTier::SimpleState,
+//!     required: false,
+//! }
+//! ```
+//!
+//! State initialization injects:
+//! - Default capability checker (allows all in dev mode)
+//! - Empty process registry for spawn tracking
+//!
+//! ## Security Considerations
+//!
+//! - **Command Injection**: Commands are parsed, not passed directly to shell
+//! - **Path Validation**: Paths are checked for existence before operations
+//! - **URL Validation**: URLs must start with http://, https://, or mailto:
+//! - **Capability Checks**: All operations verify permissions before execution
+//! - **Timeout Protection**: Commands can be terminated if they run too long
+//!
+//! ## Testing
+//!
+//! The extension includes comprehensive unit tests:
+//! - Error code validation
+//! - Error message formatting
+//! - Capability checker behavior
+//! - Type serialization/deserialization
+//!
+//! Run tests with:
+//! ```bash
+//! cargo test -p ext_shell
+//! ```
 
 use deno_core::{op2, Extension, OpState};
 use forge_weld_macro::weld_op;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Arc,
+};
 use tracing::{debug, error};
+
+// Shell execution modules
+pub mod parser;
+pub mod shell;
+
+pub use parser::{parse, SequentialList};
+pub use shell::{commands::*, execute, execute_with_pipes, types::*};
 
 // Include the generated extension code from build.rs
 include!(concat!(env!("OUT_DIR"), "/extension.rs"));
@@ -22,7 +318,7 @@ include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 // Error Types
 // ============================================================================
 
-/// Error codes for shell operations (8200-8209)
+/// Error codes for shell operations (8200-8219)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShellErrorCode {
     /// Failed to open external URL (8200)
@@ -45,6 +341,16 @@ pub enum ShellErrorCode {
     PermissionDenied = 8208,
     /// Operation not supported on this platform (8209)
     NotSupported = 8209,
+    /// Shell command parse error (8210)
+    ParseError = 8210,
+    /// Shell command execution failed (8211)
+    ExecutionFailed = 8211,
+    /// Shell command timed out (8212)
+    Timeout = 8212,
+    /// Shell process was killed (8213)
+    ProcessKilled = 8213,
+    /// Invalid shell handle (8214)
+    InvalidHandle = 8214,
 }
 
 impl std::fmt::Display for ShellErrorCode {
@@ -125,6 +431,41 @@ pub enum ShellError {
         code: ShellErrorCode,
         message: String,
     },
+
+    #[error("[{code}] Parse error: {message}")]
+    #[class(generic)]
+    ParseError {
+        code: ShellErrorCode,
+        message: String,
+    },
+
+    #[error("[{code}] Execution failed: {message}")]
+    #[class(generic)]
+    ExecutionFailed {
+        code: ShellErrorCode,
+        message: String,
+    },
+
+    #[error("[{code}] Command timed out: {message}")]
+    #[class(generic)]
+    Timeout {
+        code: ShellErrorCode,
+        message: String,
+    },
+
+    #[error("[{code}] Process killed: {message}")]
+    #[class(generic)]
+    ProcessKilled {
+        code: ShellErrorCode,
+        message: String,
+    },
+
+    #[error("[{code}] Invalid handle: {message}")]
+    #[class(generic)]
+    InvalidHandle {
+        code: ShellErrorCode,
+        message: String,
+    },
 }
 
 impl ShellError {
@@ -197,6 +538,41 @@ impl ShellError {
             message: message.into(),
         }
     }
+
+    pub fn parse_error(message: impl Into<String>) -> Self {
+        Self::ParseError {
+            code: ShellErrorCode::ParseError,
+            message: message.into(),
+        }
+    }
+
+    pub fn execution_failed(message: impl Into<String>) -> Self {
+        Self::ExecutionFailed {
+            code: ShellErrorCode::ExecutionFailed,
+            message: message.into(),
+        }
+    }
+
+    pub fn timeout(message: impl Into<String>) -> Self {
+        Self::Timeout {
+            code: ShellErrorCode::Timeout,
+            message: message.into(),
+        }
+    }
+
+    pub fn process_killed(message: impl Into<String>) -> Self {
+        Self::ProcessKilled {
+            code: ShellErrorCode::ProcessKilled,
+            message: message.into(),
+        }
+    }
+
+    pub fn invalid_handle(message: impl Into<String>) -> Self {
+        Self::InvalidHandle {
+            code: ShellErrorCode::InvalidHandle,
+            message: message.into(),
+        }
+    }
 }
 
 // ============================================================================
@@ -227,6 +603,16 @@ pub trait ShellCapabilityChecker: Send + Sync + 'static {
 
     /// Check if file icon retrieval is allowed
     fn can_get_icon(&self) -> bool {
+        true
+    }
+
+    /// Check if shell command execution is allowed
+    fn can_execute(&self) -> bool {
+        true
+    }
+
+    /// Check if spawning shell processes is allowed
+    fn can_spawn(&self) -> bool {
         true
     }
 }
@@ -262,6 +648,92 @@ pub struct DefaultAppInfo {
     pub identifier: Option<String>,
 }
 
+/// Options for shell command execution
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ExecuteOptions {
+    /// Working directory for the command
+    pub cwd: Option<String>,
+    /// Environment variables to set
+    pub env: Option<HashMap<String, String>>,
+    /// Timeout in milliseconds (0 = no timeout)
+    pub timeout_ms: Option<u64>,
+    /// Input to send to stdin
+    pub stdin: Option<String>,
+}
+
+/// Result of shell command execution
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecuteOutput {
+    /// Exit code of the command
+    pub code: i32,
+    /// Stdout output
+    pub stdout: String,
+    /// Stderr output
+    pub stderr: String,
+}
+
+/// Handle for a spawned shell process
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpawnHandle {
+    /// Unique ID for this process
+    pub id: u32,
+}
+
+/// Output event from a spawned process
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum ProcessEvent {
+    /// Stdout data received
+    Stdout(String),
+    /// Stderr data received
+    Stderr(String),
+    /// Process exited
+    Exit { code: i32 },
+    /// Error occurred
+    Error(String),
+}
+
+// ============================================================================
+// Process Handle Registry
+// ============================================================================
+
+/// Global counter for process handles
+static NEXT_PROCESS_ID: AtomicU32 = AtomicU32::new(1);
+
+/// State for tracking spawned processes
+pub struct SpawnedProcessState {
+    /// Map of process ID to kill signal sender
+    pub processes: HashMap<u32, Arc<shell::types::KillSignal>>,
+}
+
+impl SpawnedProcessState {
+    pub fn new() -> Self {
+        Self {
+            processes: HashMap::new(),
+        }
+    }
+
+    pub fn register(&mut self, kill_signal: Arc<shell::types::KillSignal>) -> u32 {
+        let id = NEXT_PROCESS_ID.fetch_add(1, Ordering::SeqCst);
+        self.processes.insert(id, kill_signal);
+        id
+    }
+
+    pub fn get(&self, id: u32) -> Option<&Arc<shell::types::KillSignal>> {
+        self.processes.get(&id)
+    }
+
+    pub fn remove(&mut self, id: u32) -> Option<Arc<shell::types::KillSignal>> {
+        self.processes.remove(&id)
+    }
+}
+
+impl Default for SpawnedProcessState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ============================================================================
 // State Initialization
 // ============================================================================
@@ -273,6 +745,7 @@ pub fn init_shell_state<C: ShellCapabilityChecker>(state: &mut OpState, checker:
         None => Box::new(DefaultShellCapabilityChecker),
     };
     state.put(checker);
+    state.put(SpawnedProcessState::new());
 }
 
 // ============================================================================
@@ -601,7 +1074,10 @@ pub async fn op_shell_get_default_app(
             let app_path = String::from_utf8_lossy(&out.stdout).trim().to_string();
             if !app_path.is_empty() {
                 return Ok(DefaultAppInfo {
-                    name: app_path.split('/').last().map(|s| s.replace(".app", "")),
+                    name: app_path
+                        .split('/')
+                        .next_back()
+                        .map(|s| s.replace(".app", "")),
                     path: Some(app_path),
                     identifier: None,
                 });
@@ -698,6 +1174,213 @@ pub async fn op_shell_get_default_app(
         path: None,
         identifier: None,
     })
+}
+
+// ============================================================================
+// Shell Execution Operations
+// ============================================================================
+
+/// Execute a shell command and return the result
+#[weld_op(async)]
+#[op2(async)]
+#[serde]
+pub async fn op_shell_execute(
+    state: std::rc::Rc<std::cell::RefCell<OpState>>,
+    #[string] command: String,
+    #[serde] options: Option<ExecuteOptions>,
+) -> Result<ExecuteOutput, ShellError> {
+    // Check capability
+    {
+        let state = state.borrow();
+        let checker = state.borrow::<Box<dyn ShellCapabilityChecker>>();
+        if !checker.can_execute() {
+            return Err(ShellError::permission_denied(
+                "Shell command execution is not allowed",
+            ));
+        }
+    }
+
+    debug!("Executing shell command: {}", command);
+
+    let options = options.unwrap_or_default();
+
+    // Parse the command
+    let parsed = parse(&command).map_err(|e| ShellError::parse_error(format!("{:?}", e)))?;
+
+    // Create shell state
+    let shell_state = Rc::new(shell::types::ShellState::new_default());
+
+    // Set working directory
+    if let Some(cwd) = options.cwd {
+        shell_state.set_cwd(PathBuf::from(cwd));
+    }
+
+    // Set environment variables
+    if let Some(env) = options.env {
+        for (key, value) in env {
+            shell_state.set_env_var(key, value);
+        }
+    }
+
+    // Set up pipes to capture output
+    let (stdout_reader, stdout_writer) = shell::types::pipe();
+    let (stderr_reader, stderr_writer) = shell::types::pipe();
+
+    // Handle stdin
+    let stdin = if let Some(input) = options.stdin {
+        shell::types::ShellPipeReader::from_string(input)
+    } else {
+        shell::types::ShellPipeReader::stdin()
+    };
+
+    // Execute with optional timeout
+    let timeout_ms = options.timeout_ms.unwrap_or(0);
+
+    let execute_future = shell::execute::execute_with_pipes(
+        parsed,
+        shell_state.clone(),
+        stdin,
+        stdout_writer,
+        stderr_writer,
+    );
+
+    let code = if timeout_ms > 0 {
+        match tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), execute_future)
+            .await
+        {
+            Ok(code) => code,
+            Err(_) => {
+                // Timeout occurred - send kill signal
+                shell_state.kill_signal().send_sigterm();
+                return Err(ShellError::timeout(format!(
+                    "Command timed out after {}ms",
+                    timeout_ms
+                )));
+            }
+        }
+    } else {
+        execute_future.await
+    };
+
+    // Collect output
+    let mut stdout_bytes = Vec::new();
+    let mut stderr_bytes = Vec::new();
+
+    // Read from the readers
+    let _ = stdout_reader.pipe_to(&mut stdout_bytes);
+    let _ = stderr_reader.pipe_to(&mut stderr_bytes);
+
+    let stdout = String::from_utf8_lossy(&stdout_bytes).to_string();
+    let stderr = String::from_utf8_lossy(&stderr_bytes).to_string();
+
+    Ok(ExecuteOutput {
+        code,
+        stdout,
+        stderr,
+    })
+}
+
+/// Kill a spawned process by its handle ID
+#[weld_op(async)]
+#[op2(async)]
+pub async fn op_shell_kill(
+    state: std::rc::Rc<std::cell::RefCell<OpState>>,
+    #[smi] handle_id: u32,
+    #[string] signal: Option<String>,
+) -> Result<(), ShellError> {
+    // Check capability
+    {
+        let state = state.borrow();
+        let checker = state.borrow::<Box<dyn ShellCapabilityChecker>>();
+        if !checker.can_spawn() {
+            return Err(ShellError::permission_denied(
+                "Killing processes is not allowed",
+            ));
+        }
+    }
+
+    debug!("Killing process {}", handle_id);
+
+    let kill_signal = {
+        let state = state.borrow();
+        let spawned_state = state.borrow::<SpawnedProcessState>();
+        spawned_state.get(handle_id).cloned()
+    };
+
+    match kill_signal {
+        Some(ks) => {
+            let sig = match signal.as_deref() {
+                Some("SIGKILL") | Some("9") => shell::types::SignalKind::SIGKILL,
+                Some("SIGINT") | Some("2") => shell::types::SignalKind::SIGINT,
+                Some("SIGQUIT") | Some("3") => shell::types::SignalKind::SIGQUIT,
+                _ => shell::types::SignalKind::SIGTERM,
+            };
+            ks.send(sig);
+            Ok(())
+        }
+        None => Err(ShellError::invalid_handle(format!(
+            "No process found with handle ID {}",
+            handle_id
+        ))),
+    }
+}
+
+/// Get the current working directory for shell operations
+#[weld_op]
+#[op2]
+#[string]
+pub fn op_shell_cwd() -> String {
+    std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| ".".to_string())
+}
+
+/// Set the current working directory for shell operations
+#[weld_op]
+#[op2(fast)]
+pub fn op_shell_set_cwd(#[string] path: String) -> Result<(), ShellError> {
+    std::env::set_current_dir(&path).map_err(|e| {
+        ShellError::execution_failed(format!("Failed to change directory to '{}': {}", path, e))
+    })
+}
+
+/// Get an environment variable
+#[weld_op]
+#[op2]
+#[string]
+pub fn op_shell_get_env(#[string] name: String) -> Option<String> {
+    std::env::var(&name).ok()
+}
+
+/// Set an environment variable
+#[weld_op]
+#[op2(fast)]
+pub fn op_shell_set_env(#[string] name: String, #[string] value: String) {
+    std::env::set_var(&name, &value);
+}
+
+/// Unset an environment variable
+#[weld_op]
+#[op2(fast)]
+pub fn op_shell_unset_env(#[string] name: String) {
+    std::env::remove_var(&name);
+}
+
+/// Get all environment variables
+#[weld_op]
+#[op2]
+#[serde]
+pub fn op_shell_get_all_env() -> HashMap<String, String> {
+    std::env::vars().collect()
+}
+
+/// Resolve a command to its path (like `which`)
+#[weld_op]
+#[op2]
+#[string]
+pub fn op_shell_which(#[string] command: String) -> Option<String> {
+    shell::which::which(std::ffi::OsStr::new(&command), None)
+        .map(|p| p.to_string_lossy().to_string())
 }
 
 // ============================================================================

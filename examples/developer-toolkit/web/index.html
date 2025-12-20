@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Developer Toolkit</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="app-header">
+      <h1>Developer Toolkit</h1>
+      <div class="system-info">
+        <span id="platform-badge" class="badge">--</span>
+        <span id="hostname">--</span>
+      </div>
+    </header>
+
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+      <button class="tab-btn active" data-tab="overview">Overview</button>
+      <button class="tab-btn" data-tab="codesign">Code Signing</button>
+      <button class="tab-btn" data-tab="hashing">File Hashing</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
+    </nav>
+
+    <!-- Tab Content -->
+    <main class="tab-content">
+      <!-- Overview Tab -->
+      <section id="tab-overview" class="tab-panel active">
+        <div class="panel-grid">
+          <!-- System Info Panel -->
+          <div class="panel">
+            <h2>System Information</h2>
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="label">OS</span>
+                <span class="value" id="sys-os">--</span>
+              </div>
+              <div class="info-item">
+                <span class="label">Architecture</span>
+                <span class="value" id="sys-arch">--</span>
+              </div>
+              <div class="info-item">
+                <span class="label">CPU Cores</span>
+                <span class="value" id="sys-cpus">--</span>
+              </div>
+              <div class="info-item">
+                <span class="label">Hostname</span>
+                <span class="value" id="sys-hostname">--</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Capabilities Panel -->
+          <div class="panel">
+            <h2>Platform Capabilities</h2>
+            <div class="capability-list">
+              <div class="capability-item" id="cap-codesign">
+                <span class="cap-icon"></span>
+                <span class="cap-name">macOS codesign</span>
+                <span class="cap-status">--</span>
+              </div>
+              <div class="capability-item" id="cap-security">
+                <span class="cap-icon"></span>
+                <span class="cap-name">macOS security</span>
+                <span class="cap-status">--</span>
+              </div>
+              <div class="capability-item" id="cap-signtool">
+                <span class="cap-icon"></span>
+                <span class="cap-name">Windows SignTool</span>
+                <span class="cap-status">--</span>
+              </div>
+              <div class="capability-item" id="cap-certutil">
+                <span class="cap-icon"></span>
+                <span class="cap-name">Windows certutil</span>
+                <span class="cap-status">--</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Signing Identities Panel -->
+          <div class="panel full-width">
+            <div class="panel-header">
+              <h2>Signing Identities</h2>
+              <button class="btn btn-secondary" onclick="refreshIdentities()">Refresh</button>
+            </div>
+            <div class="identity-list" id="identity-list">
+              <div class="empty-state">No signing identities found</div>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="panel full-width">
+            <h2>Quick Actions</h2>
+            <div class="action-grid">
+              <button class="action-btn" onclick="selectFileForHash()">
+                <span class="action-icon">🔐</span>
+                <span class="action-label">Hash Files</span>
+              </button>
+              <button class="action-btn" onclick="selectFileForSign()">
+                <span class="action-icon">✍️</span>
+                <span class="action-label">Sign File</span>
+              </button>
+              <button class="action-btn" onclick="selectFileForVerify()">
+                <span class="action-icon">✓</span>
+                <span class="action-label">Verify Signature</span>
+              </button>
+              <button class="action-btn" onclick="generateRandom()">
+                <span class="action-icon">🎲</span>
+                <span class="action-label">Generate Random</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Code Signing Tab -->
+      <section id="tab-codesign" class="tab-panel">
+        <div class="panel-grid">
+          <!-- Sign File Panel -->
+          <div class="panel">
+            <h2>Sign File</h2>
+            <div class="form-group">
+              <label>File to Sign</label>
+              <div class="file-input">
+                <input type="text" id="sign-path" placeholder="Select a file..." readonly>
+                <button class="btn btn-secondary" onclick="selectFileForSign()">Browse</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Signing Identity</label>
+              <select id="sign-identity">
+                <option value="">Select identity...</option>
+              </select>
+            </div>
+            <div class="form-group checkbox-group">
+              <label>
+                <input type="checkbox" id="sign-hardened" checked>
+                Hardened Runtime
+              </label>
+              <label>
+                <input type="checkbox" id="sign-deep" checked>
+                Deep Sign (include nested code)
+              </label>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" onclick="signSelectedFile()">Sign File</button>
+              <button class="btn btn-secondary" onclick="signAdhoc()">Ad-hoc Sign</button>
+            </div>
+          </div>
+
+          <!-- Verify Signature Panel -->
+          <div class="panel">
+            <h2>Verify Signature</h2>
+            <div class="form-group">
+              <label>File to Verify</label>
+              <div class="file-input">
+                <input type="text" id="verify-path" placeholder="Select a file..." readonly>
+                <button class="btn btn-secondary" onclick="selectFileForVerify()">Browse</button>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="verifySelectedFile()">Verify</button>
+
+            <div id="verify-result" class="result-panel hidden">
+              <h3>Verification Result</h3>
+              <div class="result-content"></div>
+            </div>
+          </div>
+
+          <!-- Recent Signings -->
+          <div class="panel full-width">
+            <h2>Recent Signing Operations</h2>
+            <div class="history-list" id="signing-history">
+              <div class="empty-state">No recent signing operations</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- File Hashing Tab -->
+      <section id="tab-hashing" class="tab-panel">
+        <div class="panel-grid">
+          <!-- Hash Panel -->
+          <div class="panel full-width">
+            <h2>Compute File Hashes</h2>
+            <div class="drop-zone" id="drop-zone" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+              <div class="drop-icon">📁</div>
+              <div class="drop-text">Drop files here or click to select</div>
+              <button class="btn btn-secondary" onclick="selectFileForHash()">Select Files</button>
+            </div>
+          </div>
+
+          <!-- Hash Results -->
+          <div class="panel full-width" id="hash-results-panel">
+            <h2>Hash Results</h2>
+            <div class="hash-results" id="hash-results">
+              <div class="empty-state">No files hashed yet</div>
+            </div>
+          </div>
+
+          <!-- Recent Hashes -->
+          <div class="panel full-width">
+            <h2>Recent Hashes</h2>
+            <div class="history-list" id="hash-history">
+              <div class="empty-state">No recent hash operations</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings Tab -->
+      <section id="tab-settings" class="tab-panel">
+        <div class="panel-grid">
+          <div class="panel">
+            <h2>Code Signing Preferences</h2>
+            <div class="form-group">
+              <label>Default Signing Identity</label>
+              <select id="pref-default-identity">
+                <option value="">None</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Timestamp Server URL</label>
+              <input type="text" id="pref-timestamp-url" value="http://timestamp.digicert.com">
+            </div>
+            <div class="form-group checkbox-group">
+              <label>
+                <input type="checkbox" id="pref-hardened" checked>
+                Enable Hardened Runtime by default
+              </label>
+              <label>
+                <input type="checkbox" id="pref-deep" checked>
+                Deep sign by default
+              </label>
+            </div>
+            <button class="btn btn-primary" onclick="savePreferences()">Save Preferences</button>
+          </div>
+
+          <div class="panel">
+            <h2>About</h2>
+            <div class="about-content">
+              <p><strong>Developer Toolkit</strong> v0.1.0</p>
+              <p>A comprehensive demonstration of Forge framework capabilities:</p>
+              <ul>
+                <li><code>runtime:codesign</code> - Code signing operations</li>
+                <li><code>runtime:crypto</code> - Cryptographic hashing</li>
+                <li><code>runtime:fs</code> - File system operations</li>
+                <li><code>runtime:process</code> - Process spawning</li>
+                <li><code>runtime:sys</code> - System information</li>
+                <li><code>runtime:storage</code> - Persistent storage</li>
+                <li><code>runtime:window</code> - Window management</li>
+                <li><code>runtime:ipc</code> - Inter-process communication</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+  </div>
+
+  <script>
+    // State
+    let state = null;
+    let selectedSignFile = null;
+    let selectedVerifyFile = null;
+
+    // Tab Navigation
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+
+        // Update buttons
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Update panels
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        document.getElementById(`tab-${tab}`).classList.add('active');
+      });
+    });
+
+    // Update UI with state
+    function updateUI(newState) {
+      state = newState;
+
+      // System info
+      document.getElementById('sys-os').textContent = state.system.os;
+      document.getElementById('sys-arch').textContent = state.system.arch;
+      document.getElementById('sys-cpus').textContent = state.system.cpuCount;
+      document.getElementById('sys-hostname').textContent = state.system.hostname;
+      document.getElementById('hostname').textContent = state.system.hostname;
+
+      // Platform badge
+      const platformBadge = document.getElementById('platform-badge');
+      platformBadge.textContent = state.capabilities.platform;
+      platformBadge.className = `badge badge-${state.capabilities.platform}`;
+
+      // Capabilities
+      updateCapability('cap-codesign', state.capabilities.codesign);
+      updateCapability('cap-security', state.capabilities.security);
+      updateCapability('cap-signtool', state.capabilities.signtool);
+      updateCapability('cap-certutil', state.capabilities.certutil);
+
+      // Identities
+      updateIdentities(state.identities);
+
+      // Recent operations
+      updateSigningHistory(state.recentSignings);
+      updateHashHistory(state.recentHashes);
+
+      // Preferences
+      document.getElementById('pref-timestamp-url').value = state.preferences.timestampUrl;
+      document.getElementById('pref-hardened').checked = state.preferences.hardenedRuntime;
+      document.getElementById('pref-deep').checked = state.preferences.deepSign;
+    }
+
+    function updateCapability(id, available) {
+      const el = document.getElementById(id);
+      const status = el.querySelector('.cap-status');
+      status.textContent = available ? 'Available' : 'Not Available';
+      el.className = `capability-item ${available ? 'available' : 'unavailable'}`;
+    }
+
+    function updateIdentities(identities) {
+      const list = document.getElementById('identity-list');
+      const select = document.getElementById('sign-identity');
+      const prefSelect = document.getElementById('pref-default-identity');
+
+      if (identities.length === 0) {
+        list.innerHTML = '<div class="empty-state">No signing identities found</div>';
+        select.innerHTML = '<option value="">No identities available</option>';
+        return;
+      }
+
+      list.innerHTML = identities.map(id => `
+        <div class="identity-card ${id.valid ? 'valid' : 'invalid'}">
+          <div class="identity-info">
+            <div class="identity-name">${escapeHtml(id.name)}</div>
+            <div class="identity-type">${id.type}</div>
+            <div class="identity-id">${id.id.substring(0, 16)}...</div>
+          </div>
+          <div class="identity-status">
+            <span class="status-badge ${id.valid ? 'valid' : 'expired'}">
+              ${id.valid ? 'Valid' : 'Invalid/Expired'}
+            </span>
+            ${id.expires ? `<div class="identity-expires">Expires: ${id.expires}</div>` : ''}
+          </div>
+          <button class="btn btn-icon" onclick="copyToClipboard('${id.id}')" title="Copy ID">📋</button>
+        </div>
+      `).join('');
+
+      select.innerHTML = '<option value="">Select identity...</option>' +
+        identities.filter(id => id.valid).map(id =>
+          `<option value="${escapeHtml(id.name)}">${escapeHtml(id.name)}</option>`
+        ).join('');
+
+      prefSelect.innerHTML = '<option value="">None</option>' +
+        identities.filter(id => id.valid).map(id =>
+          `<option value="${escapeHtml(id.name)}">${escapeHtml(id.name)}</option>`
+        ).join('');
+    }
+
+    function updateSigningHistory(signings) {
+      const list = document.getElementById('signing-history');
+      if (signings.length === 0) {
+        list.innerHTML = '<div class="empty-state">No recent signing operations</div>';
+        return;
+      }
+
+      list.innerHTML = signings.map(s => `
+        <div class="history-item ${s.success ? 'success' : 'failed'}">
+          <div class="history-icon">${s.success ? '✓' : '✗'}</div>
+          <div class="history-info">
+            <div class="history-path">${escapeHtml(s.path.split('/').pop())}</div>
+            <div class="history-detail">${escapeHtml(s.identity)} - ${escapeHtml(s.message)}</div>
+          </div>
+          ${s.timestamp ? `<div class="history-time">${new Date(s.timestamp).toLocaleTimeString()}</div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function updateHashHistory(hashes) {
+      const list = document.getElementById('hash-history');
+      if (hashes.length === 0) {
+        list.innerHTML = '<div class="empty-state">No recent hash operations</div>';
+        return;
+      }
+
+      list.innerHTML = hashes.slice(0, 5).map(h => `
+        <div class="history-item">
+          <div class="history-icon">🔐</div>
+          <div class="history-info">
+            <div class="history-path">${escapeHtml(h.name)}</div>
+            <div class="history-detail">SHA256: ${h.hashes.sha256.substring(0, 16)}...</div>
+          </div>
+          <button class="btn btn-icon" onclick="copyToClipboard('${h.hashes.sha256}')" title="Copy SHA256">📋</button>
+        </div>
+      `).join('');
+    }
+
+    // Actions
+    function refreshIdentities() {
+      window.host.send('refresh-identities');
+    }
+
+    function selectFileForHash() {
+      window.host.send('select-file-for-hash');
+    }
+
+    function selectFileForSign() {
+      window.host.send('select-file-for-sign');
+    }
+
+    function selectFileForVerify() {
+      window.host.send('select-file-for-verify');
+    }
+
+    function signSelectedFile() {
+      const path = document.getElementById('sign-path').value;
+      const identity = document.getElementById('sign-identity').value;
+
+      if (!path) {
+        showToast('Please select a file to sign', 'error');
+        return;
+      }
+      if (!identity) {
+        showToast('Please select a signing identity', 'error');
+        return;
+      }
+
+      window.host.send('sign-file', {
+        path,
+        identity,
+        options: {
+          hardenedRuntime: document.getElementById('sign-hardened').checked,
+          deep: document.getElementById('sign-deep').checked,
+        }
+      });
+    }
+
+    function signAdhoc() {
+      const path = document.getElementById('sign-path').value;
+      if (!path) {
+        showToast('Please select a file to sign', 'error');
+        return;
+      }
+      window.host.send('sign-adhoc', path);
+    }
+
+    function verifySelectedFile() {
+      const path = document.getElementById('verify-path').value;
+      if (!path) {
+        showToast('Please select a file to verify', 'error');
+        return;
+      }
+      window.host.send('verify-file', path);
+    }
+
+    function generateRandom() {
+      window.host.send('generate-random', 32);
+    }
+
+    function savePreferences() {
+      window.host.send('update-preferences', {
+        timestampUrl: document.getElementById('pref-timestamp-url').value,
+        hardenedRuntime: document.getElementById('pref-hardened').checked,
+        deepSign: document.getElementById('pref-deep').checked,
+        defaultIdentity: document.getElementById('pref-default-identity').value || null,
+      });
+      showToast('Preferences saved', 'success');
+    }
+
+    function copyToClipboard(text) {
+      window.host.send('copy-to-clipboard', text);
+    }
+
+    // Drag and Drop
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.currentTarget.classList.add('drag-over');
+    }
+
+    function handleDragLeave(e) {
+      e.currentTarget.classList.remove('drag-over');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('drag-over');
+      // Note: File paths from drag-drop need special handling
+      showToast('Drag and drop requires file path extraction', 'info');
+    }
+
+    // Event Handlers
+    window.host.on('state', updateUI);
+
+    window.host.on('file-selected-for-sign', (path) => {
+      document.getElementById('sign-path').value = path;
+    });
+
+    window.host.on('hash-result', (result) => {
+      displayHashResult(result);
+      showToast(`Hashed: ${result.name}`, 'success');
+    });
+
+    window.host.on('hash-results', (results) => {
+      results.forEach(displayHashResult);
+      showToast(`Hashed ${results.length} files`, 'success');
+    });
+
+    window.host.on('sign-result', (result) => {
+      if (result.success) {
+        showToast(`Signed: ${result.path.split('/').pop()}`, 'success');
+      } else {
+        showToast(`Signing failed: ${result.message}`, 'error');
+      }
+    });
+
+    window.host.on('verify-result', (result) => {
+      document.getElementById('verify-path').value = result.path;
+      displayVerifyResult(result);
+    });
+
+    window.host.on('random-result', (random) => {
+      copyToClipboard(random);
+      showToast('Random string generated and copied!', 'success');
+    });
+
+    window.host.on('error', (err) => {
+      showToast(`Error: ${err.message}`, 'error');
+    });
+
+    function displayHashResult(result) {
+      const container = document.getElementById('hash-results');
+      const existingEmpty = container.querySelector('.empty-state');
+      if (existingEmpty) {
+        container.innerHTML = '';
+      }
+
+      const card = document.createElement('div');
+      card.className = 'hash-card';
+      card.innerHTML = `
+        <div class="hash-header">
+          <div class="hash-filename">${escapeHtml(result.name)}</div>
+          <div class="hash-size">${formatBytes(result.size)}</div>
+        </div>
+        <div class="hash-values">
+          <div class="hash-row">
+            <span class="hash-algo">MD5</span>
+            <code class="hash-value">${result.hashes.md5}</code>
+            <button class="btn btn-icon" onclick="copyToClipboard('${result.hashes.md5}')">📋</button>
+          </div>
+          <div class="hash-row">
+            <span class="hash-algo">SHA1</span>
+            <code class="hash-value">${result.hashes.sha1}</code>
+            <button class="btn btn-icon" onclick="copyToClipboard('${result.hashes.sha1}')">📋</button>
+          </div>
+          <div class="hash-row">
+            <span class="hash-algo">SHA256</span>
+            <code class="hash-value">${result.hashes.sha256}</code>
+            <button class="btn btn-icon" onclick="copyToClipboard('${result.hashes.sha256}')">📋</button>
+          </div>
+          <div class="hash-row">
+            <span class="hash-algo">SHA512</span>
+            <code class="hash-value hash-long">${result.hashes.sha512}</code>
+            <button class="btn btn-icon" onclick="copyToClipboard('${result.hashes.sha512}')">📋</button>
+          </div>
+        </div>
+      `;
+      container.insertBefore(card, container.firstChild);
+    }
+
+    function displayVerifyResult(result) {
+      const panel = document.getElementById('verify-result');
+      panel.classList.remove('hidden');
+
+      const content = panel.querySelector('.result-content');
+      content.innerHTML = `
+        <div class="verify-status ${result.valid ? 'valid' : 'invalid'}">
+          <span class="status-icon">${result.valid ? '✓' : '✗'}</span>
+          <span class="status-text">${result.valid ? 'Valid Signature' : 'Invalid/No Signature'}</span>
+        </div>
+        ${result.signer ? `<div class="verify-item"><strong>Signer:</strong> ${escapeHtml(result.signer)}</div>` : ''}
+        ${result.timestamp ? `<div class="verify-item"><strong>Timestamp:</strong> ${escapeHtml(result.timestamp)}</div>` : ''}
+        <div class="verify-item"><strong>Message:</strong> ${escapeHtml(result.message)}</div>
+        ${result.entitlements ? `
+          <details class="entitlements-details">
+            <summary>Entitlements</summary>
+            <pre>${escapeHtml(result.entitlements)}</pre>
+          </details>
+        ` : ''}
+      `;
+    }
+
+    // Utilities
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => toast.classList.add('show'), 10);
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // Initialize
+    window.host.emit('ready');
+  </script>
+</body>
+</html>

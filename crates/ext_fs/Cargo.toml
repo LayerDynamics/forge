@@ -3,6 +3,10 @@ name = "ext_fs"
 version = "0.1.0-alpha.1"
 edition = "2021"
 
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
 [dependencies]
 anyhow = "1"
 deno_core = "0.373"

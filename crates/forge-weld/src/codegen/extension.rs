@@ -19,7 +19,7 @@ impl<'a> ExtensionGenerator<'a> {
     /// Generate the extension! macro invocation
     ///
     /// This produces code like:
-    /// ```ignore
+    /// ```text
     /// deno_core::extension!(
     ///     host_fs,
     ///     ops = [op_fs_read_text, op_fs_write_text, ...],

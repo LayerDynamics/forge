@@ -8,6 +8,10 @@ license = "MIT"
 [lib]
 proc-macro = true
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
+
 [dependencies]
 syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
 quote = "1"

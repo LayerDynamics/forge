@@ -6,6 +6,8 @@ slug: architecture
 
 This document provides an overview of Forge's architecture, explaining how the runtime works and how components interact.
 
+> **For Contributors:** See the [Implementation Reference](/internals) for detailed file paths and line numbers.
+
 ## Overview
 
 Forge is a desktop application framework that combines:
@@ -54,6 +56,7 @@ The main Rust binary that orchestrates all runtime components:
 - **Enforces capability permissions** - Parses manifest.app.toml and creates capability adapters for each extension
 
 **Key architectural pattern**: Extensions do NOT reimplement logic in forge-runtime. Extensions define the ops and data structures; forge-runtime initializes their state and provides the event loop bridge. For example:
+
 - `ext_window` defines `WindowCmd` enum and ops
 - `forge-runtime` receives `WindowCmd` via channel and translates to `UserEvent` for the tao event loop
 
@@ -138,6 +141,15 @@ Each `runtime:*` module has a Rust extension with structured error codes. All ex
 | `runtime:protocol` | `ext_protocol` | - | Custom protocol handlers |
 | `runtime:os_compat` | `ext_os_compat` | - | OS compatibility layer |
 | `runtime:debugger` | `ext_debugger` | - | Debugging support |
+
+### Forge Tool Modules
+
+In addition to `runtime:*` modules for app functionality, Forge provides `forge:*` modules for development and build tooling:
+
+| Module | Extension | Error Range | Description |
+|--------|-----------|-------------|-------------|
+| `forge:weld` | `ext_weld` | 8000-8099 | Code generation, TypeScript transpilation |
+| `forge:bundler` | `ext_bundler` | 9000-9099 | Icon management, manifest parsing, bundling utilities |
 
 ---
 
@@ -552,6 +564,13 @@ All extension crates use forge-weld macros for automatic TypeScript SDK generati
 | `ext_os_compat` | `runtime:os_compat` | OS compatibility layer |
 | `ext_debugger` | `runtime:debugger` | Debugging support |
 
+### Forge Tool Extension Crates
+
+| Crate | Module | Purpose |
+|-------|--------|---------|
+| `ext_weld` | `forge:weld` | Runtime code generation, TypeScript transpilation |
+| `ext_bundler` | `forge:bundler` | Icon management, manifest parsing, bundling utilities |
+
 ---
 
 ## File Structure
@@ -602,7 +621,9 @@ forge/
 │   ├── ext_webview/            # runtime:webview extension
 │   ├── ext_devtools/           # runtime:devtools extension
 │   ├── ext_timers/             # runtime:timers extension
-│   └── ... (25+ extension crates)
+│   ├── ext_weld/               # forge:weld extension
+│   ├── ext_bundler/            # forge:bundler extension
+│   └── ... (27+ extension crates)
 │
 ├── sdk/                        # TypeScript SDK (auto-generated)
 │   ├── generated/              # Type declarations
@@ -616,7 +637,9 @@ forge/
 │   ├── runtime.sys.ts          # Generated from ext_sys
 │   ├── runtime.app.ts          # Generated from ext_app
 │   ├── runtime.crypto.ts       # Generated from ext_crypto
-│   ├── ... (25+ runtime modules)
+│   ├── runtime.weld.ts         # Generated from ext_weld (forge:weld)
+│   ├── runtime.bundler.ts      # Generated from ext_bundler (forge:bundler)
+│   ├── ... (27+ runtime modules)
 │   └── preload.ts              # Renderer bridge
 │
 ├── examples/                   # Example apps

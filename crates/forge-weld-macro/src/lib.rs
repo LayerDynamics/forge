@@ -5,7 +5,7 @@
 //!
 //! # Usage
 //!
-//! ```ignore
+//! ```text
 //! use forge_weld_macro::{weld_op, weld_struct};
 //!
 //! #[weld_struct]
@@ -40,8 +40,27 @@ mod weld_struct;
 /// - `#[weld_op(async)]` - Async op
 /// - `#[weld_op(ts_name = "customName")]` - Custom TypeScript function name
 ///
+/// # IMPORTANT: Macro Ordering
+///
+/// **`#[weld_op]` MUST be placed BEFORE `#[op2]`:**
+/// ```text
+/// #[weld_op(async)]  // ✓ Correct - weld_op first
+/// #[op2(async)]      // ✓ deno_core macro second
+/// pub async fn my_op() { ... }
+/// ```
+///
+/// **Incorrect ordering will cause compilation errors:**
+/// ```text
+/// #[op2(async)]      // ✗ Wrong order
+/// #[weld_op(async)]  // ✗ Will fail to compile
+/// pub async fn my_op() { ... }
+/// ```
+///
+/// This requirement exists because `#[weld_op]` must analyze the function
+/// signature before `#[op2]` transforms it.
+///
 /// # Example
-/// ```ignore
+/// ```text
 /// #[weld_op(async)]
 /// #[op2(async)]
 /// pub async fn op_fs_read_text(
@@ -67,7 +86,7 @@ pub fn weld_op(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - `#[weld_struct(ts_name = "CustomName")]` - Custom TypeScript interface name
 ///
 /// # Example
-/// ```ignore
+/// ```text
 /// #[weld_struct]
 /// #[derive(Serialize, Deserialize)]
 /// pub struct FileStat {
@@ -84,7 +103,7 @@ pub fn weld_struct(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Attribute macro for annotating enums with type metadata
 ///
 /// # Example
-/// ```ignore
+/// ```text
 /// #[weld_enum]
 /// #[derive(Serialize, Deserialize)]
 /// pub enum WatchEventKind {

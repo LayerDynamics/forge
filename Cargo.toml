@@ -1,12 +1,18 @@
 [workspace]
 members = [
   "crates/ext_app",
+  "crates/ext_bundler",
+  "crates/ext_codesign",
   "crates/ext_crypto",
   "crates/ext_database",
   "crates/ext_debugger",
   "crates/ext_devtools",
   "crates/ext_display",
+  "crates/ext_dock",
+  "crates/ext_encoding",
+  "crates/ext_etcher",
   "crates/ext_fs",
+  "crates/ext_image_tools",
   "crates/ext_ipc",
   "crates/ext_lock",
   "crates/ext_log",
@@ -20,16 +26,26 @@ members = [
   "crates/ext_shortcuts",
   "crates/ext_signals",
   "crates/ext_storage",
+  "crates/ext_svelte",
   "crates/ext_sys",
   "crates/ext_timers",
   "crates/ext_trace",
   "crates/ext_updater",
   "crates/ext_wasm",
+  "crates/ext_web_inspector",
   "crates/ext_webview",
+  "crates/ext_weld",
   "crates/ext_window",
   "crates/forge_cli",
+  "crates/forge-etch",
   "crates/forge-runtime",
   "crates/forge-weld",
   "crates/forge-weld-macro",
 ]
 resolver = "2"
+
+[workspace.metadata.docs.rs]
+# Configuration for docs.rs if crates are published
+# This ensures documentation is built with all features and private items
+all-features = true
+rustdoc-args = ["--document-private-items"]

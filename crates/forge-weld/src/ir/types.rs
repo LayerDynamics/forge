@@ -2,6 +2,131 @@
 //!
 //! This module provides the type representations for mapping Rust types
 //! to TypeScript types, with full generics support.
+//!
+//! # Type Mapping Overview
+//!
+//! Forge-Weld automatically generates TypeScript bindings from Rust ops.
+//! The type system handles primitive types, generics, collections, and
+//! custom structs/enums with high fidelity.
+//!
+//! ## Primitive Type Mapping
+//!
+//! | Rust Type | TypeScript Type | Notes |
+//! |-----------|----------------|-------|
+//! | `u8`, `u16`, `u32` | `number` | Safe integer range |
+//! | `i8`, `i16`, `i32` | `number` | Safe integer range |
+//! | `u64`, `i64` | `bigint` | Exceeds JS safe integer max |
+//! | `f32`, `f64` | `number` | IEEE 754 double precision |
+//! | `usize`, `isize` | `number` | Platform-dependent size |
+//! | `bool` | `boolean` | Direct mapping |
+//! | `String`, `&str` | `string` | Owned and borrowed strings |
+//! | `char` | `string` | Single character |
+//! | `()` | `void` | Unit type |
+//!
+//! ## Collection Type Mapping
+//!
+//! | Rust Type | TypeScript Type | Notes |
+//! |-----------|----------------|-------|
+//! | `Vec<T>` | `T[]` | Generic array |
+//! | `Vec<u8>` | `Uint8Array` | Special case for binary data |
+//! | `Option<T>` | `T \| null` | Nullable types |
+//! | `Result<T, E>` | `Promise<T>` | Errors become rejections |
+//! | `HashMap<K, V>` | `Record<K, V>` | Key-value map |
+//! | `BTreeMap<K, V>` | `Record<K, V>` | Ordered map (order not preserved) |
+//! | `HashSet<T>` | `Set<T>` | Unique values |
+//! | `BTreeSet<T>` | `Set<T>` | Ordered set (order not preserved) |
+//! | `(A, B, C)` | `[A, B, C]` | Tuple → fixed-length array |
+//! | `[T; N]` | `T[]` | Fixed-size array → dynamic |
+//!
+//! ## Wrapper Type Unwrapping
+//!
+//! Smart pointers and interior mutability types are transparently unwrapped:
+//!
+//! | Rust Type | TypeScript Type | Notes |
+//! |-----------|----------------|-------|
+//! | `Box<T>` | `T` | Heap allocation wrapper |
+//! | `Arc<T>` | `T` | Atomic reference counted |
+//! | `Rc<T>` | `T` | Reference counted |
+//! | `RefCell<T>` | `T` | Runtime borrow checking |
+//! | `Mutex<T>` | `T` | Thread-safe interior mutability |
+//! | `RwLock<T>` | `T` | Reader-writer lock |
+//! | `&T`, `&mut T` | `T` | References dereferenced |
+//!
+//! ## Custom Types
+//!
+//! | Rust Type | TypeScript Type | Notes |
+//! |-----------|----------------|-------|
+//! | `#[weld_struct] struct Foo` | `interface Foo` | Struct → interface |
+//! | `#[weld_enum] enum Bar` | `type Bar = ...` | Enum → union type |
+//! | `serde_json::Value` | `unknown` | Dynamic JSON |
+//! | `Rc<RefCell<OpState>>` | _filtered_ | Internal runtime state |
+//!
+//! ## Generic Type Preservation
+//!
+//! Generic type parameters are preserved across the boundary:
+//!
+//! ```rust,ignore
+//! // Rust
+//! struct Container<T> {
+//!     value: T,
+//! }
+//!
+//! // TypeScript
+//! interface Container<T> {
+//!     value: T;
+//! }
+//! ```
+//!
+//! Nested generics work correctly:
+//! ```rust,ignore
+//! Result<Vec<Option<String>>, Error>  // Rust
+//! Promise<(string | null)[]>          // TypeScript
+//! ```
+//!
+//! # Error Conversion
+//!
+//! `Result<T, E>` types are converted to async operations:
+//!
+//! ```rust,ignore
+//! // Rust op signature
+//! #[weld_op(async)]
+//! #[op2(async)]
+//! async fn op_read_file(path: String) -> Result<String, FsError>
+//!
+//! // TypeScript signature
+//! export function readFile(path: string): Promise<string>
+//! ```
+//!
+//! Errors are thrown as JavaScript exceptions:
+//! ```typescript
+//! try {
+//!     const content = await readFile("/secret.txt");
+//! } catch (error) {
+//!     console.error(error.message);  // "Permission denied: fs.read for /secret.txt"
+//! }
+//! ```
+//!
+//! # Unsupported Types
+//!
+//! Some Rust types cannot be directly represented in TypeScript:
+//!
+//! - **Raw pointers** (`*const T`, `*mut T`): Unsafe, no TS equivalent
+//! - **Function pointers** (`fn()`): Use closures or trait objects instead
+//! - **Lifetime parameters** (`'a`): Erased at type generation
+//! - **Associated types**: Requires manual type annotation
+//!
+//! These types can still be used internally but won't appear in generated
+//! TypeScript bindings. Use [`WeldType::Unknown`] as a fallback.
+//!
+//! # Implementation Notes
+//!
+//! - Type conversion happens at build time via `build.rs`
+//! - Uses proc macros `#[weld_op]`, `#[weld_struct]`, `#[weld_enum]`
+//! - Types collected via `linkme` inventory system
+//! - Generated types written to `sdk/runtime.*.ts`
+//!
+//! See [`WeldType`] for the IR type representation and [`WeldPrimitive`]
+//! for primitive type definitions.
 
 use serde::{Deserialize, Serialize};
 use std::fmt;

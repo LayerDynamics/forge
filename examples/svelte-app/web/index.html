@@ -1,13 +1,34 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Secure Vault</title>
-  <link rel="stylesheet" href="styles.css"/>
+  
+		<link rel="modulepreload" href="/_app/immutable/entry/start.DxfToKRN.js">
+		<link rel="modulepreload" href="/_app/immutable/chunks/DA5HRsFc.js">
+		<link rel="modulepreload" href="/_app/immutable/chunks/DgFyK5i7.js">
+		<link rel="modulepreload" href="/_app/immutable/entry/app.Dx9NJefF.js">
+		<link rel="modulepreload" href="/_app/immutable/chunks/Y270MJa4.js">
 </head>
-<body>
-  <div id="app"></div>
-  <script type="module" src="bundle.js"></script>
+<body data-sveltekit-preload-data="hover">
+  <div id="app">
+			<script>
+				{
+					__sveltekit_3zp98y = {
+						base: ""
+					};
+
+					const element = document.currentScript.parentElement;
+
+					Promise.all([
+						import("/_app/immutable/entry/start.DxfToKRN.js"),
+						import("/_app/immutable/entry/app.Dx9NJefF.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element);
+					});
+				}
+			</script>
+		</div>
 </body>
 </html>
