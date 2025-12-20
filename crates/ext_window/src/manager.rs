@@ -1106,7 +1106,7 @@ impl<U: 'static> WindowManager<U> {
                         let mut map = self.menu_id_map.lock().unwrap();
                         add_tray_menu_items(&menu, menu_items, &mut map, tray_id);
                     }
-                    let _ = tray.set_menu(Some(Box::new(menu)));
+                    tray.set_menu(Some(Box::new(menu)));
                     tracing::debug!("Updated tray menu: {}", tray_id);
                 }
             }

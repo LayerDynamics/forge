@@ -258,7 +258,7 @@
 //!
 //! This extension is registered as **Tier 1 (SimpleState)** in the Forge runtime:
 //!
-//! ```rust
+//! ```rust,ignore
 //! // forge-runtime/src/ext_registry.rs
 //! ExtensionDescriptor {
 //!     name: "runtime_database",
@@ -270,9 +270,15 @@
 //!
 //! State initialization:
 //!
-//! ```rust
-//! pub fn init_database_state(op_state: &mut OpState, app_identifier: String) {
-//!     op_state.put(DatabaseAppInfo { app_identifier });
+//! ```rust,ignore
+//! // Actual signature in this file
+//! pub fn init_database_state(
+//!     op_state: &mut OpState,
+//!     app_identifier: String,
+//!     capabilities: Option<Arc<dyn DatabaseCapabilityChecker>>,
+//!     max_connections: Option<usize>,
+//! ) {
+//!     op_state.put(DatabaseState::new(app_identifier, max_connections.unwrap_or(10)));
 //! }
 //! ```
 //!
