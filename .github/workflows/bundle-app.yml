@@ -98,8 +98,19 @@ jobs:
       - name: Build app
         run: cargo run -p forge_cli -- build ${{ env.APP_PATH }}
 
-      - name: Import signing certificate (if requested)
+      - name: Check if certificates available
+        id: check_certs
         if: github.event.inputs.sign_macos == 'true'
+        run: |
+          if [ -n "${{ secrets.MACOS_CERTIFICATE }}" ]; then
+            echo "has_cert=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_cert=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Warning: Code signing requested but MACOS_CERTIFICATE secret is not set"
+          fi
+
+      - name: Import signing certificate (if requested)
+        if: github.event.inputs.sign_macos == 'true' && steps.check_certs.outputs.has_cert == 'true'
         run: |
           # Create keychain
           security create-keychain -p "" build.keychain
@@ -107,8 +118,8 @@ jobs:
           security unlock-keychain -p "" build.keychain
 
           # Import certificate
-          echo "${{ secrets.MACOS_CERTIFICATE }}" | base64 -d > cert.p12
-          security import cert.p12 -k build.keychain -P "${{ secrets.MACOS_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign
+          echo "$MACOS_CERTIFICATE" | base64 --decode > cert.p12
+          security import cert.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           rm cert.p12
 
           # Set keychain to be used
@@ -122,12 +133,16 @@ jobs:
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
 
       - name: Setup notarization credentials (if requested)
-        if: github.event.inputs.sign_macos == 'true'
+        if: github.event.inputs.sign_macos == 'true' && steps.check_certs.outputs.has_cert == 'true'
         run: |
-          xcrun notarytool store-credentials "forge-notarize" \
-            --apple-id "${{ secrets.APPLE_ID }}" \
-            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
-            --password "${{ secrets.APPLE_APP_PASSWORD }}"
+          if [ -n "$APPLE_ID" ]; then
+            xcrun notarytool store-credentials "forge-notarize" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD"
+          else
+            echo "⚠️ Warning: APPLE_ID not set, skipping notarization setup"
+          fi
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

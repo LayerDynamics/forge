@@ -45,13 +45,13 @@ jobs:
       - name: Build forge CLI and runtime
         run: |
           cargo build -p forge_cli --release
-          cargo build -p forge-host --release
+          cargo build -p forge-runtime --release
 
       - name: Package forge binaries
         run: |
           mkdir -p forge-dist
           cp target/release/forge.exe forge-dist/
-          cp target/release/forge-host.exe forge-dist/
+          cp target/release/forge-runtime.exe forge-dist/
           cd forge-dist && tar -czvf ../forge-x86_64-pc-windows-msvc.tar.gz *
 
       - name: Build example app
@@ -96,13 +96,13 @@ jobs:
       - name: Build forge CLI and runtime
         run: |
           cargo build -p forge_cli --release
-          cargo build -p forge-host --release
+          cargo build -p forge-runtime --release
 
       - name: Package forge binaries
         run: |
           mkdir -p forge-dist
           cp target/release/forge forge-dist/
-          cp target/release/forge-host forge-dist/
+          cp target/release/forge-runtime forge-dist/
           cd forge-dist && tar -czvf ../forge-aarch64-apple-darwin.tar.gz *
 
       - name: Build example app
@@ -163,13 +163,13 @@ jobs:
       - name: Build forge CLI and runtime
         run: |
           cargo build -p forge_cli --release
-          cargo build -p forge-host --release
+          cargo build -p forge-runtime --release
 
       - name: Package forge binaries
         run: |
           mkdir -p forge-dist
           cp target/release/forge forge-dist/
-          cp target/release/forge-host forge-dist/
+          cp target/release/forge-runtime forge-dist/
           cd forge-dist && tar -czvf ../forge-x86_64-unknown-linux-gnu.tar.gz *
 
       - name: Build example app
@@ -238,12 +238,14 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag.outputs.TAG }}
-          name: Release ${{ steps.tag.outputs.TAG }}
+          name: ${{ steps.tag.outputs.TAG }}
           draft: true
-          prerelease: ${{ contains(steps.tag.outputs.TAG, '-') }}
+          prerelease: ${{ contains(steps.tag.outputs.TAG, 'alpha') || contains(steps.tag.outputs.TAG, 'beta') }}
           files: release/*
           body: |
-            ## Forge ${{ steps.tag.outputs.TAG }}
+            ## 🍩 Forge ${{ steps.tag.outputs.TAG }}
+
+            > Build cross-platform desktop apps with TypeScript and Deno. Smaller bundles. Faster startup. Stronger security.
 
             ### Quick Install
 
@@ -251,32 +253,52 @@ jobs:
             # macOS/Linux
             curl -fsSL https://forge-deno.com/install.sh | sh
 
-            # Or download manually and extract
-            tar -xzf forge-x86_64-unknown-linux-gnu.tar.gz -C ~/.forge/bin
+            # Or download and extract manually
+            tar -xzf forge-aarch64-apple-darwin.tar.gz -C ~/.forge/bin
+            export PATH="$HOME/.forge/bin:$PATH"
             ```
 
-            ### Downloads
+            ### 📦 Downloads
 
             | Platform | Toolchain | Example App |
             |----------|-----------|-------------|
-            | Windows x64 | `forge-x86_64-pc-windows-msvc.tar.gz` | `.msix` |
-            | macOS ARM (Apple Silicon) | `forge-aarch64-apple-darwin.tar.gz` | `.dmg` |
-            | Linux x64 | `forge-x86_64-unknown-linux-gnu.tar.gz` | `.AppImage` |
+            | 🪟 Windows x64 | `forge-x86_64-pc-windows-msvc.tar.gz` | `.msix` |
+            | 🍎 macOS ARM (Apple Silicon) | `forge-aarch64-apple-darwin.tar.gz` | `.dmg`, `.app` |
+            | 🐧 Linux x64 | `forge-x86_64-unknown-linux-gnu.tar.gz` | `.AppImage` |
 
             Each toolchain archive contains:
-            - `forge` - CLI tool
-            - `forge-host` - Runtime binary
+            - `forge` - CLI tool (`dev`, `build`, `bundle`, `sign`, `icon`, `docs`)
+            - `forge-runtime` - Runtime binary (embeds Deno + WebView)
 
-            ### Getting Started
+            ### 🚀 Quick Start
 
             ```bash
-            forge init my-app
+            # Copy an example to start
+            cp -r examples/react-app my-app
             cd my-app
+
+            # Run in development mode with hot reload
             forge dev .
+
+            # Build for production
+            forge build .
+
+            # Create distributable package
+            forge bundle .
             ```
 
-            ### Changelog
+            ### 📚 Documentation
 
-            See [CHANGELOG.md](CHANGELOG.md) for details.
+            - [Getting Started Guide](https://github.com/LayerDynamics/forge/blob/main/docs/getting-started.md)
+            - [API Reference](https://github.com/LayerDynamics/forge/tree/main/docs/api)
+            - [Examples](https://github.com/LayerDynamics/forge/tree/main/examples)
+
+            ### 📝 Changelog
+
+            See [CHANGELOG.md](https://github.com/LayerDynamics/forge/blob/main/CHANGELOG.md) for full release notes.
+
+            ---
+
+            **Full Changelog**: https://github.com/LayerDynamics/forge/compare/v0.1.0-alpha.2...${{ steps.tag.outputs.TAG }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
