@@ -8,7 +8,7 @@ This document outlines the Forge SDK development roadmap, including planned exte
 
 ## Current State
 
-Forge currently has **20 implemented extension modules**:
+Forge currently has **40+ implemented extension modules** (as of v1.0.0p-steel-donut 🍩):
 
 ### Core Extensions (Fully Implemented)
 
@@ -40,12 +40,26 @@ Forge currently has **20 implemented extension modules**:
 | `runtime:devtools` | ext_devtools | 3 | Complete |
 | `runtime:os_compat` | ext_os_compat | 2 | Complete |
 
-### Build/Tooling Extensions
+### New Extensions (Steel Donut Release)
 
 | Module | Crate | Purpose | Status |
 |--------|-------|---------|--------|
 | `runtime:bundler` | ext_bundler | App bundling operations | Complete |
-| `runtime:weld` | ext_weld | TypeScript binding generation | Complete |
+| `runtime:codesign` | ext_codesign | Code signing (macOS/Windows/Linux) | Complete |
+| `runtime:dock` | ext_dock | macOS dock integration | Complete |
+| `runtime:encoding` | ext_encoding | Text encoding/decoding | Complete |
+| `runtime:etcher` | ext_etcher | Documentation generation | Complete |
+| `runtime:image_tools` | ext_image_tools | Image conversion (PNG, SVG, WebP, ICO) | Complete |
+| `runtime:svelte` | ext_svelte | SvelteKit integration | Complete |
+| `runtime:web_inspector` | ext_web_inspector | Chrome DevTools Protocol bridge | Complete |
+| `runtime:weld` | ext_weld | Runtime binding system access | Complete |
+| `runtime:database` | ext_database | Database operations | Complete |
+| `runtime:debugger` | ext_debugger | Debugger integration | Complete |
+| `runtime:monitor` | ext_monitor | System monitoring | Complete |
+| `runtime:display` | ext_display | Display information | Complete |
+| `runtime:updater` | ext_updater | App update system | Complete |
+| `runtime:protocol` | ext_protocol | Custom protocol handlers | Complete |
+| `runtime:shortcuts` | ext_shortcuts | Keyboard shortcuts | Complete |
 
 ---
 

@@ -4,7 +4,7 @@
 
 Forge is an Electron-like desktop application framework using **Rust** and **Deno**. Apps are 100% TypeScript - no per-app Rust required. The runtime provides native system access through a secure, capability-based API.
 
-**Status:** Alpha (0.1.0-alpha.1)
+**Status:** Alpha (v1.0.0p-steel-donut 🍩)
 
 ## Features
 
@@ -144,15 +144,57 @@ for await (const event of windowEvents()) {
 
 ## Crate Structure
 
+### Core Crates
+
 | Crate | Description |
 |-------|-------------|
-| `forge-runtime` | Main runtime binary |
-| `forge` | CLI tool |
-| `ext_ui` | Window management extension |
-| `ext_fs` | File system extension |
-| `ext_net` | Networking extension |
-| `ext_sys` | System operations extension |
-| `ext_process` | Process management extension |
+| `forge-runtime` | Main runtime binary with extension registry |
+| `forge_cli` | CLI tool (dev, build, bundle, sign, icon, docs) |
+| `forge-weld` | Code generation framework for TypeScript bindings |
+| `forge-weld-macro` | Proc macros (#[weld_op], #[weld_struct], #[weld_enum]) |
+| `forge-etch` | Documentation generation and TypeScript parsing |
+| `forge-smelt` | Binary compilation and transpilation |
+
+### Extensions (runtime:* modules)
+
+| Extension | Module | Description |
+|-----------|--------|-------------|
+| `ext_window` | `runtime:window` | Window management, menus, trays, dialogs |
+| `ext_fs` | `runtime:fs` | File operations (read, write, watch, stat) |
+| `ext_ipc` | `runtime:ipc` | Deno ↔ Renderer communication |
+| `ext_net` | `runtime:net` | HTTP fetch, network operations |
+| `ext_sys` | `runtime:sys` | System info, clipboard, notifications |
+| `ext_process` | `runtime:process` | Spawn child processes |
+| `ext_app` | `runtime:app` | App lifecycle and info |
+| `ext_crypto` | `runtime:crypto` | Cryptographic operations |
+| `ext_storage` | `runtime:storage` | Persistent key-value storage |
+| `ext_database` | `runtime:database` | Database operations |
+| `ext_shell` | `runtime:shell` | Cross-platform shell commands |
+| `ext_wasm` | `runtime:wasm` | WebAssembly module loading |
+| `ext_bundler` | `runtime:bundler` | App bundling operations |
+| `ext_codesign` | `runtime:codesign` | Code signing (macOS/Windows/Linux) |
+| `ext_dock` | `runtime:dock` | macOS dock integration |
+| `ext_encoding` | `runtime:encoding` | Text encoding/decoding |
+| `ext_etcher` | `runtime:etcher` | Documentation generation |
+| `ext_image_tools` | `runtime:image_tools` | Image conversion (PNG, SVG, WebP, ICO) |
+| `ext_svelte` | `runtime:svelte` | SvelteKit integration |
+| `ext_web_inspector` | `runtime:web_inspector` | Chrome DevTools Protocol bridge |
+| `ext_weld` | `runtime:weld` | Runtime binding system access |
+| `ext_devtools` | `runtime:devtools` | Developer tools integration |
+| `ext_webview` | `runtime:webview` | WebView management |
+| `ext_updater` | `runtime:updater` | App update system |
+| `ext_monitor` | `runtime:monitor` | System monitoring |
+| `ext_display` | `runtime:display` | Display information |
+| `ext_log` | `runtime:log` | Logging operations |
+| `ext_trace` | `runtime:trace` | Tracing and diagnostics |
+| `ext_lock` | `runtime:lock` | File locking |
+| `ext_path` | `runtime:path` | Path manipulation |
+| `ext_protocol` | `runtime:protocol` | Custom protocol handlers |
+| `ext_os_compat` | `runtime:os_compat` | OS compatibility layer |
+| `ext_debugger` | `runtime:debugger` | Debugger integration |
+| `ext_shortcuts` | `runtime:shortcuts` | Keyboard shortcuts |
+| `ext_signals` | `runtime:signals` | Signal handling |
+| `ext_timers` | `runtime:timers` | Timer operations |
 
 ## Development (For Contributors)
 

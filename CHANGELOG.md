@@ -99,11 +99,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TypeScript type definitions for all runtime modules
 - Multiple framework template options
 
+## [1.0.0p-steel-donut] - 2025-12-19
+
+### Added
+
+#### Extension Registry System
+
+- 4-tier extension initialization architecture for predictable dependency resolution
+  - Tier 0: ExtensionOnly (no state initialization)
+  - Tier 1: SimpleState (basic state, no external dependencies)
+  - Tier 2: CapabilityBased (requires capability adapter injection)
+  - Tier 3: ComplexContext (requires channels, app info, IPC)
+- `ExtensionRegistry` in `crates/forge-runtime/src/ext_registry.rs`
+- Automatic state initialization by tier with detailed debug logging
+
+#### New Extensions
+
+- `ext_bundler` → `runtime:bundler` - App bundling operations
+- `ext_codesign` → `runtime:codesign` - Code signing for macOS, Windows, Linux
+- `ext_dock` → `runtime:dock` - macOS dock integration
+- `ext_encoding` → `runtime:encoding` - Text encoding/decoding utilities
+- `ext_etcher` → `runtime:etcher` - Documentation generation runtime access
+- `ext_image_tools` → `runtime:image_tools` - PNG, SVG, WebP, ICO conversion and manipulation
+- `ext_svelte` → `runtime:svelte` - SvelteKit integration
+- `ext_web_inspector` → `runtime:web_inspector` - Chrome DevTools Protocol bridge
+- `ext_weld` → `runtime:weld` - Runtime access to the binding system
+
+#### Shell Extension Expansion
+
+- Complete shell command implementations in `ext_shell`:
+  - `cat`, `cd`, `cp`, `mv`, `echo`, `head`, `mkdir`, `pwd`, `rm`, `sleep`, `xargs`
+  - Cross-platform command execution without platform-specific binaries
+  - Child process tracking and management
+  - Command parsing and execution engine
+
+#### forge-smelt Crate
+
+- New `forge-smelt` crate for binary compilation
+- TypeScript/Deno code transpilation
+- Binary parsing and compilation utilities
+
+#### forge-etch Restructure
+
+- Complete TypeScript parser implementation
+- HTML generation system with Handlebars templates
+- AST-based documentation extraction
+- Symbol resolution and type analysis
+- Visibility and decorator handling
+
+#### Documentation
+
+- `docs/DOCUMENTATION.md` - Comprehensive API documentation guide
+- `docs/DOCUMENTATION_PROGRESS.md` - Documentation coverage tracking
+- `docs/DOCUMENTATION_STYLE_GUIDE.md` - Style guidelines for docs
+- `docs/DOCUMENTATION_TEMPLATES.md` - Documentation templates
+- `docs/PERFORMANCE.md` - Performance optimization guide
+- `docs/TROUBLESHOOTING.md` - Common issues and solutions
+- `docs/TYPE_MAPPING.md` - Rust ↔ TypeScript type mapping reference
+- README files for all core extensions (fs, database, debugger, devtools, monitor, path, process, shell, storage, trace, wasm, webview)
+
+#### Examples
+
+- `examples/developer-toolkit` - New developer toolkit example
+- `examples/svelte-app` - Restructured with full SvelteKit build system
+
+### Changed
+
+- All extension `build.rs` files updated for improved code generation
+- forge-weld extensibility system enhancements
+- Capability adapter system improvements in `crates/forge-runtime/src/capabilities.rs`
+
+### Infrastructure
+
+- `.cargo/config.toml` - Cargo configuration for workspace
+- Enhanced extension build system with preload generation
+
 ## [Unreleased]
 
 ### Planned
 
 - CI/CD workflows for automated testing and releases
 - Additional platform-specific features
-- Plugin system for extensibility
 - Enhanced debugging tools
