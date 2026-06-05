@@ -95,11 +95,7 @@ pub fn ascii_bar_chart(data: &[(&str, usize)], width: usize) -> String {
     let max_label_len = data.iter().map(|(l, _)| l.len()).max().unwrap_or(0);
 
     for (label, value) in data {
-        let bar_width = if max_value > 0 {
-            (value * width) / max_value
-        } else {
-            0
-        };
+        let bar_width = (value * width).checked_div(max_value).unwrap_or(0);
 
         writeln!(
             output,
