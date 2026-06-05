@@ -41,6 +41,20 @@ jobs:
         with:
           components: clippy
 
+      # The workspace target/ + cargo cache for this large dependency graph
+      # (deno_core, swc, v8, etc.) can exceed the ubuntu runner's ~14GB of free
+      # space, causing intermittent "No space left on device" failures. Reclaim
+      # ~25GB of preinstalled tooling we don't use before building.
+      - name: Free disk space (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          echo "Before:"; df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+            "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}" || true
+          sudo docker image prune --all --force || true
+          echo "After:"; df -h /
+
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
