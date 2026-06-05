@@ -90,7 +90,7 @@ impl<'a> SdkClassGenerator<'a> {
             .module
             .specifier
             .split(':')
-            .last()
+            .next_back()
             .unwrap_or(&self.module.name);
 
         // Convert to PascalCase and append "Client"
@@ -211,7 +211,7 @@ impl<'a> SdkClassGenerator<'a> {
             ));
         }
 
-        output.push_str("}");
+        output.push('}');
         output
     }
 
@@ -243,7 +243,7 @@ impl<'a> SdkClassGenerator<'a> {
             output.push_str(&format!("  {} = \"{}\",\n", variant.name, variant.name));
         }
 
-        output.push_str("}");
+        output.push('}');
         output
     }
 

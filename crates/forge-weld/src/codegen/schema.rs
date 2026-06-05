@@ -79,11 +79,7 @@ impl<'a> SchemaGenerator<'a> {
 
         schema["x-operations"] = operations;
 
-        let content = if self.config.include_examples {
-            serde_json::to_string_pretty(&schema)?
-        } else {
-            serde_json::to_string_pretty(&schema)?
-        };
+        let content = serde_json::to_string_pretty(&schema)?;
 
         let filename = self.generate_filename("schema.json");
 
