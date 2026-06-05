@@ -75,13 +75,13 @@
 //! | Operation | Return Type | Purpose |
 //! |-----------|-------------|---------|
 //! | `op_monitor_runtime` | `RuntimeMetrics` | Event loop latency, uptime |
-//! | `op_monitor_heap` | `HeapStats` | V8 heap stats (placeholder) |
+//! | `op_monitor_heap` | `HeapStats` | Live V8 heap stats from the isolate |
 //!
 //! ### WebView Metrics (1 operation)
 //!
 //! | Operation | Return Type | Purpose |
 //! |-----------|-------------|---------|
-//! | `op_monitor_webview` | `WebViewStats` | Window metrics (placeholder) |
+//! | `op_monitor_webview` | `WebViewStats` | Returns error 9806 until ext_window integration lands |
 //!
 //! ### Subscription API (4 operations)
 //!
@@ -266,7 +266,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use deno_core::{op2, Extension, OpState};
+use deno_core::{op2, v8, Extension, OpState};
 use deno_error::JsError;
 use forge_weld_macro::{weld_op, weld_struct};
 use serde::{Deserialize, Serialize};
@@ -333,6 +333,10 @@ pub enum MonitorError {
     #[error("[{code}] Invalid interval: {message}")]
     #[class(generic)]
     InvalidInterval { code: u32, message: String },
+
+    #[error("[{code}] WebView metrics unavailable: {message}")]
+    #[class(generic)]
+    WebViewMetricsUnavailable { code: u32, message: String },
 }
 
 impl MonitorError {
@@ -374,6 +378,13 @@ impl MonitorError {
     pub fn invalid_interval(message: impl Into<String>) -> Self {
         Self::InvalidInterval {
             code: MonitorErrorCode::InvalidInterval as u32,
+            message: message.into(),
+        }
+    }
+
+    pub fn webview_metrics_unavailable(message: impl Into<String>) -> Self {
+        Self::WebViewMetricsUnavailable {
+            code: MonitorErrorCode::WebViewMetricsUnavailable as u32,
             message: message.into(),
         }
     }
@@ -489,7 +500,7 @@ pub struct RuntimeMetrics {
     pub uptime_secs: u64,
 }
 
-/// Heap statistics (placeholder for V8 heap stats)
+/// V8 heap statistics, read live from the isolate via `op_monitor_heap`.
 #[weld_struct]
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct HeapStats {
@@ -954,28 +965,50 @@ pub fn op_monitor_runtime(state: &mut OpState) -> Result<RuntimeMetrics, Monitor
     })
 }
 
-/// Get V8 heap statistics (placeholder)
+/// Get V8 heap statistics from the current isolate.
+///
+/// Reads live `v8::HeapStatistics` via the op's `HandleScope` (the scope
+/// dereferences to the `Isolate`). The `scope` parameter is injected by
+/// deno_core and is not part of the TypeScript binding.
 #[weld_op]
 #[op2]
 #[serde]
-pub fn op_monitor_heap() -> Result<HeapStats, MonitorError> {
-    // Note: Would need access to V8 isolate for real heap stats
-    // This is a placeholder that returns default values
-    Ok(HeapStats::default())
+pub fn op_monitor_heap<'s>(
+    scope: &mut v8::PinScope<'s, '_>,
+) -> Result<HeapStats, MonitorError> {
+    let stats = scope.get_heap_statistics();
+
+    Ok(HeapStats {
+        total_heap_size: stats.total_heap_size() as u64,
+        used_heap_size: stats.used_heap_size() as u64,
+        heap_size_limit: stats.heap_size_limit() as u64,
+        external_memory: stats.external_memory() as u64,
+        number_of_native_contexts: stats.number_of_native_contexts() as u32,
+    })
 }
 
 // ============================================================================
 // WebView Metric Operations
 // ============================================================================
 
+/// Compute WebView statistics, or report them unavailable.
+///
+/// Real WebView metrics require coordination with `ext_window`'s
+/// `WindowManager`, which `ext_monitor` is not wired to. Rather than return a
+/// zeroed [`WebViewStats`] as if it were real data, surface the dedicated
+/// `9806` error so callers can tell the metrics are genuinely unavailable.
+fn webview_stats() -> Result<WebViewStats, MonitorError> {
+    Err(MonitorError::webview_metrics_unavailable(
+        "WebView metrics require ext_window/WindowManager integration, which is not yet available in ext_monitor",
+    ))
+}
+
 /// Get WebView statistics (requires window manager coordination)
 #[weld_op]
 #[op2]
 #[serde]
 pub fn op_monitor_webview() -> Result<WebViewStats, MonitorError> {
-    // Note: Would need coordination with ext_window/WindowManager
-    // This is a placeholder that returns empty stats
-    Ok(WebViewStats::default())
+    webview_stats()
 }
 
 // ============================================================================
@@ -1271,4 +1304,51 @@ include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 pub fn monitor_extension() -> Extension {
     runtime_monitor::ext()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // H6 regression: op_monitor_webview previously returned a zeroed
+    // WebViewStats::default() as if it were real data. It must now surface the
+    // dedicated 9806 "unavailable" error instead of lying.
+    #[test]
+    fn webview_metrics_report_unavailable_not_zeroed() {
+        match webview_stats() {
+            Err(MonitorError::WebViewMetricsUnavailable { code, .. }) => {
+                assert_eq!(code, MonitorErrorCode::WebViewMetricsUnavailable as u32);
+                assert_eq!(code, 9806);
+            }
+            other => panic!("expected WebViewMetricsUnavailable (9806), got {other:?}"),
+        }
+    }
+
+    // H6 regression: op_monitor_heap previously returned HeapStats::default()
+    // (all zeros). It must now read real V8 heap statistics from the isolate.
+    // Driven through a real JsRuntime so the op receives a live HandleScope.
+    #[test]
+    fn heap_op_returns_real_isolate_stats() {
+        let mut runtime = deno_core::JsRuntime::new(deno_core::RuntimeOptions {
+            extensions: vec![monitor_extension()],
+            ..Default::default()
+        });
+
+        // V8 always reports a non-zero heap_size_limit and a non-zero total
+        // heap size for a live isolate. If the op still returned ::default(),
+        // these would be 0 and the script would throw (failing the test).
+        let script = r#"
+            const h = Deno.core.ops.op_monitor_heap();
+            if (typeof h.heap_size_limit !== "number" || h.heap_size_limit <= 0) {
+                throw new Error("heap_size_limit not real: " + JSON.stringify(h));
+            }
+            if (typeof h.total_heap_size !== "number" || h.total_heap_size <= 0) {
+                throw new Error("total_heap_size not real: " + JSON.stringify(h));
+            }
+        "#;
+
+        runtime
+            .execute_script("[heap_test]", script)
+            .expect("op_monitor_heap should return real, non-zero V8 heap stats");
+    }
 }

@@ -66,8 +66,12 @@ fn extract_params(inputs: &Punctuated<FnArg, Token![,]>) -> Vec<(String, Type, b
                 .iter()
                 .any(|attr| attr.path().is_ident("state"));
 
-            // Skip OpState parameters
-            if ty_str.contains("OpState") || is_state {
+            // Skip deno_core-injected parameters that are not JS-visible args:
+            // OpState, and V8 scope types (e.g. `v8::PinScope`/`HandleScope`,
+            // used by ops that need isolate access such as heap statistics).
+            // These are supplied by the runtime, not passed from TypeScript, so
+            // they must not appear in the generated bindings.
+            if ty_str.contains("OpState") || ty_str.contains("Scope") || is_state {
                 continue;
             }
 
