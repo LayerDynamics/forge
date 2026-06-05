@@ -56,7 +56,10 @@ impl Default for SchemaConfig {
             include_examples: true,
             versioned: false,
             schema_base_url: None,
-            fail_on_error: true,
+            // Schema generation is a best-effort build step: warn on error by
+            // default rather than failing the whole build (matches the
+            // documented default and test_schema_config_default).
+            fail_on_error: false,
         }
     }
 }

@@ -415,6 +415,11 @@ impl WeldType {
         WeldType::Primitive(WeldPrimitive::String)
     }
 
+    /// Create a number type (maps to TypeScript `number`, backed by `f64`)
+    pub fn number() -> Self {
+        WeldType::Primitive(WeldPrimitive::F64)
+    }
+
     /// Create a boolean type
     pub fn bool() -> Self {
         WeldType::Primitive(WeldPrimitive::Bool)
