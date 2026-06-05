@@ -148,7 +148,7 @@
 //! approximately 10x faster than individual operations for 10+ items.
 //!
 //! **Atomicity**: `setMany()` uses transactions:
-//! ```rust
+//! ```ignore
 //! let tx = conn.transaction()?;
 //! for (key, value) in entries {
 //!     // Insert or update
@@ -168,7 +168,7 @@
 //!
 //! This extension is registered in the Forge runtime as **Tier 1 (SimpleState)**:
 //!
-//! ```rust
+//! ```ignore
 //! // In forge-runtime/src/ext_registry.rs
 //! ExtensionDescriptor {
 //!     name: "runtime_storage",
@@ -179,7 +179,7 @@
 //! ```
 //!
 //! **State Initialization**:
-//! ```rust
+//! ```ignore
 //! pub fn init_storage_state(
 //!     op_state: &mut OpState,
 //!     app_identifier: String,
@@ -436,8 +436,32 @@ impl Default for StorageCapabilities {
 // Helper Functions
 // ============================================================================
 
-/// Get or create the storage database connection
-async fn get_connection(
+/// Ensure the `kv_store` table and its lookup index exist on a connection.
+///
+/// This is the single source of truth for the storage schema. It is invoked
+/// when the storage connection is first opened, and is also exposed so other
+/// extensions that share the same database (e.g. `ext_shortcuts`) can guarantee
+/// the schema is present before reading or writing.
+pub fn ensure_kv_store_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS kv_store (
+            key TEXT PRIMARY KEY NOT NULL,
+            value TEXT NOT NULL,
+            created_at INTEGER DEFAULT (strftime('%s', 'now')),
+            updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+        )",
+        [],
+    )?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kv_key ON kv_store(key)", [])?;
+    Ok(())
+}
+
+/// Get or create the storage database connection.
+///
+/// Returns the process-wide `kv_store` connection, creating the database file
+/// and schema on first use. Exposed so sibling extensions can persist into the
+/// same app-scoped store via the shared connection.
+pub async fn get_connection(
     state: &Rc<RefCell<OpState>>,
 ) -> Result<Arc<Mutex<Connection>>, StorageError> {
     // Check if already connected
@@ -471,19 +495,8 @@ async fn get_connection(
     let connection = tokio::task::spawn_blocking(move || -> Result<Connection, StorageError> {
         let conn = Connection::open(&db_path_clone)?;
 
-        // Create table if not exists
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS kv_store (
-                key TEXT PRIMARY KEY NOT NULL,
-                value TEXT NOT NULL,
-                created_at INTEGER DEFAULT (strftime('%s', 'now')),
-                updated_at INTEGER DEFAULT (strftime('%s', 'now'))
-            )",
-            [],
-        )?;
-
-        // Create index for faster lookups
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_kv_key ON kv_store(key)", [])?;
+        // Create the kv_store table + index (single source of truth)
+        ensure_kv_store_schema(&conn)?;
 
         Ok(conn)
     })

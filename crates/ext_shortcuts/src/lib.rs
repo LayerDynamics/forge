@@ -17,6 +17,7 @@ use deno_error::JsError;
 use forge_weld_macro::{weld_op, weld_struct};
 use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -149,7 +150,7 @@ impl ShortcutsError {
 
 /// Configuration for registering a shortcut
 #[weld_struct]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShortcutConfig {
     /// Unique identifier for the shortcut
     pub id: String,
@@ -227,11 +228,10 @@ pub struct ShortcutsState {
     event_tx: mpsc::Sender<ShortcutEvent>,
     /// Event receiver (taken when listening)
     event_rx: Option<mpsc::Receiver<ShortcutEvent>>,
-    /// App identifier for persistence
-    app_id: String,
     /// Whether to auto-persist on changes
     auto_persist: bool,
-    /// Storage key for persistence
+    /// Storage key for persistence (`forge-shortcuts-<app_id>`), used as the
+    /// kv_store key shared with ext_storage.
     storage_key: String,
 }
 
@@ -258,7 +258,6 @@ impl ShortcutsState {
             event_tx: tx,
             event_rx: Some(rx),
             storage_key: format!("forge-shortcuts-{}", app_id),
-            app_id,
             auto_persist: false,
         }
     }
@@ -713,14 +712,73 @@ pub async fn op_shortcuts_next_event(
 // Persistence Operations
 // ============================================================================
 
+/// Write the given shortcuts into the shared `kv_store` under `key`.
+///
+/// Takes a borrowed `rusqlite::Connection` (the caller holds the async mutex
+/// guard) so the SQL work is synchronous and unit-testable with an in-memory
+/// database. The schema is ensured defensively so this works whether or not
+/// `ext_storage` has initialized the table yet.
+fn persist_to_storage(
+    conn: &Connection,
+    key: &str,
+    persisted: &PersistedShortcuts,
+) -> Result<(), ShortcutsError> {
+    ext_storage::ensure_kv_store_schema(conn).map_err(|e| {
+        ShortcutsError::persistence_error(format!("Failed to ensure storage schema: {}", e))
+    })?;
+
+    let value = serde_json::to_string(persisted)
+        .map_err(|e| ShortcutsError::persistence_error(format!("Failed to serialize: {}", e)))?;
+
+    conn.execute(
+        "INSERT INTO kv_store (key, value, updated_at) VALUES (?, ?, strftime('%s', 'now'))
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = strftime('%s', 'now')",
+        rusqlite::params![key, value],
+    )
+    .map_err(|e| ShortcutsError::persistence_error(format!("Failed to write shortcuts: {}", e)))?;
+
+    Ok(())
+}
+
+/// Read shortcuts from the shared `kv_store` for `key`.
+///
+/// Returns an empty vec when nothing has been persisted yet (legitimately
+/// empty, e.g. first run). A stored value that fails to deserialize is an
+/// error, not silently dropped.
+fn load_from_storage(conn: &Connection, key: &str) -> Result<Vec<ShortcutConfig>, ShortcutsError> {
+    ext_storage::ensure_kv_store_schema(conn).map_err(|e| {
+        ShortcutsError::persistence_error(format!("Failed to ensure storage schema: {}", e))
+    })?;
+
+    let result: Result<String, rusqlite::Error> =
+        conn.query_row("SELECT value FROM kv_store WHERE key = ?", [key], |row| {
+            row.get(0)
+        });
+
+    match result {
+        Ok(value) => {
+            let persisted: PersistedShortcuts = serde_json::from_str(&value).map_err(|e| {
+                ShortcutsError::persistence_error(format!("Failed to deserialize shortcuts: {}", e))
+            })?;
+            Ok(persisted.shortcuts)
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(Vec::new()),
+        Err(e) => Err(ShortcutsError::persistence_error(format!(
+            "Failed to read shortcuts: {}",
+            e
+        ))),
+    }
+}
+
 /// Save shortcuts to persistent storage
 #[weld_op(async)]
 #[op2(async)]
 pub async fn op_shortcuts_save(state: Rc<RefCell<OpState>>) -> Result<(), ShortcutsError> {
     debug!("shortcuts.save");
 
-    // Get shortcuts and storage key
-    let (shortcuts, _storage_key, _app_id) = {
+    // Snapshot the current shortcuts and the storage key, releasing the
+    // OpState borrow before the async storage call.
+    let (shortcuts, storage_key) = {
         let s = state.borrow();
         let shortcuts_state = s.borrow::<ShortcutsState>();
 
@@ -730,23 +788,19 @@ pub async fn op_shortcuts_save(state: Rc<RefCell<OpState>>) -> Result<(), Shortc
             .map(|s| s.config.clone())
             .collect();
 
-        (
-            shortcuts,
-            shortcuts_state.storage_key.clone(),
-            shortcuts_state.app_id.clone(),
-        )
+        (shortcuts, shortcuts_state.storage_key.clone())
     };
 
     let persisted = PersistedShortcuts { shortcuts };
-    let _json = serde_json::to_string(&persisted)
-        .map_err(|e| ShortcutsError::persistence_error(format!("Failed to serialize: {}", e)))?;
 
-    // Note: In production, this would call ext_storage::op_storage_set
-    // For now, we log what would be saved
-    trace!(
-        "Would save {} shortcuts to storage",
-        persisted.shortcuts.len()
-    );
+    // Persist into the app-scoped kv_store shared with ext_storage.
+    let conn = ext_storage::get_connection(&state)
+        .await
+        .map_err(|e| ShortcutsError::persistence_error(format!("Failed to open storage: {}", e)))?;
+    let conn = conn.lock().await;
+    persist_to_storage(&conn, &storage_key, &persisted)?;
+
+    trace!("Saved {} shortcuts to storage", persisted.shortcuts.len());
 
     Ok(())
 }
@@ -760,17 +814,22 @@ pub async fn op_shortcuts_load(
 ) -> Result<Vec<ShortcutConfig>, ShortcutsError> {
     debug!("shortcuts.load");
 
-    // Note: In production, this would call ext_storage::op_storage_get
-    // For now, return empty list
-    let _storage_key = {
+    let storage_key = {
         let s = state.borrow();
         let shortcuts_state = s.borrow::<ShortcutsState>();
         shortcuts_state.storage_key.clone()
     };
 
-    trace!("Would load shortcuts from storage");
+    // Read from the app-scoped kv_store shared with ext_storage.
+    let conn = ext_storage::get_connection(&state)
+        .await
+        .map_err(|e| ShortcutsError::persistence_error(format!("Failed to open storage: {}", e)))?;
+    let conn = conn.lock().await;
+    let shortcuts = load_from_storage(&conn, &storage_key)?;
 
-    Ok(vec![])
+    trace!("Loaded {} shortcuts from storage", shortcuts.len());
+
+    Ok(shortcuts)
 }
 
 /// Set whether shortcuts should auto-persist on changes
@@ -856,5 +915,84 @@ mod tests {
         let config: ShortcutConfig =
             serde_json::from_str(r#"{"id": "test", "accelerator": "Ctrl+T"}"#).unwrap();
         assert!(config.enabled); // Should default to true
+    }
+
+    // ------------------------------------------------------------------
+    // Persistence (H5 regression): op_shortcuts_save/load previously never
+    // touched storage — save only logged a placeholder message and load always
+    // returned an empty vec. These tests exercise the real persist/load helpers
+    // against an in-memory SQLite database (the kv_store schema ext_storage uses).
+    // ------------------------------------------------------------------
+
+    fn cfg(id: &str) -> ShortcutConfig {
+        ShortcutConfig {
+            id: id.to_string(),
+            accelerator: "CmdOrCtrl+Shift+K".to_string(),
+            enabled: true,
+        }
+    }
+
+    #[test]
+    fn persistence_save_then_load_round_trips() {
+        let conn = Connection::open_in_memory().unwrap();
+        let key = "forge-shortcuts-test-app";
+        let persisted = PersistedShortcuts {
+            shortcuts: vec![cfg("open"), cfg("save")],
+        };
+
+        persist_to_storage(&conn, key, &persisted).unwrap();
+        let loaded = load_from_storage(&conn, key).unwrap();
+
+        assert_eq!(loaded, persisted.shortcuts);
+    }
+
+    #[test]
+    fn persistence_load_empty_store_returns_empty() {
+        let conn = Connection::open_in_memory().unwrap();
+        // No write has happened for this key -> legitimately empty, not an error.
+        let loaded = load_from_storage(&conn, "never-written").unwrap();
+        assert!(loaded.is_empty());
+    }
+
+    #[test]
+    fn persistence_save_overwrites_previous() {
+        let conn = Connection::open_in_memory().unwrap();
+        let key = "forge-shortcuts-test-app";
+
+        persist_to_storage(
+            &conn,
+            key,
+            &PersistedShortcuts {
+                shortcuts: vec![cfg("old")],
+            },
+        )
+        .unwrap();
+        persist_to_storage(
+            &conn,
+            key,
+            &PersistedShortcuts {
+                shortcuts: vec![cfg("new-a"), cfg("new-b")],
+            },
+        )
+        .unwrap();
+
+        let loaded = load_from_storage(&conn, key).unwrap();
+        assert_eq!(loaded, vec![cfg("new-a"), cfg("new-b")]);
+    }
+
+    #[test]
+    fn persistence_corrupt_value_is_an_error() {
+        let conn = Connection::open_in_memory().unwrap();
+        ext_storage::ensure_kv_store_schema(&conn).unwrap();
+        let key = "corrupt-entry";
+        conn.execute(
+            "INSERT INTO kv_store (key, value) VALUES (?, ?)",
+            rusqlite::params![key, "this is not valid json {{{"],
+        )
+        .unwrap();
+
+        // A stored-but-unparseable value must surface as an error, not be
+        // silently swallowed into an empty list.
+        assert!(load_from_storage(&conn, key).is_err());
     }
 }
