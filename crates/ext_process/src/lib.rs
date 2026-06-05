@@ -171,7 +171,7 @@
 //! - Stdin uses `AsyncWriteExt` with explicit flushing
 //!
 //! ### Security Model
-//! ```rust
+//! ```ignore
 //! // Initialize with custom capability checker
 //! init_process_state(
 //!     &mut op_state,

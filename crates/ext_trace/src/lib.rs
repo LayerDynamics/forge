@@ -61,7 +61,7 @@
 //! ### TraceState
 //!
 //! Main state struct stored in `OpState`:
-//! ```rust
+//! ```ignore
 //! pub struct TraceState {
 //!     next_id: u64,                      // Monotonic span ID counter
 //!     active: HashMap<u64, ActiveSpan>,  // Spans currently timing
@@ -72,7 +72,7 @@
 //! ### ActiveSpan (Internal)
 //!
 //! Active span tracking (not exposed to TypeScript):
-//! ```rust
+//! ```ignore
 //! struct ActiveSpan {
 //!     id: u64,
 //!     name: String,
@@ -85,7 +85,7 @@
 //! ### SpanRecord (Public)
 //!
 //! Completed span record (returned to TypeScript):
-//! ```rust
+//! ```ignore
 //! #[weld_struct]
 //! pub struct SpanRecord {
 //!     pub id: u64,                    // Span ID
@@ -133,7 +133,7 @@
 //! ### Span ID Generation
 //!
 //! Span IDs are generated using a wrapping monotonic counter:
-//! ```rust
+//! ```ignore
 //! let id = trace_state.next_id.wrapping_add(1).max(1);
 //! trace_state.next_id = id;
 //! ```
@@ -154,7 +154,7 @@
 //! ### Wall-Clock Timestamps
 //!
 //! `started_at` uses `SystemTime` for export compatibility:
-//! ```rust
+//! ```ignore
 //! SystemTime::now()
 //!     .duration_since(SystemTime::UNIX_EPOCH)
 //!     .unwrap_or(Duration::ZERO)
@@ -184,7 +184,7 @@
 //! ## Error Handling
 //!
 //! Only one error type:
-//! ```rust
+//! ```ignore
 //! #[derive(Debug, Error, JsError)]
 //! pub enum TraceError {
 //!     #[error("Span not found")]

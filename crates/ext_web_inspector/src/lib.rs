@@ -620,33 +620,109 @@ pub fn op_web_inspector_disable_domain(
 // Operations - Panel Injection
 // ============================================================================
 
-/// Inject the Forge DevTools panel into the native inspector
+/// Build the JavaScript that injects the Forge DevTools panel into a page.
+///
+/// CSS/HTML are JSON-encoded so they become safe JS string literals; the panel
+/// JS is appended as executable code. The whole thing is idempotent via a
+/// `window.__forgeInspectorPanelInjected` guard so repeated evals are no-ops.
+fn build_panel_injection_script(assets: &platform::PanelAssets) -> String {
+    let css = serde_json::to_string(&assets.css).unwrap_or_else(|_| "\"\"".to_string());
+    let html = serde_json::to_string(&assets.html).unwrap_or_else(|_| "\"\"".to_string());
+    format!(
+        r#"(function() {{
+  if (window.__forgeInspectorPanelInjected) {{ return; }}
+  window.__forgeInspectorPanelInjected = true;
+  try {{
+    var style = document.createElement('style');
+    style.id = 'forge-inspector-panel-style';
+    style.textContent = {css};
+    document.head.appendChild(style);
+    var container = document.createElement('div');
+    container.id = 'forge-inspector-panel';
+    container.innerHTML = {html};
+    document.body.appendChild(container);
+  }} catch (e) {{
+    console.error('[forge] panel DOM injection failed:', e);
+  }}
+  {js}
+}})();
+"#,
+        css = css,
+        html = html,
+        js = assets.js,
+    )
+}
+
+/// Inject the Forge DevTools panel into the window's WebView.
+///
+/// The panel script is evaluated in the real WebView by routing a
+/// [`ext_window::WindowCmd::EvalJs`] through the window command channel — the
+/// `WindowManager` owns the (`!Send`) wry `WebView` and runs `evaluate_script`
+/// on the event-loop thread. `panel_injected` is set only after the WebView
+/// confirms the eval succeeded.
 #[weld_op(async)]
 #[op2(async)]
 pub async fn op_web_inspector_inject_panel(
     state: Rc<RefCell<OpState>>,
     #[string] window_id: String,
 ) -> Result<bool, WebInspectorError> {
-    let mut s = state.borrow_mut();
-    let inspector_state = s.borrow_mut::<WebInspectorState>();
-
-    let session = inspector_state
-        .sessions
-        .get_mut(&window_id)
-        .ok_or_else(|| {
+    // Bail early if the session is missing or the panel is already injected.
+    {
+        let s = state.borrow();
+        let inspector_state = s.borrow::<WebInspectorState>();
+        let session = inspector_state.sessions.get(&window_id).ok_or_else(|| {
             WebInspectorError::session_not_found(format!("No session for window: {}", window_id))
         })?;
-
-    if session.panel_injected {
-        debug!("Panel already injected for window: {}", window_id);
-        return Ok(false);
+        if session.panel_injected {
+            debug!("Panel already injected for window: {}", window_id);
+            return Ok(false);
+        }
     }
 
-    // Platform-specific injection would happen here
-    // For now, just mark as injected
-    session.panel_injected = true;
-    debug!("Injected Forge panel for window: {}", window_id);
+    let script = build_panel_injection_script(&platform::PanelAssets::default());
 
+    // Borrow the window command channel from the shared OpState. ext_window owns
+    // the wry WebViews and runs evaluate_script on the main/event-loop thread.
+    let cmd_tx = {
+        let s = state.borrow();
+        s.try_borrow::<ext_window::WindowRuntimeState>()
+            .map(|w| w.cmd_tx.clone())
+            .ok_or_else(|| {
+                WebInspectorError::injection_failed(
+                    "window runtime not initialized; cannot inject panel",
+                )
+            })?
+    };
+
+    // Send the eval command to the event loop and await the real result.
+    let (respond_tx, respond_rx) = tokio::sync::oneshot::channel();
+    cmd_tx
+        .send(ext_window::WindowCmd::EvalJs {
+            window_id: window_id.clone(),
+            script,
+            respond: respond_tx,
+        })
+        .await
+        .map_err(|e| {
+            WebInspectorError::injection_failed(format!("failed to send eval command: {}", e))
+        })?;
+    respond_rx
+        .await
+        .map_err(|e| {
+            WebInspectorError::injection_failed(format!("eval response channel dropped: {}", e))
+        })?
+        .map_err(WebInspectorError::injection_failed)?;
+
+    // Mark injected only after the WebView confirmed the eval succeeded.
+    {
+        let mut s = state.borrow_mut();
+        let inspector_state = s.borrow_mut::<WebInspectorState>();
+        if let Some(session) = inspector_state.sessions.get_mut(&window_id) {
+            session.panel_injected = true;
+        }
+    }
+
+    debug!("Injected Forge panel for window: {}", window_id);
     Ok(true)
 }
 
@@ -939,4 +1015,53 @@ include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 pub fn web_inspector_extension() -> Extension {
     runtime_web_inspector::ext()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // H1 regression: op_web_inspector_inject_panel previously only flipped a
+    // `panel_injected` flag without injecting anything. It now builds a real
+    // injection script (routed to the WebView via WindowCmd::EvalJs). This
+    // verifies the script builder produces valid, asset-bearing, idempotent JS.
+    #[test]
+    fn panel_injection_script_embeds_assets_and_is_idempotent() {
+        let assets = platform::PanelAssets {
+            html: "<div class=\"forge\">Panel</div>".to_string(),
+            js: "globalThis.__forgePanelReady = true;".to_string(),
+            css: ".forge { color: #0f0; }".to_string(),
+            icon: None,
+        };
+
+        let script = build_panel_injection_script(&assets);
+
+        // Non-empty and contains the panel JS verbatim (executable code).
+        assert!(!script.is_empty());
+        assert!(script.contains("globalThis.__forgePanelReady = true;"));
+
+        // CSS/HTML are embedded as JSON-encoded string literals (quotes escaped),
+        // so the raw asset substrings appear inside the generated literals.
+        assert!(script.contains("color: #0f0"), "css not embedded: {script}");
+        assert!(script.contains("forge"), "html not embedded: {script}");
+
+        // Idempotency guard so repeated evals are no-ops.
+        assert!(script.contains("__forgeInspectorPanelInjected"));
+
+        // The HTML's double-quotes must be escaped in the JS literal (not raw),
+        // proving JSON-encoding rather than naive string splicing.
+        assert!(
+            script.contains("\\\"forge\\\""),
+            "html not JSON-escaped: {script}"
+        );
+    }
+
+    #[test]
+    fn panel_injection_script_uses_default_assets() {
+        // The default assets are the embedded forge-panel.{html,js,css}; the
+        // builder must produce a non-trivial script from them.
+        let script = build_panel_injection_script(&platform::PanelAssets::default());
+        assert!(script.len() > 100);
+        assert!(script.contains("forge-inspector-panel"));
+    }
 }

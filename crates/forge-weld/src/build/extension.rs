@@ -62,6 +62,10 @@ pub enum ExtensionBuilderError {
     /// Documentation generation error
     #[error("Documentation generation error: {0}")]
     DocGeneration(String),
+
+    /// Schema generation error
+    #[error("Schema generation error: {0}")]
+    SchemaGeneration(String),
 }
 
 /// Builder for Forge extension crates
@@ -96,6 +100,10 @@ pub struct ExtensionBuilder {
     dts_generator: Option<Box<dyn Fn() -> String>>,
     /// Documentation generation configuration
     doc_config: Option<DocConfig>,
+    /// Schema generation configuration
+    schema_config: Option<crate::build::schema::SchemaConfig>,
+    /// SDK class generation path
+    sdk_class_path: Option<PathBuf>,
 }
 
 impl ExtensionBuilder {
@@ -114,6 +122,8 @@ impl ExtensionBuilder {
             additional_watch: Vec::new(),
             dts_generator: None,
             doc_config: None,
+            schema_config: None,
+            sdk_class_path: None,
         }
     }
 
@@ -131,6 +141,8 @@ impl ExtensionBuilder {
             additional_watch: Vec::new(),
             dts_generator: None,
             doc_config: None,
+            schema_config: None,
+            sdk_class_path: None,
         }
     }
 
@@ -327,6 +339,137 @@ impl ExtensionBuilder {
         if let Some(ref mut config) = self.doc_config {
             config.description = Some(description.into());
         }
+        self
+    }
+
+    // =========================================================================
+    // Schema Generation Configuration
+    // =========================================================================
+
+    /// Enable schema generation with default configuration
+    ///
+    /// Generates JSON Schema 2020-12 specifications for the extension's types
+    /// and operations. The schemas are written to `sdk/schemas/` by default.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use forge_weld::ExtensionBuilder;
+    ///
+    /// ExtensionBuilder::new("runtime_fs", "runtime:fs")
+    ///     .ts_path("ts/init.ts")
+    ///     .ops(&["op_fs_read_text"])
+    ///     .generate_schema()  // Creates sdk/schemas/runtime.fs.schema.json
+    ///     .build();
+    /// ```
+    pub fn generate_schema(mut self) -> Self {
+        self.schema_config = Some(crate::build::schema::SchemaConfig::default());
+        self
+    }
+
+    /// Enable schema generation with custom configuration
+    ///
+    /// Provides full control over schema generation behavior including output
+    /// directory, formats (JSON Schema, OpenAPI), and error handling.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use forge_weld::{ExtensionBuilder, SchemaConfig, SchemaFormat};
+    ///
+    /// ExtensionBuilder::new("runtime_fs", "runtime:fs")
+    ///     .generate_schema_with(SchemaConfig {
+    ///         output_dir: "docs/schemas".into(),
+    ///         formats: vec![SchemaFormat::JsonSchema, SchemaFormat::OpenApi],
+    ///         include_examples: true,
+    ///         versioned: false,
+    ///         schema_base_url: Some("https://myapp.com/schemas".to_string()),
+    ///         fail_on_error: false,
+    ///     })
+    ///     .build();
+    /// ```
+    pub fn generate_schema_with(mut self, config: crate::build::schema::SchemaConfig) -> Self {
+        self.schema_config = Some(config);
+        self
+    }
+
+    /// Set schema output directory
+    ///
+    /// Only has effect if `generate_schema()` or `generate_schema_with()` was called first.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use forge_weld::ExtensionBuilder;
+    ///
+    /// ExtensionBuilder::new("runtime_fs", "runtime:fs")
+    ///     .generate_schema()
+    ///     .schema_output_dir("docs/api/schemas")  // Override default location
+    ///     .build();
+    /// ```
+    pub fn schema_output_dir(mut self, dir: impl AsRef<Path>) -> Self {
+        if let Some(ref mut config) = self.schema_config {
+            config.output_dir = dir.as_ref().to_path_buf();
+        }
+        self
+    }
+
+    /// Set schema formats to generate
+    ///
+    /// Only has effect if `generate_schema()` or `generate_schema_with()` was called first.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use forge_weld::{ExtensionBuilder, SchemaFormat};
+    ///
+    /// ExtensionBuilder::new("runtime_fs", "runtime:fs")
+    ///     .generate_schema()
+    ///     .schema_formats(&[SchemaFormat::JsonSchema, SchemaFormat::OpenApi])
+    ///     .build();
+    /// ```
+    pub fn schema_formats(mut self, formats: &[crate::build::schema::SchemaFormat]) -> Self {
+        if let Some(ref mut config) = self.schema_config {
+            config.formats = formats.to_vec();
+        }
+        self
+    }
+
+    /// Enable class-based SDK generation
+    ///
+    /// Generates a TypeScript class wrapper for the extension API, providing
+    /// an object-oriented interface alongside the function-based SDK.
+    ///
+    /// The generated class includes:
+    /// - Instance methods for each op
+    /// - A singleton export for convenience
+    /// - Full TypeScript type definitions
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use forge_weld::ExtensionBuilder;
+    ///
+    /// ExtensionBuilder::new("runtime_fs", "runtime:fs")
+    ///     .ts_path("ts/init.ts")
+    ///     .ops(&["op_fs_read_text", "op_fs_write_text"])
+    ///     .generate_sdk_module("sdk")        // Function-based SDK
+    ///     .generate_sdk_class("sdk/classes") // Class-based SDK (new!)
+    ///     .build();
+    /// ```
+    ///
+    /// Generated output:
+    /// ```typescript
+    /// // sdk/classes/FsClient.ts
+    /// export class FsClient {
+    ///   async readText(path: string): Promise<string> { ... }
+    ///   async writeText(path: string, content: string): Promise<void> { ... }
+    /// }
+    ///
+    /// export const fs = new FsClient();
+    /// ```
+    pub fn generate_sdk_class(mut self, sdk_relative_path: impl AsRef<Path>) -> Self {
+        self.sdk_class_path = Some(sdk_relative_path.as_ref().to_path_buf());
         self
     }
 
@@ -669,6 +812,57 @@ impl ExtensionBuilder {
             // Also write to OUT_DIR for reference
             let out_ts_path = out_path.join(&ts_filename);
             fs::write(&out_ts_path, &ts_content)?;
+        }
+
+        // Generate SDK class if requested
+        if let Some(ref sdk_class_relative_path) = self.sdk_class_path {
+            let workspace_root = manifest_path.parent().unwrap().parent().unwrap();
+            let sdk_class_dir = workspace_root.join(sdk_class_relative_path);
+            fs::create_dir_all(&sdk_class_dir)?;
+
+            let class_gen = crate::codegen::SdkClassGenerator::new(&module);
+            let class_content = class_gen.generate();
+            let class_name = class_gen.class_name();
+            let class_filename = format!("{}.ts", class_name);
+            let class_path = sdk_class_dir.join(&class_filename);
+
+            fs::write(&class_path, &class_content)?;
+
+            // Also write to OUT_DIR for reference
+            let out_class_path = out_path.join(&class_filename);
+            fs::write(&out_class_path, &class_content)?;
+        }
+
+        // Generate schemas if requested
+        if let Some(ref schema_config) = self.schema_config {
+            let workspace_root = manifest_path.parent().unwrap().parent().unwrap();
+            let schema_dir = workspace_root.join(&schema_config.output_dir);
+            fs::create_dir_all(&schema_dir)?;
+
+            let schema_gen = crate::codegen::SchemaGenerator::new(&module, schema_config);
+
+            match schema_gen.generate_all() {
+                Ok(schemas) => {
+                    for schema in schemas {
+                        let schema_path = schema_dir.join(&schema.filename);
+                        fs::write(&schema_path, &schema.content)?;
+
+                        // Also write to OUT_DIR for reference
+                        let out_schema_path = out_path.join(&schema.filename);
+                        fs::write(&out_schema_path, &schema.content)?;
+                    }
+                }
+                Err(e) => {
+                    if schema_config.fail_on_error {
+                        return Err(ExtensionBuilderError::SchemaGeneration(e.to_string()));
+                    } else {
+                        println!(
+                            "cargo:warning=Schema generation failed: {}. Continuing build.",
+                            e
+                        );
+                    }
+                }
+            }
         }
 
         // Save module info for documentation generation by external tools (forge_cli)

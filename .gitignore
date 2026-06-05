@@ -1,7 +1,9 @@
 # Rust build artifacts
 /target/
 **/*.rs.bk
-Cargo.lock
+# Cargo.lock is committed: Forge ships binaries (forge_cli, forge-runtime), so a
+# pinned lockfile is required for reproducible CI builds. Leaving it unpinned
+# lets CI resolve incompatible transitive deps (e.g. temporal_rs vs icu_calendar).
 
 # IDE
 .idea/
@@ -57,3 +59,4 @@ CLAUDE.md
 .claude
 /examples/*/bundle
 bundle
+Fix.md

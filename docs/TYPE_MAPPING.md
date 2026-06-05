@@ -33,15 +33,18 @@ Complete guide to how Rust types are mapped to TypeScript in Forge extensions.
 JavaScript's `number` type uses IEEE 754 double-precision, which has a safe integer range of ±2^53 - 1.
 
 **Safe Mappings (→ `number`):**
+
 - `u8`, `u16`, `u32` (0 to 4,294,967,295)
 - `i8`, `i16`, `i32` (-2,147,483,648 to 2,147,483,647)
 - `usize`, `isize` (platform-dependent, typically 64-bit)
 
 **BigInt Mappings (→ `bigint`):**
+
 - `u64` (0 to 18,446,744,073,709,551,615)
 - `i64` (-9,223,372,036,854,775,808 to 9,223,372,036,854,775,807)
 
 **Example:**
+
 ```rust
 // Rust
 #[weld_op]
@@ -79,6 +82,7 @@ interface User {
 ```
 
 **Nested Options:**
+
 ```rust
 Option<Option<String>>  →  string | null | null  (simplified to  string | null)
 ```
@@ -113,6 +117,7 @@ All errors are caught generically as JavaScript `Error` objects.
 ### Collections
 
 **Vec<T> → T[]:**
+
 ```rust
 Vec<String>       →  string[]
 Vec<Vec<u32>>     →  number[][]
@@ -120,6 +125,7 @@ Vec<Option<T>>    →  (T | null)[]
 ```
 
 **Special case - Vec<u8> → Uint8Array:**
+
 ```rust
 // Rust
 #[weld_op]
@@ -135,6 +141,7 @@ console.log(bytes instanceof Uint8Array);  // true
 ```
 
 **HashMap/BTreeMap → Record:**
+
 ```rust
 HashMap<String, u32>     →  Record<string, number>
 HashMap<u32, String>     →  Record<number, string>  // number keys!
@@ -145,6 +152,7 @@ const config: Config = { timeout: 5000, retries: 3 };
 ```
 
 **HashSet/BTreeSet → Set:**
+
 ```rust
 HashSet<String>  →  Set<string>
 
@@ -175,6 +183,7 @@ type UserResponse = Response<User>;
 ```
 
 **Complex nested generics:**
+
 ```rust
 Result<Vec<Option<HashMap<String, User>>>, Error>
 
@@ -195,6 +204,7 @@ const [text, num, flag] = data;  // Destructuring works
 ```
 
 **Unit tuple:**
+
 ```rust
 ()  →  void
 ```
@@ -246,6 +256,7 @@ interface Rectangle {
 ```
 
 **Field name conversion:**
+
 - `snake_case` (Rust) → `camelCase` (TypeScript)
 - `top_left` → `topLeft`
 - `user_id` → `userId`

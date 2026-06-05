@@ -65,6 +65,10 @@ pub enum DockError {
     InvalidParameter { code: u32, message: String },
 }
 
+// `dock_error` mirrors the `DockError` variant name (the crate's error
+// constructors are named after their variants); that the variant matches the
+// type name is incidental, not a real self-named-constructor smell.
+#[allow(clippy::self_named_constructors)]
 impl DockError {
     pub fn dock_error(message: impl Into<String>) -> Self {
         Self::DockError {
@@ -244,17 +248,23 @@ pub fn op_dock_bounce(
 
     #[cfg(target_os = "macos")]
     {
-        use cocoa::appkit::{NSApp, NSApplication, NSRequestUserAttentionType};
-        use cocoa::base::nil;
+        use objc2_app_kit::{NSApplication, NSRequestUserAttentionType};
+        use objc2_foundation::MainThreadMarker;
 
-        unsafe {
-            let app = NSApp();
-            let request_type = match bounce_type {
-                BounceType::Critical => NSRequestUserAttentionType::NSCriticalRequest,
-                BounceType::Informational => NSRequestUserAttentionType::NSInformationalRequest,
-            };
-            app.requestUserAttention_(request_type);
-        }
+        let Some(mtm) = MainThreadMarker::new() else {
+            warn!("dock.bounce must be called on the main thread");
+            return Ok(BounceResult {
+                id: bounce_id,
+                success: false,
+            });
+        };
+
+        let app = NSApplication::sharedApplication(mtm);
+        let request_type = match bounce_type {
+            BounceType::Critical => NSRequestUserAttentionType::NSCriticalRequest,
+            BounceType::Informational => NSRequestUserAttentionType::NSInformationalRequest,
+        };
+        let _request_id = app.requestUserAttention(request_type);
 
         Ok(BounceResult {
             id: bounce_id,
@@ -283,13 +293,18 @@ pub fn op_dock_cancel_bounce(
 
     #[cfg(target_os = "macos")]
     {
-        use cocoa::appkit::NSApp;
-        use objc::{msg_send, sel, sel_impl};
+        use objc2_app_kit::NSApplication;
+        use objc2_foundation::MainThreadMarker;
 
-        unsafe {
-            let app = NSApp();
-            // Cancel user attention request (pass 0 to cancel all)
-            let _: () = msg_send![app, cancelUserAttentionRequest: 0i64];
+        if let Some(mtm) = MainThreadMarker::new() {
+            let app = NSApplication::sharedApplication(mtm);
+            // SAFETY: called on the main thread with the shared application;
+            // passing 0 cancels all pending user-attention requests.
+            unsafe {
+                app.cancelUserAttentionRequest(0);
+            }
+        } else {
+            warn!("dock.cancel_bounce must be called on the main thread");
         }
     }
 
@@ -314,22 +329,23 @@ pub fn op_dock_set_badge(state: &mut OpState, #[string] text: String) -> Result<
 
     #[cfg(target_os = "macos")]
     {
-        use cocoa::appkit::NSApp;
-        use cocoa::base::{id, nil};
-        use cocoa::foundation::NSString;
-        use objc::{msg_send, sel, sel_impl};
+        use objc2_app_kit::NSApplication;
+        use objc2_foundation::{MainThreadMarker, NSString};
 
-        unsafe {
-            let app = NSApp();
-            let dock_tile: id = msg_send![app, dockTile];
-
-            let badge_label: id = if text.is_empty() {
-                nil
-            } else {
-                NSString::alloc(nil).init_str(&text)
-            };
-
-            let _: () = msg_send![dock_tile, setBadgeLabel: badge_label];
+        if let Some(mtm) = MainThreadMarker::new() {
+            let app = NSApplication::sharedApplication(mtm);
+            // SAFETY: main thread; operate on the application's dock tile.
+            unsafe {
+                let dock_tile = app.dockTile();
+                if text.is_empty() {
+                    dock_tile.setBadgeLabel(None);
+                } else {
+                    let label = NSString::from_str(&text);
+                    dock_tile.setBadgeLabel(Some(&label));
+                }
+            }
+        } else {
+            warn!("dock.set_badge must be called on the main thread");
         }
     }
 
@@ -368,13 +384,14 @@ pub fn op_dock_hide(state: &mut OpState) -> Result<(), DockError> {
 
     #[cfg(target_os = "macos")]
     {
-        use cocoa::appkit::{NSApp, NSApplication, NSApplicationActivationPolicy};
+        use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+        use objc2_foundation::MainThreadMarker;
 
-        unsafe {
-            let app = NSApp();
-            app.setActivationPolicy_(
-                NSApplicationActivationPolicy::NSApplicationActivationPolicyAccessory,
-            );
+        if let Some(mtm) = MainThreadMarker::new() {
+            let app = NSApplication::sharedApplication(mtm);
+            app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+        } else {
+            warn!("dock.hide must be called on the main thread");
         }
     }
 
@@ -399,13 +416,14 @@ pub fn op_dock_show(state: &mut OpState) -> Result<(), DockError> {
 
     #[cfg(target_os = "macos")]
     {
-        use cocoa::appkit::{NSApp, NSApplication, NSApplicationActivationPolicy};
+        use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+        use objc2_foundation::MainThreadMarker;
 
-        unsafe {
-            let app = NSApp();
-            app.setActivationPolicy_(
-                NSApplicationActivationPolicy::NSApplicationActivationPolicyRegular,
-            );
+        if let Some(mtm) = MainThreadMarker::new() {
+            let app = NSApplication::sharedApplication(mtm);
+            app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
+        } else {
+            warn!("dock.show must be called on the main thread");
         }
     }
 
@@ -439,9 +457,15 @@ pub fn op_dock_set_icon(#[string] icon_path: String) -> Result<bool, DockError> 
 
     #[cfg(target_os = "macos")]
     {
-        use cocoa::appkit::{NSApp, NSApplication, NSImage};
-        use cocoa::base::{id, nil};
-        use cocoa::foundation::NSData;
+        use objc2::ClassType;
+        use objc2_app_kit::{NSApplication, NSImage};
+        use objc2_foundation::{MainThreadMarker, NSData};
+
+        let Some(mtm) = MainThreadMarker::new() else {
+            warn!("dock.set_icon must be called on the main thread");
+            return Ok(false);
+        };
+        let app = NSApplication::sharedApplication(mtm);
 
         if !icon_path.is_empty() {
             // Read image from file
@@ -460,29 +484,20 @@ pub fn op_dock_set_icon(#[string] icon_path: String) -> Result<bool, DockError> 
             )
             .map_err(|e| DockError::icon_error(format!("Failed to encode image: {}", e)))?;
 
-            unsafe {
-                let app = NSApp();
-                let ns_data: id = NSData::dataWithBytes_length_(
-                    nil,
-                    png_bytes.as_ptr() as *const std::ffi::c_void,
-                    png_bytes.len() as u64,
-                );
-                let ns_image: id = NSImage::initWithData_(NSImage::alloc(nil), ns_data);
-
-                if ns_image != nil {
-                    app.setApplicationIconImage_(ns_image);
-                    return Ok(true);
-                } else {
-                    return Err(DockError::icon_error("Failed to create NSImage"));
+            let ns_data = NSData::with_bytes(&png_bytes);
+            match NSImage::initWithData(NSImage::alloc(), &ns_data) {
+                Some(ns_image) => {
+                    // SAFETY: main thread; set the application's dock icon image.
+                    unsafe { app.setApplicationIconImage(Some(&ns_image)) };
+                    Ok(true)
                 }
+                None => Err(DockError::icon_error("Failed to create NSImage")),
             }
         } else {
-            // Reset to default icon
-            unsafe {
-                let app = NSApp();
-                app.setApplicationIconImage_(nil);
-            }
-            return Ok(true);
+            // Reset to the default application icon.
+            // SAFETY: main thread; passing None resets to the default icon.
+            unsafe { app.setApplicationIconImage(None) };
+            Ok(true)
         }
     }
 

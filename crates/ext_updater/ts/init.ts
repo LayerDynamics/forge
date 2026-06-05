@@ -108,6 +108,8 @@ export interface UpdateConfig {
 export interface UpdateInfo {
   /** New version string */
   version: string;
+  /** Human-readable release title (e.g. the GitHub release name), if available */
+  release_name: string | null;
   /** Download URL for the current platform */
   download_url: string;
   /** Release notes (if available) */

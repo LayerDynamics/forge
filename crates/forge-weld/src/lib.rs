@@ -32,11 +32,12 @@ pub mod ir;
 // Re-export commonly used types
 pub use build::{
     generate_preload, generate_preload_to_file, transpile_file, transpile_ts, DocConfig, DocFormat,
-    ExtensionBuilder, ExtensionBuilderError, PreloadBuilder, PreloadBuilderError, TranspileError,
+    ExtensionBuilder, ExtensionBuilderError, PreloadBuilder, PreloadBuilderError, SchemaConfig,
+    SchemaError, SchemaFormat, TranspileError,
 };
 pub use codegen::{
-    DtsBuilder, DtsGenerator, ExtensibilityGenerator, ExtensionGenerator, PreloadGenerator,
-    TypeScriptGenerator,
+    DtsBuilder, DtsGenerator, ExtensibilityGenerator, ExtensionGenerator, GeneratedSchema,
+    PreloadGenerator, SchemaGenerator, SdkClassGenerator, TypeScriptGenerator,
 };
 pub use ir::{
     collect_enums, collect_ops, collect_structs, ConfigOption, EnumVariant, ExtensibilityConfig,

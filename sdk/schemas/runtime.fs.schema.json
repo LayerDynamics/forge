@@ -1,0 +1,185 @@
+{
+  "$id": "https://forge.dev/schemas/runtime.fs.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Forge extension schema",
+  "title": "runtime:fs",
+  "type": "object",
+  "x-operations": {
+    "appendBytes": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "appendText": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "copy": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "exists": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "metadata": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "mkdir": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "readBytes": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "readDir": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "readLink": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "readText": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "realPath": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "remove": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "rename": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "stat": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "symlink": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "tempDir": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "tempFile": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "watch": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "watchClose": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "watchNext": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "writeBytes": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    },
+    "writeText": {
+      "async": false,
+      "parameters": {},
+      "returns": {
+        "type": "null"
+      },
+      "type": "function"
+    }
+  }
+}

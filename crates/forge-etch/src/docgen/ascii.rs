@@ -167,9 +167,9 @@ pub fn render_node_ascii(node: &EtchNode) -> String {
         EtchNodeKind::TypeAlias => "type",
         EtchNodeKind::Variable => "const",
         EtchNodeKind::Namespace => "namespace",
-        EtchNodeKind::Module => todo!(),
-        EtchNodeKind::Import => todo!(),
-        EtchNodeKind::Reference => todo!(),
+        EtchNodeKind::Module => "module",
+        EtchNodeKind::Import => "import",
+        EtchNodeKind::Reference => "reference",
     };
 
     writeln!(output, "{} {}", kind_str, node.name).ok();
@@ -193,6 +193,35 @@ pub fn render_node_ascii(node: &EtchNode) -> String {
             writeln!(output, "  {}", line).ok();
         }
         output.push('\n');
+    }
+
+    // Kind-specific details for module/import/reference nodes
+    match &node.def {
+        crate::node::EtchNodeDef::Module { module_def } => {
+            writeln!(output, "  Specifier: {}", module_def.specifier).ok();
+            writeln!(output, "  Module:    {}", module_def.name).ok();
+            writeln!(output, "  Exports:   {} item(s)", module_def.elements.len()).ok();
+            output.push('\n');
+        }
+        crate::node::EtchNodeDef::Import { import_def } => {
+            writeln!(output, "  Source: {}", import_def.src).ok();
+            match &import_def.imported {
+                Some(name) => writeln!(output, "  Imports: {}", name).ok(),
+                None => writeln!(output, "  Imports: * (namespace import)").ok(),
+            };
+            output.push('\n');
+        }
+        crate::node::EtchNodeDef::Reference { reference_def } => {
+            let target = &reference_def.target;
+            writeln!(
+                output,
+                "  Target: {}:{}:{}",
+                target.filename, target.line, target.col
+            )
+            .ok();
+            output.push('\n');
+        }
+        _ => {}
     }
 
     // Parameters table
@@ -257,9 +286,9 @@ pub fn render_summary_table(nodes: &[EtchNode]) -> String {
             EtchNodeKind::TypeAlias => "type",
             EtchNodeKind::Variable => "const",
             EtchNodeKind::Namespace => "ns",
-            EtchNodeKind::Module => todo!(),
-            EtchNodeKind::Import => todo!(),
-            EtchNodeKind::Reference => todo!(),
+            EtchNodeKind::Module => "mod",
+            EtchNodeKind::Import => "import",
+            EtchNodeKind::Reference => "ref",
         };
 
         let desc = node
@@ -380,5 +409,93 @@ mod tests {
         let tree = render_tree(&items);
         assert!(tree.contains("functions"));
         assert!(tree.contains("readFile"));
+    }
+
+    // Regression: render_node_ascii / render_summary_table previously panicked
+    // (via an unimplemented-macro arm) for Module/Import/Reference node kinds.
+    // These tests construct one node of each kind and assert the renderers
+    // return real content without panicking.
+    use crate::node::{EtchNodeDef, ImportDef, Location, ModuleDef, ReferenceDef};
+
+    fn module_node() -> EtchNode {
+        EtchNode {
+            name: "runtime:fs".to_string(),
+            def: EtchNodeDef::Module {
+                module_def: ModuleDef {
+                    specifier: "runtime:fs".to_string(),
+                    name: "host_fs".to_string(),
+                    elements: vec![],
+                },
+            },
+            ..Default::default()
+        }
+    }
+
+    fn import_node() -> EtchNode {
+        EtchNode {
+            name: "readFile".to_string(),
+            def: EtchNodeDef::Import {
+                import_def: ImportDef {
+                    src: "runtime:fs".to_string(),
+                    imported: Some("readFile".to_string()),
+                },
+            },
+            ..Default::default()
+        }
+    }
+
+    fn reference_node() -> EtchNode {
+        EtchNode {
+            name: "FileStat".to_string(),
+            def: EtchNodeDef::Reference {
+                reference_def: ReferenceDef {
+                    target: Location {
+                        filename: "runtime.fs.ts".to_string(),
+                        line: 42,
+                        col: 0,
+                        ..Default::default()
+                    },
+                },
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_render_node_ascii_module_kind() {
+        let out = render_node_ascii(&module_node());
+        assert!(!out.is_empty());
+        assert!(out.contains("module"), "missing kind label: {out}");
+        assert!(out.contains("runtime:fs"), "missing specifier: {out}");
+    }
+
+    #[test]
+    fn test_render_node_ascii_import_kind() {
+        let out = render_node_ascii(&import_node());
+        assert!(!out.is_empty());
+        assert!(out.contains("import"), "missing kind label: {out}");
+        assert!(out.contains("runtime:fs"), "missing import source: {out}");
+    }
+
+    #[test]
+    fn test_render_node_ascii_reference_kind() {
+        let out = render_node_ascii(&reference_node());
+        assert!(!out.is_empty());
+        assert!(out.contains("reference"), "missing kind label: {out}");
+        assert!(
+            out.contains("runtime.fs.ts"),
+            "missing reference target: {out}"
+        );
+    }
+
+    #[test]
+    fn test_render_summary_table_module_import_reference() {
+        let nodes = vec![module_node(), import_node(), reference_node()];
+        let table = render_summary_table(&nodes);
+        assert!(!table.is_empty());
+        // All three names appear as rows (previously this panicked).
+        assert!(table.contains("runtime:fs"), "missing module row: {table}");
+        assert!(table.contains("readFile"), "missing import row: {table}");
+        assert!(table.contains("FileStat"), "missing reference row: {table}");
     }
 }

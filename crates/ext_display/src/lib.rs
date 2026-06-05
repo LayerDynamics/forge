@@ -261,7 +261,8 @@ struct ExtensionInfo {
 struct DisplaySubscription {
     id: String,
     options: SubscribeOptions,
-    sender: mpsc::Sender<DisplayEvent>,
+    // The live sender is owned by the polling task (see op_display_subscribe);
+    // the subscription only retains the receiver, consumed by next_event.
     receiver: Option<mpsc::Receiver<DisplayEvent>>,
     event_count: Arc<AtomicU64>,
     cancel_token: CancellationToken,
@@ -664,7 +665,6 @@ pub async fn op_display_subscribe(
         let subscription = DisplaySubscription {
             id: id.clone(),
             options: SubscribeOptions { interval_ms },
-            sender: tx.clone(),
             receiver: Some(rx),
             event_count: event_count.clone(),
             cancel_token: cancel_token.clone(),

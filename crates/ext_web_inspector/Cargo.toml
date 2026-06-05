@@ -28,6 +28,9 @@ ext_monitor = { path = "../ext_monitor" }
 ext_trace = { path = "../ext_trace" }
 ext_signals = { path = "../ext_signals" }
 ext_debugger = { path = "../ext_debugger" }
+# Window command channel: panel injection / devtools route through ext_window's
+# WindowManager (which owns the wry WebViews) via WindowCmd on the shared OpState.
+ext_window = { path = "../ext_window" }
 
 [build-dependencies]
 forge-weld = { path = "../forge-weld" }

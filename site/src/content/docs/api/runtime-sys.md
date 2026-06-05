@@ -33,8 +33,7 @@ const sysInfo = info();
 console.log(sysInfo.os);        // "macos", "windows", "linux"
 console.log(sysInfo.arch);      // "x86_64", "aarch64"
 console.log(sysInfo.hostname);  // "my-computer" or null
-console.log(sysInfo.platform);  // "darwin", "win32", "linux"
-console.log(sysInfo.cpu_count); // 8
+console.log(sysInfo.cpuCount);  // 8
 ```
 
 **Returns:**
@@ -44,8 +43,7 @@ interface SystemInfo {
   os: string;
   arch: string;
   hostname: string | null;
-  platform: string;
-  cpu_count: number;
+  cpuCount: number;
 }
 ```
 
@@ -58,31 +56,20 @@ import { powerInfo } from "runtime:sys";
 
 const power = await powerInfo();
 
-if (power.has_battery) {
-  const battery = power.batteries[0];
-  console.log(`Battery: ${battery.charge_percent}%`);
-  console.log(`Status: ${battery.state}`);  // "charging", "discharging", etc.
-  console.log(`AC Connected: ${power.ac_connected}`);
-}
+console.log(power.state);       // "charging" | "discharging" | "full" | "empty" | "unknown"
+console.log(power.percentage);  // Battery % (null if unavailable)
+console.log(power.timeToFull);  // Seconds until full (or null)
+console.log(power.timeToEmpty); // Seconds until empty (or null)
 ```
 
 **Returns:**
 
 ```typescript
 interface PowerInfo {
-  has_battery: boolean;
-  batteries: BatteryInfo[];
-  ac_connected: boolean;
-}
-
-interface BatteryInfo {
-  charge_percent: number;
   state: "charging" | "discharging" | "full" | "empty" | "unknown";
-  time_to_full_secs?: number;
-  time_to_empty_secs?: number;
-  health_percent?: number;
-  cycle_count?: number;
-  temperature_celsius?: number;
+  percentage: number | null;
+  timeToFull: number | null;
+  timeToEmpty: number | null;
 }
 ```
 
@@ -110,6 +97,17 @@ Set an environment variable:
 import { setEnv } from "runtime:sys";
 
 setEnv("MY_APP_DEBUG", "true");
+```
+
+### getAllEnv() and deleteEnv(key)
+
+Read or remove environment variables in bulk:
+
+```typescript
+import { getAllEnv, deleteEnv } from "runtime:sys";
+
+const all = getAllEnv();         // { PATH: "...", HOME: "...", ... }
+deleteEnv("MY_APP_DEBUG");       // Removes a variable
 ```
 
 ### cwd()
@@ -143,6 +141,30 @@ import { tempDir } from "runtime:sys";
 
 const temp = tempDir();
 console.log(temp);  // "/tmp" or "C:\Users\name\AppData\Local\Temp"
+```
+
+### locale()
+
+Get locale information:
+
+```typescript
+import { locale } from "runtime:sys";
+
+const loc = locale();
+console.log(loc.language); // "en"
+console.log(loc.locale);   // "en-US"
+```
+
+### appPaths()
+
+Get common application directories (platform-specific):
+
+```typescript
+import { appPaths } from "runtime:sys";
+
+const paths = appPaths();
+console.log(paths.documents); // e.g., "/Users/alex/Documents"
+console.log(paths.cache);     // e.g., "/Users/alex/Library/Caches/MyApp"
 ```
 
 ---
@@ -211,6 +233,7 @@ interface NotifyOptions {
   title: string;
   body?: string;
   subtitle?: string;
+  icon?: string;   // Path to an icon image
   sound?: boolean;
 }
 ```
@@ -225,13 +248,18 @@ import {
   homeDir,
   clipboard,
   notify,
-  powerInfo
+  powerInfo,
+  locale,
+  appPaths,
+  getAllEnv
 } from "runtime:sys";
 import { writeTextFile } from "runtime:fs";
 
 // System diagnostics
 async function getDiagnostics() {
   const sysInfo = info();
+  const loc = locale();
+  const paths = appPaths();
   const power = await powerInfo();
 
   const report = {
@@ -239,12 +267,16 @@ async function getDiagnostics() {
       os: sysInfo.os,
       arch: sysInfo.arch,
       hostname: sysInfo.hostname,
-      cpus: sysInfo.cpu_count
+      cpus: sysInfo.cpuCount,
+      locale: loc.locale
     },
-    power: power.has_battery ? {
-      batteryPercent: power.batteries[0]?.charge_percent,
-      charging: power.ac_connected
-    } : null,
+    paths,
+    power: {
+      state: power.state,
+      percentage: power.percentage,
+      timeToFull: power.timeToFull,
+      timeToEmpty: power.timeToEmpty
+    },
     timestamp: new Date().toISOString()
   };
 
@@ -263,9 +295,48 @@ async function saveDiagnostics() {
 // Copy system info to clipboard
 async function copySystemInfo() {
   const sysInfo = info();
-  const text = `${sysInfo.os} ${sysInfo.arch} (${sysInfo.cpu_count} CPUs)`;
+  const text = `${sysInfo.os} ${sysInfo.arch} (${sysInfo.cpuCount} CPUs)`;
 
   await clipboard.write(text);
   await notify("Copied", "System info copied to clipboard");
+}
+```
+
+---
+
+## Error Codes
+
+System operations use structured error codes for precise error handling:
+
+| Code | Name | Description |
+|------|------|-------------|
+| 2000 | Io | Generic I/O error |
+| 2001 | PermissionDenied | Operation not allowed by capabilities |
+| 2002 | NotSupported | Feature not supported on this platform |
+| 2003 | Clipboard | Clipboard access failed |
+| 2004 | Notification | Notification delivery failed |
+| 2005 | Power | Battery/power information unavailable |
+
+### Error Handling Example
+
+```typescript
+import { clipboard, notify } from "runtime:sys";
+
+try {
+  const text = await clipboard.read();
+} catch (error) {
+  if (error.message.includes("[2001]")) {
+    console.error("Clipboard access denied - check capabilities.sys.clipboard");
+  } else if (error.message.includes("[2003]")) {
+    console.error("Clipboard error - may be empty or inaccessible");
+  }
+}
+
+try {
+  await notify("Hello", "World");
+} catch (error) {
+  if (error.message.includes("[2001]")) {
+    console.error("Notifications denied - check capabilities.sys.notifications");
+  }
 }
 ```

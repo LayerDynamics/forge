@@ -172,25 +172,39 @@ mod tests {
     use super::*;
     use std::env;
     use std::fs;
+    use std::sync::Mutex;
+
+    // Crash-reporting enablement is a process-global `AtomicBool`, so these
+    // tests share mutable state. cargo runs them on parallel threads in one
+    // process, so without serialization `test_init_crash_reporting` (which
+    // enables reporting) races `test_crash_reporting_disabled_by_default`.
+    // Serialize them and restore the disabled state after mutating it.
+    static CRASH_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_crash_reporting_disabled_by_default() {
+        let _guard = CRASH_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // Mutating tests restore the disabled state on exit, so unless a test
+        // has explicitly enabled it (while holding the lock), reporting is off.
         assert!(!is_enabled());
     }
 
     #[test]
     fn test_init_crash_reporting() {
+        let _guard = CRASH_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let temp_dir = env::temp_dir().join("forge-crash-test");
         let _ = fs::remove_dir_all(&temp_dir);
 
         // Note: We can't fully test panic handling without actually panicking,
-        // so we just test initialization
+        // so we just test initialization.
         init_crash_reporting(true, temp_dir.to_str().unwrap(), "test-app");
 
         assert!(is_enabled());
         assert!(temp_dir.exists());
 
-        // Cleanup
+        // Restore the global disabled state so the serialized sibling test
+        // observes the documented default regardless of execution order.
+        init_crash_reporting(false, temp_dir.to_str().unwrap(), "test-app");
         let _ = fs::remove_dir_all(&temp_dir);
     }
 }

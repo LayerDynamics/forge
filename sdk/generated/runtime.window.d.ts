@@ -40,6 +40,8 @@ declare module "runtime:window" {
     maxHeight?: number;
     /** Channel allowlist for IPC - only these channels can be used */
     channels?: string[];
+    /** Path to window icon file (PNG, ICO, etc.) */
+    icon?: string;
   }
 
   /** Window position */
