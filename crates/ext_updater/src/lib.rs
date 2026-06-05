@@ -976,7 +976,7 @@ async fn op_updater_download(state: Rc<RefCell<OpState>>) -> Result<String, Upda
     let file_name = update_info
         .download_url
         .split('/')
-        .last()
+        .next_back()
         .unwrap_or("update");
     let file_path = temp_dir.path().join(file_name);
 

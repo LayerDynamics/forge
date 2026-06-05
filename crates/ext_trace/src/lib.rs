@@ -323,6 +323,20 @@ impl TraceState {
         self.finished.len()
     }
 
+    /// Clear all active and finished spans, returning the total number removed.
+    ///
+    /// The count reuses [`active_count`](Self::active_count) /
+    /// [`finished_count`](Self::finished_count) and is clamped to `u32` (the
+    /// op/SDK type) rather than truncated, so it saturates instead of wrapping
+    /// in the (practically impossible) case of more than `u32::MAX` spans.
+    pub fn clear(&mut self) -> u32 {
+        let removed =
+            u32::try_from(self.active_count() + self.finished_count()).unwrap_or(u32::MAX);
+        self.active.clear();
+        self.finished.clear();
+        removed
+    }
+
     /// Get a read-only snapshot of finished spans (without clearing)
     pub fn finished_spans(&self) -> &[SpanRecord] {
         &self.finished
@@ -448,6 +462,13 @@ fn op_trace_flush(state: &mut OpState) -> Vec<SpanRecord> {
     result
 }
 
+/// Clear all spans (active and finished). Returns the number of spans removed.
+#[weld_op]
+#[op2(fast)]
+fn op_trace_clear(state: &mut OpState) -> u32 {
+    state.borrow_mut::<TraceState>().clear()
+}
+
 // Include generated extension! macro from build.rs
 include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
@@ -467,5 +488,57 @@ trait InstantExt {
 impl InstantExt for Instant {
     fn elapsed_or_zero(&self) -> Duration {
         self.elapsed()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Instant, SystemTime};
+
+    fn active_span(id: u64) -> ActiveSpan {
+        ActiveSpan {
+            id,
+            name: format!("span-{id}"),
+            started: Instant::now(),
+            wall_clock: SystemTime::now(),
+            attributes: None,
+        }
+    }
+
+    fn finished_span(id: u64) -> SpanRecord {
+        SpanRecord {
+            id,
+            name: format!("done-{id}"),
+            started_at: 0,
+            duration_ms: 1.0,
+            attributes: None,
+            result: None,
+        }
+    }
+
+    // H4 regression: clear() must actually empty both span collections and
+    // report the real number removed (the CDP clear path previously returned a
+    // hardcoded 0 without touching any state).
+    #[test]
+    fn clear_removes_all_spans_and_returns_count() {
+        let mut state = TraceState::default();
+        state.active.insert(1, active_span(1));
+        state.active.insert(2, active_span(2));
+        state.finished.push(finished_span(3));
+        assert_eq!(state.active_count(), 2);
+        assert_eq!(state.finished_count(), 1);
+
+        let removed = state.clear();
+
+        assert_eq!(removed, 3, "clear must report every removed span");
+        assert_eq!(state.active_count(), 0);
+        assert_eq!(state.finished_count(), 0);
+    }
+
+    #[test]
+    fn clear_on_empty_state_returns_zero() {
+        let mut state = TraceState::default();
+        assert_eq!(state.clear(), 0);
     }
 }

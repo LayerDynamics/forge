@@ -9,6 +9,7 @@ fn main() {
             "op_trace_end",
             "op_trace_instant",
             "op_trace_flush",
+            "op_trace_clear",
         ])
         .generate_sdk_module("sdk")
         .use_inventory_types()

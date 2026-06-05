@@ -365,12 +365,17 @@ fn get_active_spans(state: &Rc<RefCell<OpState>>) -> Result<Vec<Value>, WebInspe
     Ok(spans)
 }
 
-fn clear_spans(_state: &Rc<RefCell<OpState>>) -> Result<u32, WebInspectorError> {
-    // Note: Clearing spans requires mutable access to TraceState
-    // This would need an op_trace_clear or similar in ext_trace
-    // For now, return 0 as a placeholder
-    debug!("clear_spans called - requires mutable access to TraceState");
-    Ok(0)
+fn clear_spans(state: &Rc<RefCell<OpState>>) -> Result<u32, WebInspectorError> {
+    use crate::bridge::TraceState;
+
+    let mut op_state = state.borrow_mut();
+    let trace_state = op_state.try_borrow_mut::<TraceState>().ok_or_else(|| {
+        WebInspectorError::cdp_error("TraceState not available; cannot clear spans")
+    })?;
+
+    let removed = trace_state.clear();
+    debug!("clear_spans removed {} spans", removed);
+    Ok(removed)
 }
 
 // ============================================================================
@@ -577,5 +582,27 @@ mod tests {
     fn test_current_arch() {
         let arch = current_arch();
         assert!(["x64", "arm64", "x86", "unknown"].contains(&arch));
+    }
+
+    // H4 regression: clear_spans previously returned Ok(0) unconditionally
+    // (a placebo). It must now clear the real TraceState and error when the
+    // trace subsystem is absent rather than silently report success.
+    #[test]
+    fn clear_spans_errors_when_trace_state_absent() {
+        let op_state = Rc::new(RefCell::new(OpState::new(None)));
+        assert!(
+            clear_spans(&op_state).is_err(),
+            "must error (not Ok(0)) when TraceState is missing"
+        );
+    }
+
+    #[test]
+    fn clear_spans_clears_present_trace_state() {
+        let mut state = OpState::new(None);
+        ext_trace::init_trace_state(&mut state);
+        let op_state = Rc::new(RefCell::new(state));
+        // A freshly-initialized TraceState is empty, so the real cleared count
+        // is 0 — but it comes from actually clearing the state, not a placebo.
+        assert_eq!(clear_spans(&op_state).unwrap(), 0);
     }
 }

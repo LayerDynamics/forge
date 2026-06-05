@@ -347,7 +347,7 @@ fn query_monitors() -> Result<Vec<MonitorInfo>, DisplayError> {
     let event_loop = EventLoopBuilder::new().build();
 
     let primary = event_loop.primary_monitor();
-    let primary_id = primary.as_ref().map(|m| monitor_id(m));
+    let primary_id = primary.as_ref().map(monitor_id);
 
     let monitors: Vec<MonitorInfo> = event_loop
         .available_monitors()
