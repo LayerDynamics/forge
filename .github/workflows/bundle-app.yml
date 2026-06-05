@@ -10,12 +10,12 @@ on:
       sign_windows:
         description: 'Sign Windows MSIX package'
         required: false
-        default: 'false'
+        default: false
         type: boolean
       sign_macos:
         description: 'Sign and notarize macOS app'
         required: false
-        default: 'false'
+        default: false
         type: boolean
 
 env:

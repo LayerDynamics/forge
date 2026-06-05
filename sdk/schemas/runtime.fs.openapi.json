@@ -1,0 +1,363 @@
+{
+  "info": {
+    "description": "Forge extension API",
+    "title": "runtime:fs",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {},
+  "x-operations": {
+    "appendBytes": {
+      "description": "appendBytes operation",
+      "operationId": "appendBytes",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "appendText": {
+      "description": "appendText operation",
+      "operationId": "appendText",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "copy": {
+      "description": "copy operation",
+      "operationId": "copy",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "exists": {
+      "description": "exists operation",
+      "operationId": "exists",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "metadata": {
+      "description": "metadata operation",
+      "operationId": "metadata",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "mkdir": {
+      "description": "mkdir operation",
+      "operationId": "mkdir",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "readBytes": {
+      "description": "readBytes operation",
+      "operationId": "readBytes",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "readDir": {
+      "description": "readDir operation",
+      "operationId": "readDir",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "readLink": {
+      "description": "readLink operation",
+      "operationId": "readLink",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "readText": {
+      "description": "readText operation",
+      "operationId": "readText",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "realPath": {
+      "description": "realPath operation",
+      "operationId": "realPath",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "remove": {
+      "description": "remove operation",
+      "operationId": "remove",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "rename": {
+      "description": "rename operation",
+      "operationId": "rename",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "stat": {
+      "description": "stat operation",
+      "operationId": "stat",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "symlink": {
+      "description": "symlink operation",
+      "operationId": "symlink",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "tempDir": {
+      "description": "tempDir operation",
+      "operationId": "tempDir",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "tempFile": {
+      "description": "tempFile operation",
+      "operationId": "tempFile",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "watch": {
+      "description": "watch operation",
+      "operationId": "watch",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "watchClose": {
+      "description": "watchClose operation",
+      "operationId": "watchClose",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "watchNext": {
+      "description": "watchNext operation",
+      "operationId": "watchNext",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "writeBytes": {
+      "description": "writeBytes operation",
+      "operationId": "writeBytes",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    },
+    "writeText": {
+      "description": "writeText operation",
+      "operationId": "writeText",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null"
+              }
+            }
+          },
+          "description": "Successful operation"
+        }
+      }
+    }
+  }
+}

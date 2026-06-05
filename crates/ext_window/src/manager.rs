@@ -376,6 +376,20 @@ impl<U: 'static> WindowManager<U> {
             win_builder = win_builder.with_max_inner_size(tao::dpi::LogicalSize::new(max_w, max_h));
         }
 
+        // Load and set window icon if provided
+        if let Some(ref icon_path) = opts.icon {
+            let full_path = if std::path::Path::new(icon_path).is_absolute() {
+                std::path::PathBuf::from(icon_path)
+            } else {
+                self.config.app_dir.join(icon_path)
+            };
+
+            if let Some(icon) = load_window_icon(&full_path) {
+                win_builder = win_builder.with_window_icon(Some(icon));
+                tracing::debug!("Set window icon from: {:?}", full_path);
+            }
+        }
+
         let window = win_builder
             .build(event_loop_target)
             .map_err(|e| format!("Failed to create window: {}", e))?;
@@ -1713,6 +1727,30 @@ pub fn create_default_tray_icon() -> tray_icon::Icon {
         rgba_data.extend_from_slice(&[128, 128, 128, 255]);
     }
     tray_icon::Icon::from_rgba(rgba_data, size, size).expect("Failed to create default icon")
+}
+
+/// Load a window icon from a file path
+///
+/// Loads an image file and converts it to a tao::window::Icon for window decoration.
+/// Returns None if the file cannot be loaded or converted.
+pub fn load_window_icon(icon_path: &Path) -> Option<tao::window::Icon> {
+    match std::fs::read(icon_path) {
+        Ok(bytes) => match image::load_from_memory(&bytes) {
+            Ok(img) => {
+                let rgba = img.to_rgba8();
+                let (width, height) = rgba.dimensions();
+                tao::window::Icon::from_rgba(rgba.into_raw(), width, height).ok()
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load window icon image from {:?}: {}", icon_path, e);
+                None
+            }
+        },
+        Err(e) => {
+            tracing::warn!("Failed to read window icon file {:?}: {}", icon_path, e);
+            None
+        }
+    }
 }
 
 /// Add menu items to a Menu and track their IDs for event handling

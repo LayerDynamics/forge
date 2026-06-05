@@ -332,3 +332,34 @@ function handleSettings(payload: unknown, windowId: string) {
   // Handle settings events
 }
 ```
+
+---
+
+## Error Codes
+
+IPC operations use structured error codes for precise error handling:
+
+| Code | Name | Description |
+|------|------|-------------|
+| 7000 | ChannelSend | Failed to send message to renderer |
+| 7001 | ChannelRecv | Failed to receive message from renderer |
+| 7002 | PermissionDenied | Channel not allowed by capabilities |
+| 7003 | WindowNotFound | Target window ID does not exist |
+
+### Error Handling Example
+
+```typescript
+import { sendToWindow } from "runtime:ipc";
+
+try {
+  await sendToWindow("unknown-window", "message", { data: "test" });
+} catch (error) {
+  if (error.message.includes("[7003]")) {
+    console.error("Window not found - verify window ID exists");
+  } else if (error.message.includes("[7002]")) {
+    console.error("Channel denied - check manifest.app.toml [permissions.ui] channels");
+  } else if (error.message.includes("[7000]")) {
+    console.error("Send failed - window may have been closed");
+  }
+}
+```

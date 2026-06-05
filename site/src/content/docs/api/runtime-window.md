@@ -49,6 +49,8 @@ interface WindowOptions {
   transparent?: boolean;
   /** Whether window is always on top */
   alwaysOnTop?: boolean;
+  /** Open DevTools on creation (default: false) */
+  devtools?: boolean;
   /** Initial X position */
   x?: number;
   /** Initial Y position */
@@ -63,8 +65,30 @@ interface WindowOptions {
   maxHeight?: number;
   /** IPC channel allowlist */
   channels?: string[];
+  /** Path to window icon file (PNG, ICO, etc.) */
+  icon?: string;
 }
 ```
+
+### Window Icons
+
+Set a custom icon for your window:
+
+```typescript
+import { createWindow } from "runtime:window";
+
+const win = await createWindow({
+  title: "My Application",
+  width: 800,
+  height: 600,
+  icon: "./assets/app-icon.png", // PNG, ICO, BMP formats supported
+});
+```
+
+**Icon file requirements:**
+- Supported formats: PNG, ICO, BMP, JPEG
+- Recommended sizes: 32x32, 64x64, 128x128, 256x256
+- Path can be relative (to app directory) or absolute
 
 ### closeWindow(windowId)
 
@@ -181,6 +205,42 @@ await win.setAlwaysOnTop(true);
 await win.setVisible(true);
 await win.show();  // Alias for setVisible(true)
 await win.hide();  // Alias for setVisible(false)
+```
+
+### Developer Tools & WebView Injection
+
+```typescript
+// Open/close DevTools
+await win.openDevTools();
+await win.closeDevTools();
+const isOpen = await win.isDevToolsOpen();
+
+// Execute JavaScript in the window's WebView
+await win.evalJs("window.localStorage.setItem('foo', 'bar')");
+
+// Inject CSS into the WebView
+await win.injectCss("body { background: #111; color: #fff; }");
+```
+
+### Minimum/Maximum Size & Centering
+
+```typescript
+await win.setMinSize(640, 480);
+await win.setMaxSize(1920, 1080);
+await win.center(); // Center the window on the current monitor
+```
+
+### Monitors
+
+Get information about available displays:
+
+```typescript
+import { getMonitors } from "runtime:window";
+
+const monitors = await getMonitors();
+monitors.forEach((m) => {
+  console.log(m.name, m.size.width, m.size.height, m.scaleFactor, m.isPrimary);
+});
 ```
 
 ### Native Handle

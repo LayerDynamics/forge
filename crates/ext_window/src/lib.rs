@@ -217,6 +217,7 @@ impl WindowError {
 // ============================================================================
 
 /// Options for creating a window
+#[weld_struct]
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct WindowOpts {
     pub url: Option<String>,
@@ -237,6 +238,8 @@ pub struct WindowOpts {
     pub max_height: Option<u32>,
     /// Channel allowlist for IPC
     pub channels: Option<Vec<String>>,
+    /// Path to window icon file (PNG, ICO, etc.)
+    pub icon: Option<String>,
 }
 
 /// Window position

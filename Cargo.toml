@@ -49,3 +49,15 @@ resolver = "2"
 # This ensures documentation is built with all features and private items
 all-features = true
 rustdoc-args = ["--document-private-items"]
+
+[profile.dev]
+opt-level = 1
+debug = 1
+debug-assertions = true
+incremental = true
+overflow-checks = true
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"

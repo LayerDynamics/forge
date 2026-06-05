@@ -291,7 +291,12 @@ ExtensionBuilder::new("runtime_fs", "runtime:fs")
 | `new(name, specifier)` | Create builder with extension name and module specifier |
 | `ts_path(path)` | Path to TypeScript shim (ts/init.ts) |
 | `ops(&[...])` | List of op function names to register |
-| `generate_sdk_module(dir)` | Generate TypeScript SDK to directory |
+| `generate_sdk_module(dir)` | Generate TypeScript function-based SDK to directory |
+| `generate_sdk_class(path)` | Generate TypeScript class-based SDK to directory |
+| `generate_schema()` | Enable JSON Schema generation with defaults |
+| `generate_schema_with(config)` | Enable schema generation with custom SchemaConfig |
+| `schema_output_dir(dir)` | Set schema output directory (default: sdk/schemas) |
+| `schema_formats(formats)` | Set schema formats to generate (JsonSchema, OpenAPI, TypeScriptSdk) |
 | `use_inventory_types()` | Read types from `#[weld_*]` macro annotations |
 | `build()` | Execute the build, generating all output files |
 
@@ -310,6 +315,105 @@ pub static WELD_STRUCTS: [fn() -> WeldStruct];
 #[distributed_slice]
 pub static WELD_ENUMS: [fn() -> WeldEnum];
 ```
+
+## Schema Generation
+
+forge-weld can automatically generate JSON Schema and OpenAPI specifications from your extension's types and operations.
+
+### Configuration
+
+```rust
+use forge_weld::{ExtensionBuilder, SchemaConfig, SchemaFormat};
+
+ExtensionBuilder::new("runtime_fs", "runtime:fs")
+    .ts_path("ts/init.ts")
+    .ops(&["op_fs_read_text", "op_fs_write_text"])
+    .generate_sdk_module("sdk")         // Function-based SDK
+    .generate_sdk_class("sdk/classes")  // Class-based SDK (optional)
+    .generate_schema()                   // JSON Schema with defaults
+    .schema_formats(&[
+        SchemaFormat::JsonSchema,        // JSON Schema 2020-12
+        SchemaFormat::OpenApi,           // OpenAPI 3.1.0
+    ])
+    .use_inventory_types()
+    .build()?;
+```
+
+### SchemaConfig
+
+Controls schema generation behavior:
+
+```rust
+pub struct SchemaConfig {
+    /// Output directory (default: "sdk/schemas")
+    pub output_dir: PathBuf,
+
+    /// Formats to generate
+    pub formats: Vec<SchemaFormat>,
+
+    /// Include example values (default: true)
+    pub include_examples: bool,
+
+    /// Add version suffix to filenames (default: false)
+    pub versioned: bool,
+
+    /// Base URL for schema $id fields (default: None)
+    pub schema_base_url: Option<String>,
+
+    /// Fail build on schema errors (default: true)
+    pub fail_on_error: bool,
+}
+```
+
+### SchemaFormat
+
+```rust
+pub enum SchemaFormat {
+    JsonSchema,      // JSON Schema Draft 2020-12
+    OpenApi,         // OpenAPI 3.1.0
+    TypeScriptSdk,   // Class-based TypeScript SDK
+}
+```
+
+### Generated Output
+
+Running the build generates:
+
+```
+sdk/
+├── runtime.fs.ts                    # Function-based SDK
+├── classes/
+│   └── FsClient.ts                  # Class-based SDK (if enabled)
+└── schemas/
+    ├── runtime.fs.schema.json       # JSON Schema 2020-12
+    └── runtime.fs.openapi.json      # OpenAPI 3.1.0
+```
+
+### Class-Based SDK
+
+The class-based SDK provides an object-oriented alternative to the function-based SDK:
+
+```typescript
+// Function-based SDK (default)
+import { readTextFile, writeTextFile } from "runtime:fs";
+await readTextFile("./config.json");
+
+// Class-based SDK (opt-in)
+import { fs } from "runtime:fs/classes";
+await fs.readTextFile("./config.json");
+
+// Or instantiate custom client
+import { FsClient } from "runtime:fs/classes";
+const fsClient = new FsClient();
+```
+
+### Usage with External Tools
+
+Generated schemas can be used with:
+- **JSON Schema validators** - Runtime validation
+- **OpenAPI tools** - API documentation, code generation
+- **TypeScript** - Enhanced type checking and IDE support
+- **Testing tools** - Schema-based test generation
 
 ## File Structure
 
