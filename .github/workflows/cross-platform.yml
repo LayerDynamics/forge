@@ -65,18 +65,18 @@ jobs:
             libayatana-appindicator3-dev \
             libxdo-dev
 
-      - name: Cache cargo
-        uses: actions/cache@v4
+      # Use the standard Rust cache action instead of caching the whole
+      # `target/` with actions/cache. It caches the cargo registry/git plus only
+      # the *dependency* build artifacts (cleaning the workspace crates and
+      # intermediates before saving), which makes the cache far smaller and the
+      # save/restore fast on every OS. The previous full-`target/` cache was
+      # ~3.4GB and packed extremely slowly on Windows (NTFS + hundreds of
+      # thousands of tiny files), and contributed to the Linux disk-full.
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-xplat-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-xplat-
+          shared-key: xplat
+          cache-all-crates: "true"
 
       # Debug profile keeps debug_assertions on, which compiles the
       # `#[cfg(any(debug_assertions, feature = "devtools"))]` DevTools paths.
