@@ -172,16 +172,16 @@ pub fn from_file_url(url: &str) -> Option<PathBuf> {
 /// assert_eq!(url, "file:///home/user/file.ts");
 /// ```
 pub fn to_file_url(path: &Path) -> String {
-    #[cfg(windows)]
-    {
-        // Windows: C:\path\to\file -> file:///C:/path/to/file
-        let path_str = path.to_string_lossy().replace('\\', "/");
-        format!("file:///{}", path_str)
-    }
-    #[cfg(not(windows))]
-    {
-        format!("file://{}", path.display())
-    }
+    // Normalize separators (`C:\a\b` -> `C:/a/b`) and strip a single leading
+    // slash so that both Windows paths and unix-style absolute paths
+    // (`/home/x`) yield exactly three slashes after the scheme:
+    //   "C:\\a\\b"      -> "file:///C:/a/b"
+    //   "/home/x"       -> "file:///home/x"
+    // The previous Windows-only branch prepended `file:///` unconditionally,
+    // producing a doubled slash ("file:////home/x") for unix-style inputs.
+    let normalized = path.to_string_lossy().replace('\\', "/");
+    let normalized = normalized.strip_prefix('/').unwrap_or(&normalized);
+    format!("file:///{}", normalized)
 }
 
 /// Generate a JSR import specifier.

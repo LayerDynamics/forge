@@ -199,8 +199,16 @@ pub fn parse_typescript_source(
     // Determine media type from extension
     let media_type = MediaType::from_path(path);
 
-    // Create specifier from path
+    // Create specifier from path. `from_file_path` requires a platform-absolute
+    // path; since this function parses in-memory `source` and the specifier is
+    // only a label, fall back to resolving non-absolute or foreign-style paths
+    // (e.g. a unix-style "/tmp/x.ts" on Windows) against the current directory.
     let specifier = deno_ast::ModuleSpecifier::from_file_path(path)
+        .or_else(|_| {
+            let cwd = std::env::current_dir().map_err(|_| ())?;
+            let relative = path.strip_prefix("/").unwrap_or(path);
+            deno_ast::ModuleSpecifier::from_file_path(cwd.join(relative))
+        })
         .map_err(|_| EtchError::InvalidPath(path.display().to_string()))?;
 
     // Parse the source
