@@ -25,10 +25,21 @@ tracing = "0.1"
 image = "0.25"
 tokio = { version = "1", features = ["sync"] }
 
-# macOS-specific dependencies
+# macOS-specific dependencies (objc2 stack; cocoa/objc are deprecated)
 [target.'cfg(target_os = "macos")'.dependencies]
-objc = "0.2"
-cocoa = "0.26"
+objc2 = "0.5"
+objc2-foundation = { version = "0.2", features = [
+    "NSString",
+    "NSData",
+    "NSThread",
+] }
+objc2-app-kit = { version = "0.2", features = [
+    "NSApplication",
+    "NSResponder",
+    "NSRunningApplication",
+    "NSDockTile",
+    "NSImage",
+] }
 core-graphics = "0.24"
 
 [build-dependencies]
