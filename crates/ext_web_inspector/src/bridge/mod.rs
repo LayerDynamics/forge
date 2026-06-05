@@ -63,7 +63,7 @@ pub trait ExtensionBridge {
 }
 
 /// Status of an extension bridge
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BridgeStatus {
     /// Whether the extension is loaded
     pub loaded: bool,
@@ -73,17 +73,6 @@ pub struct BridgeStatus {
     pub message: Option<String>,
     /// Extension version
     pub version: Option<String>,
-}
-
-impl Default for BridgeStatus {
-    fn default() -> Self {
-        Self {
-            loaded: false,
-            active: false,
-            message: None,
-            version: None,
-        }
-    }
 }
 
 // ============================================================================
@@ -902,7 +891,7 @@ mod tests {
 
     #[test]
     fn test_monitor_bridge_default() {
-        let bridge = MonitorBridge::default();
+        let bridge = MonitorBridge::new();
         assert_eq!(bridge.poll_interval_ms, 1000);
     }
 
@@ -930,7 +919,7 @@ mod tests {
 
     #[test]
     fn test_trace_bridge_default() {
-        let _bridge = TraceBridge::default();
+        let _bridge = TraceBridge::new();
     }
 
     #[test]
@@ -956,7 +945,7 @@ mod tests {
 
     #[test]
     fn test_signals_bridge_default() {
-        let _bridge = SignalsBridge::default();
+        let _bridge = SignalsBridge::new();
     }
 
     #[test]
@@ -1016,7 +1005,7 @@ mod tests {
 
     #[test]
     fn test_debugger_bridge_default() {
-        let _bridge = DebuggerBridge::default();
+        let _bridge = DebuggerBridge::new();
     }
 
     #[test]

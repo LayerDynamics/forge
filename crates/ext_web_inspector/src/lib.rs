@@ -187,6 +187,9 @@ impl CdpDomain {
         }
     }
 
+    // Constructor-style parser kept as `from_str` for call-site readability;
+    // it returns Option (not Result) so it intentionally isn't std::str::FromStr.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "Forge.Monitor" => Some(CdpDomain::ForgeMonitor),
@@ -304,10 +307,8 @@ pub struct AggregatedMetrics {
     pub finished_span_count: u32,
     /// Signal subscriptions active
     pub signal_subscriptions: u32,
-    /// Window count
+    /// Window count (active inspector sessions)
     pub window_count: u32,
-    /// IPC channel count
-    pub ipc_channel_count: u32,
 }
 
 // ============================================================================
@@ -742,25 +743,41 @@ pub fn op_web_inspector_is_panel_injected(state: &OpState, #[string] window_id: 
 // Operations - Metrics
 // ============================================================================
 
-/// Get aggregated metrics from all Forge extensions
+/// Get aggregated metrics from the Forge extension bridges.
+///
+/// Availability flags reflect whether each subsystem's state is actually present
+/// in `OpState`; counts are read live from the real bridges (no placeholders).
+/// `system_available` and `runtime_available` are both backed by ext_monitor's
+/// `MonitorState` (system metrics and runtime metrics come from the same state).
+/// Aggregate live metrics from the extension bridges (testable core of
+/// `op_web_inspector_get_metrics`).
+fn aggregate_metrics(state: &OpState) -> AggregatedMetrics {
+    use crate::bridge::{ExtensionBridge, MonitorBridge, SignalsBridge, TraceBridge};
+
+    let monitor_bridge = MonitorBridge::new();
+    let trace_bridge = TraceBridge::new();
+    let signals_bridge = SignalsBridge::new();
+
+    let monitor_available = monitor_bridge.is_available(state);
+    let (active_span_count, finished_span_count) = trace_bridge.span_count(state);
+    let window_count = state.borrow::<WebInspectorState>().sessions.len() as u32;
+
+    AggregatedMetrics {
+        system_available: monitor_available,
+        runtime_available: monitor_available,
+        trace_available: trace_bridge.is_available(state),
+        active_span_count: active_span_count as u32,
+        finished_span_count: finished_span_count as u32,
+        signal_subscriptions: signals_bridge.get_subscription_count(state) as u32,
+        window_count,
+    }
+}
+
 #[weld_op]
 #[op2]
 #[serde]
 pub fn op_web_inspector_get_metrics(state: &OpState) -> AggregatedMetrics {
-    // This would aggregate metrics from ext_monitor, ext_trace, ext_signals, etc.
-    // For now, return a placeholder
-    let inspector_state = state.borrow::<WebInspectorState>();
-
-    AggregatedMetrics {
-        system_available: true,
-        runtime_available: true,
-        trace_available: true,
-        active_span_count: 0,
-        finished_span_count: 0,
-        signal_subscriptions: 0,
-        window_count: inspector_state.sessions.len() as u32,
-        ipc_channel_count: 0,
-    }
+    aggregate_metrics(state)
 }
 
 // ============================================================================
@@ -1063,5 +1080,53 @@ mod tests {
         let script = build_panel_injection_script(&platform::PanelAssets::default());
         assert!(script.len() > 100);
         assert!(script.contains("forge-inspector-panel"));
+    }
+
+    // H2 regression: op_web_inspector_get_metrics previously hardcoded
+    // system/runtime/trace availability to `true` and every count to `0`.
+    // aggregate_metrics must now reflect the real presence of each subsystem's
+    // state in OpState and read counts from the live bridges.
+    #[test]
+    fn metrics_report_unavailable_when_states_absent() {
+        let mut op_state = deno_core::OpState::new(None);
+        // Only the inspector's own state is present (required for window_count).
+        init_web_inspector_state(&mut op_state);
+
+        let m = aggregate_metrics(&op_state);
+
+        assert!(
+            !m.system_available,
+            "system must be unavailable when MonitorState is absent"
+        );
+        assert!(
+            !m.runtime_available,
+            "runtime must be unavailable when MonitorState is absent"
+        );
+        assert!(
+            !m.trace_available,
+            "trace must be unavailable when TraceState is absent"
+        );
+        assert_eq!(m.active_span_count, 0);
+        assert_eq!(m.finished_span_count, 0);
+        assert_eq!(m.signal_subscriptions, 0);
+    }
+
+    #[test]
+    fn metrics_report_available_when_states_present() {
+        let mut op_state = deno_core::OpState::new(None);
+        init_web_inspector_state(&mut op_state);
+        ext_monitor::init_monitor_state(&mut op_state);
+        ext_trace::init_trace_state(&mut op_state);
+        ext_signals::init_signals_state(&mut op_state);
+
+        let m = aggregate_metrics(&op_state);
+
+        // Presence is now detected from real state, not hardcoded.
+        assert!(m.system_available);
+        assert!(m.runtime_available);
+        assert!(m.trace_available);
+        // Freshly-initialized states have no spans/subscriptions yet.
+        assert_eq!(m.active_span_count, 0);
+        assert_eq!(m.signal_subscriptions, 0);
     }
 }

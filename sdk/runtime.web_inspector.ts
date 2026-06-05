@@ -54,10 +54,8 @@ export interface AggregatedMetrics {
   finishedSpanCount: number;
   /** Signal subscriptions active */
   signalSubscriptions: number;
-  /** Window count */
+  /** Window count (active inspector sessions) */
   windowCount: number;
-  /** IPC channel count */
-  ipcChannelCount: number;
 }
 
 /** Extension information */
