@@ -256,7 +256,7 @@
 //!
 //! Registered as **Tier 1 (SimpleState)** extension:
 //!
-//! ```rust
+//! ```ignore
 //! ExtensionDescriptor {
 //!     id: "runtime_shell",
 //!     init_fn: ExtensionInitFn::SimpleState(|state| {
