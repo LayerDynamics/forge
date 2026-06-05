@@ -1050,7 +1050,10 @@ mod tests {
 
         // The HTML's double-quotes must be escaped in the JS literal (not raw),
         // proving JSON-encoding rather than naive string splicing.
-        assert!(script.contains("\\\"forge\\\""), "html not JSON-escaped: {script}");
+        assert!(
+            script.contains("\\\"forge\\\""),
+            "html not JSON-escaped: {script}"
+        );
     }
 
     #[test]

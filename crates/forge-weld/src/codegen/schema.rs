@@ -430,22 +430,14 @@ impl<'a> SchemaGenerator<'a> {
             .as_deref()
             .unwrap_or("https://forge.dev/schemas");
 
-        let module_name = self
-            .module
-            .specifier
-            .replace(':', ".")
-            .replace('_', "-");
+        let module_name = self.module.specifier.replace(':', ".").replace('_', "-");
 
         format!("{}/{}.json", base_url, module_name)
     }
 
     /// Generate output filename
     fn generate_filename(&self, extension: &str) -> String {
-        let module_name = self
-            .module
-            .specifier
-            .replace(':', ".")
-            .replace('_', "-");
+        let module_name = self.module.specifier.replace(':', ".").replace('_', "-");
 
         if self.config.versioned {
             format!("{}.v1.{}", module_name, extension)
@@ -466,7 +458,10 @@ mod tests {
         let config = SchemaConfig::default();
         let gen = SchemaGenerator::new(&module, &config);
 
-        assert_eq!(gen.generate_filename("schema.json"), "runtime.fs.schema.json");
+        assert_eq!(
+            gen.generate_filename("schema.json"),
+            "runtime.fs.schema.json"
+        );
 
         let config_versioned = SchemaConfig {
             versioned: true,
@@ -512,7 +507,9 @@ mod tests {
 
         // Array type
         let array_schema = gen
-            .weld_type_to_json_schema(&WeldType::Vec(Box::new(WeldType::primitive(WeldPrimitive::I32))))
+            .weld_type_to_json_schema(&WeldType::Vec(Box::new(WeldType::primitive(
+                WeldPrimitive::I32,
+            ))))
             .unwrap();
         assert_eq!(array_schema["type"], "array");
         assert_eq!(array_schema["items"]["type"], "integer");
@@ -615,7 +612,10 @@ mod tests {
 
         // Parse to verify valid JSON
         let parsed: Value = serde_json::from_str(&schema.content).unwrap();
-        assert_eq!(parsed["$schema"], "https://json-schema.org/draft/2020-12/schema");
+        assert_eq!(
+            parsed["$schema"],
+            "https://json-schema.org/draft/2020-12/schema"
+        );
         assert_eq!(parsed["title"], "runtime:test");
     }
 }

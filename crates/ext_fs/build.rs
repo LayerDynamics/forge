@@ -29,12 +29,9 @@ fn main() {
             "op_fs_temp_dir",
         ])
         .generate_sdk_module("sdk")
-        .generate_sdk_class("sdk/classes")  // NEW: Class-based SDK
-        .generate_schema()                   // NEW: JSON Schema generation
-        .schema_formats(&[
-            SchemaFormat::JsonSchema,
-            SchemaFormat::OpenApi,
-        ])
+        .generate_sdk_class("sdk/classes") // NEW: Class-based SDK
+        .generate_schema() // NEW: JSON Schema generation
+        .schema_formats(&[SchemaFormat::JsonSchema, SchemaFormat::OpenApi])
         .use_inventory_types()
         .enable_extensibility()
         .build()

@@ -856,7 +856,10 @@ impl ExtensionBuilder {
                     if schema_config.fail_on_error {
                         return Err(ExtensionBuilderError::SchemaGeneration(e.to_string()));
                     } else {
-                        println!("cargo:warning=Schema generation failed: {}. Continuing build.", e);
+                        println!(
+                            "cargo:warning=Schema generation failed: {}. Continuing build.",
+                            e
+                        );
                     }
                 }
             }

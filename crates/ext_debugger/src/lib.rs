@@ -461,8 +461,7 @@ pub struct Breakpoint {
 
 /// Scope types
 #[weld_enum]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum ScopeType {
     Global,

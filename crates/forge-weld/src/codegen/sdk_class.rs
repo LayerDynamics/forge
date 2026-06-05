@@ -156,10 +156,7 @@ impl<'a> SdkClassGenerator<'a> {
         ));
 
         // Method body - call core.ops with proper await
-        let param_names: Vec<String> = visible_params
-            .iter()
-            .map(|p| p.ts_name.clone())
-            .collect();
+        let param_names: Vec<String> = visible_params.iter().map(|p| p.ts_name.clone()).collect();
 
         let await_keyword = if op.is_async { "await " } else { "" };
 
@@ -262,14 +259,17 @@ impl<'a> SdkClassGenerator<'a> {
             .map(|c| c.to_lowercase().to_string() + &class_name[1..class_name.len() - 6])
             .unwrap_or_else(|| "client".to_string());
 
-        format!("/** Default instance for convenience */\nexport const {} = new {}();\n", instance_name, class_name)
+        format!(
+            "/** Default instance for convenience */\nexport const {} = new {}();\n",
+            instance_name, class_name
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{OpParam, WeldType, WeldPrimitive, StructField};
+    use crate::ir::{OpParam, StructField, WeldPrimitive, WeldType};
 
     #[test]
     fn test_class_name_generation() {
@@ -336,14 +336,12 @@ mod tests {
         let gen = SdkClassGenerator::new(&module);
 
         let mut test_struct = WeldStruct::new("TestData");
-        test_struct.fields.push(
-            StructField::new("name", WeldType::string())
-                .with_doc("The name field"),
-        );
-        test_struct.fields.push(
-            StructField::new("count", WeldType::primitive(WeldPrimitive::F64))
-                .optional(),
-        );
+        test_struct
+            .fields
+            .push(StructField::new("name", WeldType::string()).with_doc("The name field"));
+        test_struct
+            .fields
+            .push(StructField::new("count", WeldType::primitive(WeldPrimitive::F64)).optional());
 
         let interface = gen.generate_struct_interface(&test_struct);
 
@@ -355,8 +353,8 @@ mod tests {
 
     #[test]
     fn test_full_generation() {
-        let mut module = WeldModule::new("runtime_test", "runtime:test")
-            .with_doc("Test extension module");
+        let mut module =
+            WeldModule::new("runtime_test", "runtime:test").with_doc("Test extension module");
 
         module.ops.push(
             OpSymbol::from_rust_name("op_test_hello")

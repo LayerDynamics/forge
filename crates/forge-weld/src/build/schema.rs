@@ -155,7 +155,10 @@ mod tests {
 
     #[test]
     fn test_schema_format_display() {
-        assert_eq!(SchemaFormat::JsonSchema.display_name(), "JSON Schema 2020-12");
+        assert_eq!(
+            SchemaFormat::JsonSchema.display_name(),
+            "JSON Schema 2020-12"
+        );
         assert_eq!(SchemaFormat::OpenApi.display_name(), "OpenAPI 3.1.0");
         assert_eq!(SchemaFormat::TypeScriptSdk.display_name(), "TypeScript SDK");
     }

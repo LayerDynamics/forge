@@ -973,9 +973,7 @@ pub fn op_monitor_runtime(state: &mut OpState) -> Result<RuntimeMetrics, Monitor
 #[weld_op]
 #[op2]
 #[serde]
-pub fn op_monitor_heap<'s>(
-    scope: &mut v8::PinScope<'s, '_>,
-) -> Result<HeapStats, MonitorError> {
+pub fn op_monitor_heap<'s>(scope: &mut v8::PinScope<'s, '_>) -> Result<HeapStats, MonitorError> {
     let stats = scope.get_heap_statistics();
 
     Ok(HeapStats {

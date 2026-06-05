@@ -1742,7 +1742,11 @@ pub fn load_window_icon(icon_path: &Path) -> Option<tao::window::Icon> {
                 tao::window::Icon::from_rgba(rgba.into_raw(), width, height).ok()
             }
             Err(e) => {
-                tracing::warn!("Failed to load window icon image from {:?}: {}", icon_path, e);
+                tracing::warn!(
+                    "Failed to load window icon image from {:?}: {}",
+                    icon_path,
+                    e
+                );
                 None
             }
         },
