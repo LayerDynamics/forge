@@ -2225,7 +2225,6 @@ dependencies = [
 name = "ext_dock"
 version = "0.1.0-alpha.1"
 dependencies = [
- "cocoa",
  "core-graphics",
  "deno_core",
  "deno_error",
@@ -2233,7 +2232,9 @@ dependencies = [
  "forge-weld-macro",
  "image",
  "linkme",
- "objc",
+ "objc2 0.5.2",
+ "objc2-app-kit 0.2.2",
+ "objc2-foundation 0.2.2",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -2647,6 +2648,7 @@ dependencies = [
  "ext_monitor",
  "ext_signals",
  "ext_trace",
+ "ext_window",
  "forge-weld",
  "forge-weld-macro",
  "linkme",

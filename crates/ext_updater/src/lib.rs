@@ -328,6 +328,8 @@ pub struct UpdateConfig {
 pub struct UpdateInfo {
     /// New version string
     pub version: String,
+    /// Human-readable release title (e.g. the GitHub release name), if available
+    pub release_name: Option<String>,
     /// Download URL for the current platform
     pub download_url: String,
     /// Release notes (if available)
@@ -825,6 +827,7 @@ async fn check_github_releases(
 
     Ok(Some(UpdateInfo {
         version: release_version.to_string(),
+        release_name: release.name,
         download_url,
         release_notes: release.body,
         size_bytes,
@@ -908,6 +911,7 @@ async fn check_custom_manifest(
 
     Ok(Some(UpdateInfo {
         version: manifest_version.to_string(),
+        release_name: None,
         download_url: platform_asset.url.clone(),
         release_notes: manifest.release_notes,
         size_bytes: platform_asset.size.unwrap_or(0),
