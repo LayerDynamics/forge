@@ -134,6 +134,18 @@ export function flush(): SpanRecord[] {
   return core.ops.op_trace_flush();
 }
 
+/**
+ * Clear all spans, both active and finished.
+ *
+ * Unlike {@link flush} (which drains only finished spans and returns them),
+ * this discards every span and returns how many were removed.
+ *
+ * @returns The number of spans removed (active + finished)
+ */
+export function clear(): number {
+  return core.ops.op_trace_clear();
+}
+
 
 // ============================================================================
 // Extensibility API (auto-generated)
@@ -146,6 +158,7 @@ interface OpRegistry {
   end: { args: []; result: void };
   instant: { args: []; result: void };
   flush: { args: []; result: void };
+  clear: { args: []; result: void };
 }
 
 /** Extract argument types for an operation */
@@ -155,7 +168,7 @@ type OpArgs<T extends keyof OpRegistry> = OpRegistry[T]['args'];
 type OpResult<T extends keyof OpRegistry> = OpRegistry[T]['result'];
 
 /** Valid operation names for this extension */
-type OpName = "info" | "start" | "end" | "instant" | "flush";
+type OpName = "info" | "start" | "end" | "instant" | "flush" | "clear";
 
 /** Hook callback types */
 type BeforeHookCallback<T extends OpName> = (args: OpArgs<T>) => void | Promise<void>;

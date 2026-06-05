@@ -133,3 +133,15 @@ export function instant(name: string, attributes?: unknown): SpanRecord {
 export function flush(): SpanRecord[] {
   return core.ops.op_trace_flush();
 }
+
+/**
+ * Clear all spans, both active and finished.
+ *
+ * Unlike {@link flush} (which drains only finished spans and returns them),
+ * this discards every span and returns how many were removed.
+ *
+ * @returns The number of spans removed (active + finished)
+ */
+export function clear(): number {
+  return core.ops.op_trace_clear();
+}
