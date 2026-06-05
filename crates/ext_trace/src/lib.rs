@@ -324,8 +324,14 @@ impl TraceState {
     }
 
     /// Clear all active and finished spans, returning the total number removed.
+    ///
+    /// The count reuses [`active_count`](Self::active_count) /
+    /// [`finished_count`](Self::finished_count) and is clamped to `u32` (the
+    /// op/SDK type) rather than truncated, so it saturates instead of wrapping
+    /// in the (practically impossible) case of more than `u32::MAX` spans.
     pub fn clear(&mut self) -> u32 {
-        let removed = (self.active.len() + self.finished.len()) as u32;
+        let removed =
+            u32::try_from(self.active_count() + self.finished_count()).unwrap_or(u32::MAX);
         self.active.clear();
         self.finished.clear();
         removed

@@ -171,7 +171,7 @@ pub fn list_directory(path: &Path, options: &ListOptions) -> FsResult<Vec<ListEn
         });
     } else {
         // Sort by name (case-insensitive)
-        entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        entries.sort_by_key(|a| a.name.to_lowercase());
     }
 
     if options.reverse {
