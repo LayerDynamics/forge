@@ -743,16 +743,18 @@ pub fn op_web_inspector_is_panel_injected(state: &OpState, #[string] window_id: 
 // Operations - Metrics
 // ============================================================================
 
-/// Get aggregated metrics from the Forge extension bridges.
+/// Aggregate live metrics from the extension bridges.
 ///
-/// Availability flags reflect whether each subsystem's state is actually present
-/// in `OpState`; counts are read live from the real bridges (no placeholders).
-/// `system_available` and `runtime_available` are both backed by ext_monitor's
-/// `MonitorState` (system metrics and runtime metrics come from the same state).
-/// Aggregate live metrics from the extension bridges (testable core of
-/// `op_web_inspector_get_metrics`).
+/// The testable core of [`op_web_inspector_get_metrics`]: it reads each
+/// subsystem's presence and counts directly from the bridges so it can be
+/// exercised against a constructed `OpState` in tests.
 fn aggregate_metrics(state: &OpState) -> AggregatedMetrics {
     use crate::bridge::{ExtensionBridge, MonitorBridge, SignalsBridge, TraceBridge};
+
+    // The bridges report counts as `usize`. `AggregatedMetrics` exposes them as
+    // `u32` (TypeScript `number`); clamp explicitly so a count that somehow
+    // exceeded `u32::MAX` would saturate rather than silently wrap/truncate.
+    let to_u32 = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
 
     let monitor_bridge = MonitorBridge::new();
     let trace_bridge = TraceBridge::new();
@@ -760,19 +762,24 @@ fn aggregate_metrics(state: &OpState) -> AggregatedMetrics {
 
     let monitor_available = monitor_bridge.is_available(state);
     let (active_span_count, finished_span_count) = trace_bridge.span_count(state);
-    let window_count = state.borrow::<WebInspectorState>().sessions.len() as u32;
+    let window_count = state.borrow::<WebInspectorState>().sessions.len();
 
     AggregatedMetrics {
+        // System and runtime metrics are both backed by ext_monitor's MonitorState.
         system_available: monitor_available,
         runtime_available: monitor_available,
         trace_available: trace_bridge.is_available(state),
-        active_span_count: active_span_count as u32,
-        finished_span_count: finished_span_count as u32,
-        signal_subscriptions: signals_bridge.get_subscription_count(state) as u32,
-        window_count,
+        active_span_count: to_u32(active_span_count),
+        finished_span_count: to_u32(finished_span_count),
+        signal_subscriptions: to_u32(signals_bridge.get_subscription_count(state)),
+        window_count: to_u32(window_count),
     }
 }
 
+/// Get aggregated metrics across the Forge inspector subsystems.
+///
+/// Availability flags reflect whether each subsystem's state is actually present
+/// in `OpState` (never hardcoded), and every count is read live from the bridges.
 #[weld_op]
 #[op2]
 #[serde]
