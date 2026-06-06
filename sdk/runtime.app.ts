@@ -191,9 +191,18 @@ export async function setBadgeCount(count?: number | null): Promise<void> {
 }
 
 /**
- * Set the Windows App User Model ID.
- * Used for taskbar grouping on Windows.
- * @param appId - Application user model ID
+ * Set the Windows App User Model ID (AppUserModelID).
+ *
+ * On Windows this calls `SetCurrentProcessExplicitAppUserModelID` so the shell
+ * groups taskbar buttons and attributes toast notifications to this app. On
+ * other platforms the concept does not exist and this is a no-op.
+ *
+ * For grouping to take full effect, call this very early in process startup:
+ * setting it after windows are shown may have limited effect. The ID must be
+ * non-empty.
+ *
+ * @param appId - Application user model ID (e.g. "Company.Product")
+ * @throws if `appId` is empty or the Windows shell call fails
  */
 export function setUserModelId(appId: string): void {
   return core.ops.op_app_set_user_model_id(appId);
