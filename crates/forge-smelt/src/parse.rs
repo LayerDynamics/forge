@@ -94,7 +94,7 @@ impl ModuleGraph {
             for dep in &deps {
                 if let DepKind::Relative(target) = &dep.kind {
                     if is_ts_family(target) && !visited.contains(target) {
-                        queue.push(target.clone());
+                        queue.push_back(target.clone());
                     }
                 }
             }
@@ -296,21 +296,6 @@ fn canonicalize(path: &Path) -> SmeltResult<PathBuf> {
             SmeltError::io(path, e)
         }
     })
-}
-
-/// Small helper: pop from the front to keep discovery order stable without
-/// pulling in `VecDeque` ceremony at every call site.
-trait PopFront<T> {
-    fn pop_front_like(&mut self) -> Option<T>;
-}
-impl<T> PopFront<T> for Vec<T> {
-    fn pop_front_like(&mut self) -> Option<T> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self.remove(0))
-        }
-    }
 }
 
 /// Build a quick path->index map (used by callers that need random access).
