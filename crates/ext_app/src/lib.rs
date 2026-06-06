@@ -347,7 +347,7 @@ impl EnvLike for SystemEnv {
 pub fn detect_packaged(
     exe_path: Option<&std::path::Path>,
     assets_embedded: bool,
-    env: &impl EnvLike,
+    env: &dyn EnvLike,
 ) -> bool {
     if assets_embedded {
         return true;
@@ -362,18 +362,63 @@ pub fn detect_packaged(
 
 /// Heuristic: does the executable path indicate it lives inside a platform
 /// bundle or install location?
+///
+/// This inspects [`std::path::Component`]s (not a lossy string) so it is robust
+/// to separator/casing variation, and is gated per `target_os` because a given
+/// host can only ever produce its own platform's bundle layout — checking the
+/// other platforms' markers would only add false-positive surface.
 fn exe_in_bundle(path: &std::path::Path) -> bool {
-    let p = path.to_string_lossy();
-    // macOS: the forge_cli bundler places the binary at
-    // `<App>.app/Contents/MacOS/<bin>` (see bundler/macos.rs).
-    if p.contains(".app/Contents/MacOS/") {
-        return true;
+    #[cfg(target_os = "macos")]
+    {
+        path_is_macos_app_bundle(path)
     }
-    // Windows: MSIX packages install under `...\WindowsApps\<package>\...`, and
-    // the NSIS installer targets Program Files. Match case-insensitively since
-    // drive-letter paths vary in casing.
-    let lower = p.to_lowercase();
-    lower.contains(r"\windowsapps\") || lower.contains(r"\program files")
+    #[cfg(target_os = "windows")]
+    {
+        path_is_windows_install(path)
+    }
+    // Linux/other: AppImage is detected via the APPIMAGE env var in
+    // detect_packaged; there is no reliable exe-path bundle marker.
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let _ = path;
+        false
+    }
+}
+
+/// True when `path` is the binary inside a macOS `.app` bundle, i.e. three
+/// consecutive path components `<name>.app / Contents / MacOS` (see
+/// `forge_cli/src/bundler/macos.rs`, which writes the binary to
+/// `<App>.app/Contents/MacOS/<bin>`).
+#[cfg(any(target_os = "macos", test))]
+fn path_is_macos_app_bundle(path: &std::path::Path) -> bool {
+    use std::path::Component;
+    let normal: Vec<&std::ffi::OsStr> = path
+        .components()
+        .filter_map(|c| match c {
+            Component::Normal(s) => Some(s),
+            _ => None,
+        })
+        .collect();
+    normal
+        .windows(3)
+        .any(|w| w[0].to_string_lossy().ends_with(".app") && w[1] == "Contents" && w[2] == "MacOS")
+}
+
+/// True when `path` lives under a Windows install location: an MSIX package
+/// (`...\WindowsApps\<package>\...`) or a `Program Files` install (NSIS). Each
+/// path component is matched case-insensitively.
+#[cfg(any(target_os = "windows", test))]
+fn path_is_windows_install(path: &std::path::Path) -> bool {
+    use std::path::Component;
+    path.components().any(|c| match c {
+        Component::Normal(s) => {
+            let s = s.to_string_lossy();
+            s.eq_ignore_ascii_case("WindowsApps")
+                || s.eq_ignore_ascii_case("Program Files")
+                || s.eq_ignore_ascii_case("Program Files (x86)")
+        }
+        _ => false,
+    })
 }
 
 /// Types of special paths that can be requested
@@ -1093,12 +1138,6 @@ mod tests {
     }
 
     #[test]
-    fn detect_packaged_true_for_macos_app_bundle() {
-        let exe = std::path::PathBuf::from("/Applications/MyApp.app/Contents/MacOS/MyApp");
-        assert!(detect_packaged(Some(&exe), false, &MapEnv::empty()));
-    }
-
-    #[test]
     fn detect_packaged_true_when_appimage_env_set() {
         // AppImage runs from a temp mount, so the bundle signal is the env var.
         let exe = std::path::PathBuf::from("/tmp/.mount_MyAppXXXX/usr/bin/forge-runtime");
@@ -1106,14 +1145,52 @@ mod tests {
         assert!(detect_packaged(Some(&exe), false, &env));
     }
 
+    // The exe-path helpers are tested directly (and portably, via PathBuf joins
+    // so component parsing works on any host) because exe_in_bundle dispatches
+    // to them per target_os — a foreign platform's path would not be inspected
+    // through detect_packaged on this host.
+
     #[test]
-    fn detect_packaged_true_for_windows_install_paths() {
-        let msix = std::path::PathBuf::from(
-            r"C:\Program Files\WindowsApps\MyApp_1.0_x64__abc\forge-runtime.exe",
-        );
-        assert!(detect_packaged(Some(&msix), false, &MapEnv::empty()));
-        let nsis = std::path::PathBuf::from(r"C:\Program Files (x86)\MyApp\forge-runtime.exe");
-        assert!(detect_packaged(Some(&nsis), false, &MapEnv::empty()));
+    fn macos_app_bundle_path_is_detected() {
+        let app: std::path::PathBuf = ["Applications", "MyApp.app", "Contents", "MacOS", "MyApp"]
+            .iter()
+            .collect();
+        assert!(path_is_macos_app_bundle(&app));
+        // A nested .app-looking dir without the Contents/MacOS suffix is not a bundle binary.
+        let not_bundle: std::path::PathBuf = ["Applications", "MyApp.app", "Resources", "MyApp"]
+            .iter()
+            .collect();
+        assert!(!path_is_macos_app_bundle(&not_bundle));
+        let dev: std::path::PathBuf = ["home", "dev", "target", "debug", "forge-runtime"]
+            .iter()
+            .collect();
+        assert!(!path_is_macos_app_bundle(&dev));
+    }
+
+    #[test]
+    fn windows_install_path_is_detected() {
+        let msix: std::path::PathBuf = [
+            "Program Files",
+            "WindowsApps",
+            "MyApp_1.0_x64__abc",
+            "forge-runtime.exe",
+        ]
+        .iter()
+        .collect();
+        assert!(path_is_windows_install(&msix));
+        let nsis: std::path::PathBuf = ["Program Files (x86)", "MyApp", "forge-runtime.exe"]
+            .iter()
+            .collect();
+        assert!(path_is_windows_install(&nsis));
+        // Case-insensitive component match.
+        let lower: std::path::PathBuf = ["windowsapps", "MyApp", "forge-runtime.exe"]
+            .iter()
+            .collect();
+        assert!(path_is_windows_install(&lower));
+        let dev: std::path::PathBuf = ["home", "dev", "target", "debug", "forge-runtime"]
+            .iter()
+            .collect();
+        assert!(!path_is_windows_install(&dev));
     }
 
     #[test]
