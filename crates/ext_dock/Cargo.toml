@@ -39,6 +39,10 @@ objc2-app-kit = { version = "0.2", features = [
     "NSRunningApplication",
     "NSDockTile",
     "NSImage",
+    "NSMenu",
+    "NSMenuItem",
+    "NSEvent",
+    "NSCell",
 ] }
 core-graphics = "0.24"
 
