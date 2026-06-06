@@ -77,9 +77,9 @@ impl ModuleGraph {
 
         let mut modules = Vec::new();
         let mut visited: HashSet<PathBuf> = HashSet::new();
-        let mut queue: Vec<PathBuf> = vec![entry.clone()];
+        let mut queue = std::collections::VecDeque::from([entry.clone()]);
 
-        while let Some(path) = queue.pop_front_like() {
+        while let Some(path) = queue.pop_front() {
             if !visited.insert(path.clone()) {
                 continue;
             }
