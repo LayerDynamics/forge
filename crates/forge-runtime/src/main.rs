@@ -688,14 +688,20 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
     });
 
     // Build app info for extensions
+    let current_exe = std::env::current_exe().ok();
     let app_info = ext_app::AppInfo {
         name: manifest.app.name.clone(),
         version: manifest.app.version.clone(),
         identifier: manifest.app.identifier.clone(),
-        is_packaged: false, // TODO: detect packaged mode
-        exe_path: std::env::current_exe()
-            .ok()
-            .map(|p| p.to_string_lossy().to_string()),
+        // Packaged when assets were embedded at build time (release bundles set
+        // FORGE_EMBED_DIR ⇒ ASSET_EMBEDDED), or when the executable location /
+        // APPIMAGE env indicates a bundled run. See ext_app::detect_packaged.
+        is_packaged: ext_app::detect_packaged(
+            current_exe.as_deref(),
+            ASSET_EMBEDDED,
+            &ext_app::SystemEnv,
+        ),
+        exe_path: current_exe.map(|p| p.to_string_lossy().to_string()),
         resource_path: Some(app_dir.to_string_lossy().to_string()),
     };
 
