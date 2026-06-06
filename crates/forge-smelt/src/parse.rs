@@ -246,7 +246,7 @@ fn resolve_relative(specifier: &str, referrer_dir: &Path) -> Option<PathBuf> {
 pub fn is_ts_family(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|e| e.to_str()),
-        Some("ts") | Some("tsx") | Some("mts") | Some("cts")
+        Some("ts") | Some("tsx") | Some("mts") | Some("cts") | Some("jsx")
     )
 }
 
