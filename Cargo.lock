@@ -2985,6 +2985,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tao",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tokio-tungstenite 0.24.0",
@@ -2993,6 +2994,20 @@ dependencies = [
  "tracing-subscriber",
  "tray-icon",
  "wry",
+]
+
+[[package]]
+name = "forge-smelt"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "deno_ast",
+ "deno_core",
+ "forge-weld",
+ "serde",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3027,6 +3042,7 @@ dependencies = [
  "chrono",
  "dirs 5.0.1",
  "forge-etch",
+ "forge-smelt",
  "image",
  "serde",
  "toml",

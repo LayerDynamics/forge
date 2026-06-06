@@ -40,6 +40,7 @@ members = [
   "crates/forge_cli",
   "crates/forge-etch",
   "crates/forge-runtime",
+  "crates/forge-smelt",
   "crates/forge-weld",
   "crates/forge-weld-macro",
 ]

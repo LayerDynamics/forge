@@ -135,9 +135,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### forge-smelt Crate
 
-- New `forge-smelt` crate for binary compilation
-- TypeScript/Deno code transpilation
-- Binary parsing and compilation utilities
+- New `forge-smelt` crate: ahead-of-time TypeScript→JavaScript compiler for app source
+- Module-graph discovery from the app entry, transpiling each module via `forge-weld`
+- Relative import-specifier rewriting (`./x.ts` → `./x.js`) so the compiled `.js`
+  tree is self-consistent; `runtime:*` and external specifiers left untouched
+- `forge smelt` CLI command and `forge build` integration (bundles ship compiled
+  JS instead of loose TypeScript re-transpiled at every launch)
+- `forge_smelt::build::embed` build-script helper for embedding an app (Depth-2
+  standalone-binary embedding is groundwork; full runtime embed deferred)
 
 #### forge-etch Restructure
 

@@ -234,6 +234,24 @@ impl ChannelChecker for ForgeChannelChecker {
 // Module Loader for ES Modules
 // ============================================================================
 
+/// Resolve the app's entry module, preferring a smelted `src/main.js` over the
+/// TypeScript `src/main.ts`.
+///
+/// A bundled app ships ahead-of-time compiled JavaScript (`forge build` runs
+/// forge-smelt and drops the `.ts` sources), so the runtime loads `main.js` with
+/// no launch-time transpile. In dev mode only `main.ts` exists and is transpiled
+/// on the fly (preserving HMR). When neither preference applies, the returned
+/// path is `src/main.ts` so the caller surfaces a consistent "missing entry"
+/// error.
+fn resolve_app_entry(app_dir: &Path) -> PathBuf {
+    let compiled = app_dir.join("src/main.js");
+    if compiled.is_file() {
+        compiled
+    } else {
+        app_dir.join("src/main.ts")
+    }
+}
+
 /// Run lightweight checks against window helpers to ensure host builds match UI expectations.
 fn warm_up_window_helpers(app_dir: &Path, app_name: &str, default_channels: &[String]) {
     let title: Cow<'_, str> = Cow::Owned(app_name.to_string());
@@ -743,20 +761,20 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
         }
     }
 
-    // Load the app's main.ts as an ES module (but don't evaluate yet)
-    let main_ts_path = app_dir
-        .join("src/main.ts")
-        .canonicalize()
-        .with_context(|| {
-            format!(
-                "Cannot find main.ts at {}",
-                app_dir.join("src/main.ts").display()
-            )
-        })?;
-    let main_specifier = ModuleSpecifier::from_file_path(&main_ts_path)
-        .map_err(|_| anyhow::anyhow!("Invalid path: {}", main_ts_path.display()))?;
+    // Resolve the app's entry module, preferring a smelted `src/main.js` over
+    // `src/main.ts`. A bundled app ships compiled JS (see `forge build` /
+    // forge-smelt); in dev mode only `main.ts` exists and HMR transpiles it.
+    let entry = resolve_app_entry(&app_dir);
+    let main_module_path = entry.canonicalize().with_context(|| {
+        format!(
+            "Cannot find app entry (src/main.js or src/main.ts) under {}",
+            app_dir.join("src").display()
+        )
+    })?;
+    let main_specifier = ModuleSpecifier::from_file_path(&main_module_path)
+        .map_err(|_| anyhow::anyhow!("Invalid path: {}", main_module_path.display()))?;
 
-    tracing::info!("Executing {}", main_ts_path.display());
+    tracing::info!("Executing {}", main_module_path.display());
 
     // Load the main module
     let module_id = rt.block_on(js.load_main_es_module(&main_specifier))?;
@@ -1090,4 +1108,53 @@ fn sync_main(rt: tokio::runtime::Runtime) -> Result<()> {
             _ => {}
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_app_entry;
+    use std::fs;
+
+    #[test]
+    fn prefers_compiled_main_js_when_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("src");
+        fs::create_dir_all(&src).unwrap();
+        // A bundled app ships both is not expected, but if a compiled main.js is
+        // present it must win over any main.ts.
+        fs::write(src.join("main.ts"), "// ts").unwrap();
+        fs::write(src.join("main.js"), "// js").unwrap();
+
+        let entry = resolve_app_entry(tmp.path());
+        assert!(
+            entry.ends_with("src/main.js"),
+            "compiled main.js must be preferred, got {}",
+            entry.display()
+        );
+    }
+
+    #[test]
+    fn falls_back_to_main_ts_in_dev() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("src");
+        fs::create_dir_all(&src).unwrap();
+        // Dev layout: only the TypeScript source exists.
+        fs::write(src.join("main.ts"), "// ts").unwrap();
+
+        let entry = resolve_app_entry(tmp.path());
+        assert!(
+            entry.ends_with("src/main.ts"),
+            "dev mode must load main.ts, got {}",
+            entry.display()
+        );
+    }
+
+    #[test]
+    fn missing_entry_resolves_to_main_ts_for_a_consistent_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tmp.path().join("src")).unwrap();
+        // Neither file present: caller canonicalizes and reports a missing entry.
+        let entry = resolve_app_entry(tmp.path());
+        assert!(entry.ends_with("src/main.ts"));
+    }
 }
