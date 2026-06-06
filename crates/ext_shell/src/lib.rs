@@ -1022,8 +1022,17 @@ pub async fn op_shell_get_file_icon(
 /// The returned [`FileIcon`] reports the *actual* decoded dimensions of the PNG,
 /// which may differ from the requested size (e.g. a theme only ships a 48px
 /// variant, or macOS returns a higher-resolution representation).
+/// Upper bound on the requested icon edge length. Caps fallback/raster buffer
+/// allocations (which scale with `size`²) so an absurd request cannot trigger an
+/// out-of-memory condition. 512px comfortably covers high-DPI icon needs.
+const MAX_ICON_SIZE: u32 = 512;
+
 fn get_file_icon_impl(path: &str, size: i32) -> Result<FileIcon, ShellError> {
-    let size = if size <= 0 { 32 } else { size as u32 };
+    let size = if size <= 0 {
+        32
+    } else {
+        (size as u32).min(MAX_ICON_SIZE)
+    };
     debug!("Getting file icon for: {} (size: {})", path, size);
 
     let png_bytes = raster_icon(path, size)?;
@@ -1154,6 +1163,10 @@ fn raster_icon(path: &str, size: u32) -> Result<Vec<u8>, ShellError> {
             Vec::new()
         };
 
+        // `NSString::alloc(nil).init_str(..)` returns an owned (+1 retain) object
+        // that is not in the autorelease pool, so release it to avoid a per-call
+        // leak before draining the pool.
+        let _: () = msg_send![ns_path, release];
         let _: () = msg_send![pool, release];
         bytes
     };
@@ -1255,6 +1268,15 @@ fn raster_icon(path: &str, size: u32) -> Result<Vec<u8>, ShellError> {
         bi.bmiHeader.biCompression = BI_RGB.0 as u32;
 
         let hdc = GetDC(HWND::default());
+        if hdc.is_invalid() {
+            // No device context: clean up GDI objects and the icon before bailing.
+            let _ = DeleteObject(HGDIOBJ(hbm_color.0));
+            let _ = DeleteObject(HGDIOBJ(hbm_mask.0));
+            let _ = DestroyIcon(hicon);
+            return Err(ShellError::icon_failed(
+                "GetDC returned a null device context",
+            ));
+        }
 
         let mut color_bits = vec![0u8; pixel_count * 4];
         let color_scan = GetDIBits(
@@ -1359,7 +1381,11 @@ fn find_themed_icon_png(icon_name: &str, size: u32) -> Option<PathBuf> {
     ];
     let themes = ["hicolor", "Adwaita", "gnome", "breeze", "Papirus"];
     let mut sizes = vec![size, 48, 64, 32, 128, 256, 24, 16];
-    sizes.dedup();
+    // Remove duplicates while preserving priority order. `Vec::dedup` only drops
+    // *consecutive* repeats, so a requested `size` that also appears later (e.g.
+    // 32) would otherwise be scanned twice.
+    let mut seen = std::collections::HashSet::new();
+    sizes.retain(|&s| seen.insert(s));
 
     for base in &bases {
         if base.is_empty() {
@@ -1845,9 +1871,10 @@ mod tests {
         // 2x2 expects 16 bytes; provide 12.
         let rgba = vec![0u8; 12];
         let err = encode_rgba_png(&rgba, 2, 2).unwrap_err();
+        // Assert on the variant (stable) rather than the formatted code string.
         assert!(
-            err.to_string().contains("8205"),
-            "should be an IconFailed error"
+            matches!(err, ShellError::IconFailed { .. }),
+            "expected ShellError::IconFailed, got: {err:?}"
         );
     }
 
