@@ -65,6 +65,7 @@ pub mod deno;
 pub mod diagnostics;
 pub mod parser;
 pub mod printer;
+pub mod rust_parser;
 pub mod test;
 pub mod visibility;
 
@@ -85,6 +86,7 @@ pub use js_doc::{EtchDoc, JsDocTag};
 pub use node::{EtchNode, EtchNodeDef, EtchNodeKind, Location};
 pub use params::ParamDef;
 pub use r#enum::EnumDef;
+pub use rust_parser::{parse_rust_file, parse_rust_source};
 pub use type_alias::TypeAliasDef;
 pub use types::{EtchLiteral, EtchPrimitive, EtchType, EtchTypeKind};
 pub use variable::VariableDef;

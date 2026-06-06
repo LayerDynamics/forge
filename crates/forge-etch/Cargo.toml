@@ -23,6 +23,10 @@ serde_json = { version = "1.0", features = ["preserve_order"] }
 # TypeScript parsing (deno_ast wraps SWC with Deno optimizations)
 deno_ast = { version = "0.52", features = ["transpiling"] }
 
+# Rust source parsing (runtime extraction of Rust API metadata into EtchNodes)
+syn = { version = "2", features = ["full", "parsing", "printing"] }
+quote = "1"
+
 # Template rendering for HTML generation
 handlebars = { version = "6.1", features = ["string_helpers"] }
 
