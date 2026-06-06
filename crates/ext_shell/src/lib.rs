@@ -1381,11 +1381,12 @@ fn find_themed_icon_png(icon_name: &str, size: u32) -> Option<PathBuf> {
     ];
     let themes = ["hicolor", "Adwaita", "gnome", "breeze", "Papirus"];
     let mut sizes = vec![size, 48, 64, 32, 128, 256, 24, 16];
-    // Remove duplicates while preserving priority order. `Vec::dedup` only drops
+    // Drop zero (a 0px request would search nonexistent `0x0/` dirs) and remove
+    // duplicates while preserving priority order. `Vec::dedup` only drops
     // *consecutive* repeats, so a requested `size` that also appears later (e.g.
     // 32) would otherwise be scanned twice.
     let mut seen = std::collections::HashSet::new();
-    sizes.retain(|&s| seen.insert(s));
+    sizes.retain(|&s| s != 0 && seen.insert(s));
 
     for base in &bases {
         if base.is_empty() {
