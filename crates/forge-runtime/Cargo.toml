@@ -47,6 +47,7 @@ ext_wasm = { path = "../ext_wasm" }
 ext_app = { path = "../ext_app" }
 ext_bundler = { path = "../ext_bundler" }
 ext_codesign = { path = "../ext_codesign" }
+ext_console = { path = "../ext_console" }
 ext_crypto = { path = "../ext_crypto" }
 ext_encoding = { path = "../ext_encoding" }
 ext_storage = { path = "../ext_storage" }

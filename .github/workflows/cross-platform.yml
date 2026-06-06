@@ -22,6 +22,11 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Harden against transient registry/CDN download flakes (e.g. curl [18]
+  # "Transferred a partial file"): retry interrupted downloads instead of
+  # failing the job, and fetch git sources via the more resilient git CLI.
+  CARGO_NET_RETRY: 10
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 # Cancel superseded runs on the same ref to save runner minutes.
 concurrency:
