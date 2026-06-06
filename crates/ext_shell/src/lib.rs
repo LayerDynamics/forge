@@ -209,7 +209,7 @@
 //! | showItemInFolder | ✅ `open -R` | ✅ `explorer /select` | ⚠️ dbus fallback |
 //! | moveToTrash | ✅ Trash | ✅ Recycle Bin | ✅ freedesktop Trash |
 //! | beep | ✅ AppleScript | ✅ PowerShell | ⚠️ paplay fallback |
-//! | getFileIcon | ❌ Needs bindings | ❌ Needs bindings | ❌ Needs bindings |
+//! | getFileIcon | ✅ NSWorkspace | ✅ SHGetFileInfo | ✅ icon theme + fallback |
 //! | getDefaultApp | ✅ osascript | ✅ assoc | ✅ xdg-mime |
 //!
 //! ### Shell Execution
@@ -995,41 +995,422 @@ pub async fn op_shell_get_file_icon(
         }
     }
 
-    // Use default size of 32 if size <= 0
-    let _size = if size <= 0 { 32 } else { size as u32 };
-    debug!("Getting file icon for: {} (size: {})", path, _size);
+    get_file_icon_impl(&path, size)
+}
 
-    // File icon retrieval is platform-specific and complex
-    // For now, return a placeholder indicating the feature is available but limited
-    #[cfg(target_os = "macos")]
-    {
-        // On macOS, we could use NSWorkspace to get icons
-        // This requires more complex Objective-C bridging
-        return Err(ShellError::not_supported(
-            "File icon retrieval requires additional native bindings",
-        ));
+// ============================================================================
+// File Icon Rasterization
+// ============================================================================
+//
+// `getFileIcon` resolves the system icon associated with a file (or file type)
+// and returns it as a base64-encoded PNG. Each platform uses its native icon
+// provider, then the raw image is normalized to a PNG so the renderer can embed
+// it directly via a `data:image/png;base64,...` URL:
+//
+//   - macOS:   `NSWorkspace.iconForFile:` -> `NSBitmapImageRep` PNG export.
+//   - Windows: `SHGetFileInfoW(SHGFI_ICON)` -> `GetDIBits` 32bpp -> `png` encode.
+//   - Linux:   freedesktop icon-theme lookup of the MIME-type icon PNG.
+//
+// When a platform cannot resolve a specific icon (unknown type, missing theme
+// entry), a deterministic generic document icon is generated so the operation
+// always yields a valid PNG instead of failing — mirroring the generic-icon
+// behavior of comparable desktop frameworks.
+
+/// Resolve the system icon for `path` and return it as a base64-encoded PNG.
+///
+/// `size` is the requested edge length in pixels; values `<= 0` default to 32.
+/// The returned [`FileIcon`] reports the *actual* decoded dimensions of the PNG,
+/// which may differ from the requested size (e.g. a theme only ships a 48px
+/// variant, or macOS returns a higher-resolution representation).
+/// Upper bound on the requested icon edge length. Caps fallback/raster buffer
+/// allocations (which scale with `size`²) so an absurd request cannot trigger an
+/// out-of-memory condition. 512px comfortably covers high-DPI icon needs.
+const MAX_ICON_SIZE: u32 = 512;
+
+fn get_file_icon_impl(path: &str, size: i32) -> Result<FileIcon, ShellError> {
+    let size = if size <= 0 {
+        32
+    } else {
+        (size as u32).min(MAX_ICON_SIZE)
+    };
+    debug!("Getting file icon for: {} (size: {})", path, size);
+
+    let png_bytes = raster_icon(path, size)?;
+    let (width, height) = png_dimensions(&png_bytes)?;
+    let data =
+        base64::engine::Engine::encode(&base64::engine::general_purpose::STANDARD, &png_bytes);
+
+    Ok(FileIcon {
+        data,
+        width,
+        height,
+    })
+}
+
+/// Read the pixel dimensions of an encoded PNG without decoding pixel data.
+fn png_dimensions(png_bytes: &[u8]) -> Result<(u32, u32), ShellError> {
+    let decoder = png::Decoder::new(png_bytes);
+    let reader = decoder
+        .read_info()
+        .map_err(|e| ShellError::icon_failed(format!("Failed to decode icon PNG: {}", e)))?;
+    let info = reader.info();
+    Ok((info.width, info.height))
+}
+
+/// Encode raw 8-bit RGBA pixels (row-major, top-down) as a PNG byte stream.
+fn encode_rgba_png(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, ShellError> {
+    if rgba.len() != (width as usize) * (height as usize) * 4 {
+        return Err(ShellError::icon_failed(format!(
+            "RGBA buffer size {} does not match {}x{} (expected {})",
+            rgba.len(),
+            width,
+            height,
+            (width as usize) * (height as usize) * 4
+        )));
     }
 
-    #[cfg(target_os = "windows")]
+    let mut out = Vec::new();
     {
-        // On Windows, we could use SHGetFileInfo
-        return Err(ShellError::not_supported(
-            "File icon retrieval requires additional native bindings",
-        ));
+        let mut encoder = png::Encoder::new(&mut out, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder
+            .write_header()
+            .map_err(|e| ShellError::icon_failed(format!("PNG header write failed: {}", e)))?;
+        writer
+            .write_image_data(rgba)
+            .map_err(|e| ShellError::icon_failed(format!("PNG data write failed: {}", e)))?;
+    }
+    Ok(out)
+}
+
+/// Generate a deterministic generic document icon as a PNG.
+///
+/// Used as the fallback when no platform-specific icon is available. The icon is
+/// a filled light-gray square with a darker one-pixel border — a real, valid
+/// image (not a stub), matching how desktop frameworks return a generic icon for
+/// unknown file types.
+fn generate_generic_icon(size: u32) -> Result<Vec<u8>, ShellError> {
+    let size = if size == 0 { 32 } else { size };
+    let (w, h) = (size, size);
+    let mut rgba = Vec::with_capacity((w as usize) * (h as usize) * 4);
+    for y in 0..h {
+        for x in 0..w {
+            let is_border = x == 0 || y == 0 || x == w - 1 || y == h - 1;
+            if is_border {
+                rgba.extend_from_slice(&[0x9e, 0x9e, 0x9e, 0xff]);
+            } else {
+                rgba.extend_from_slice(&[0xe0, 0xe0, 0xe0, 0xff]);
+            }
+        }
+    }
+    encode_rgba_png(&rgba, w, h)
+}
+
+/// macOS: resolve the Finder icon via `NSWorkspace` and export it as PNG.
+///
+/// `cocoa 0.26` marks its whole AppKit surface deprecated in favor of `objc2`
+/// (a migration recommendation, not a correctness issue), so the `deprecated`
+/// lint is suppressed at the function scope. The related `unexpected_cfgs` noise
+/// from the `objc 0.2` macros is handled via `check-cfg` in `Cargo.toml`.
+#[cfg(target_os = "macos")]
+#[allow(deprecated)]
+fn raster_icon(path: &str, size: u32) -> Result<Vec<u8>, ShellError> {
+    use cocoa::base::{id, nil};
+    use cocoa::foundation::{NSAutoreleasePool, NSSize, NSString};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let size_f = size as f64;
+
+    // SAFETY: All Objective-C messages target valid AppKit classes/instances.
+    // The autorelease pool bounds the lifetime of the temporary `id`s, and the
+    // PNG bytes are copied into an owned `Vec` before the pool is drained, so no
+    // Objective-C memory outlives this block.
+    let data: Vec<u8> = unsafe {
+        let pool = NSAutoreleasePool::new(nil);
+        let ns_path = NSString::alloc(nil).init_str(path);
+        let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+        let image: id = msg_send![workspace, iconForFile: ns_path];
+
+        let bytes = if image != nil {
+            let new_size = NSSize::new(size_f, size_f);
+            let _: () = msg_send![image, setSize: new_size];
+            let tiff: id = msg_send![image, TIFFRepresentation];
+            if tiff != nil {
+                let rep: id = msg_send![class!(NSBitmapImageRep), imageRepWithData: tiff];
+                if rep != nil {
+                    // NSBitmapImageFileTypePNG == 4
+                    let png_data: id =
+                        msg_send![rep, representationUsingType: 4u64 properties: nil];
+                    if png_data != nil {
+                        let len: usize = msg_send![png_data, length];
+                        let ptr: *const u8 = msg_send![png_data, bytes];
+                        if !ptr.is_null() && len > 0 {
+                            std::slice::from_raw_parts(ptr, len).to_vec()
+                        } else {
+                            Vec::new()
+                        }
+                    } else {
+                        Vec::new()
+                    }
+                } else {
+                    Vec::new()
+                }
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
+
+        // `NSString::alloc(nil).init_str(..)` returns an owned (+1 retain) object
+        // that is not in the autorelease pool, so release it to avoid a per-call
+        // leak before draining the pool.
+        let _: () = msg_send![ns_path, release];
+        let _: () = msg_send![pool, release];
+        bytes
+    };
+
+    if data.is_empty() {
+        // NSWorkspace virtually always returns an icon, but guard the edge case
+        // (e.g. an unreadable path) with a valid generic icon rather than failing.
+        generate_generic_icon(size)
+    } else {
+        Ok(data)
+    }
+}
+
+/// Windows: resolve the shell icon via `SHGetFileInfoW` and rasterize it to PNG.
+#[cfg(target_os = "windows")]
+fn raster_icon(path: &str, size: u32) -> Result<Vec<u8>, ShellError> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::Graphics::Gdi::{
+        DeleteObject, GetDC, GetDIBits, GetObjectW, ReleaseDC, BITMAP, BITMAPINFO,
+        BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HGDIOBJ,
+    };
+    use windows::Win32::Storage::FileSystem::FILE_ATTRIBUTE_NORMAL;
+    use windows::Win32::UI::Shell::{
+        SHGetFileInfoW, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON, SHGFI_SMALLICON,
+        SHGFI_USEFILEATTRIBUTES,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo, ICONINFO};
+
+    let wide: Vec<u16> = std::ffi::OsStr::new(path)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+
+    let size_flag = if size <= 16 {
+        SHGFI_SMALLICON
+    } else {
+        SHGFI_LARGEICON
+    };
+    let flags = SHGFI_ICON | SHGFI_USEFILEATTRIBUTES | size_flag;
+
+    // SAFETY: Win32 calls below use valid handles obtained from the preceding
+    // call; every GDI object and the icon handle are released on all paths.
+    unsafe {
+        let mut shfi = SHFILEINFOW::default();
+        let res = SHGetFileInfoW(
+            PCWSTR(wide.as_ptr()),
+            FILE_ATTRIBUTE_NORMAL,
+            Some(&mut shfi),
+            std::mem::size_of::<SHFILEINFOW>() as u32,
+            flags,
+        );
+        if res == 0 || shfi.hIcon.is_invalid() {
+            // No shell icon available for this type: return a generic icon.
+            return generate_generic_icon(size);
+        }
+        let hicon = shfi.hIcon;
+
+        let mut icon_info = ICONINFO::default();
+        if GetIconInfo(hicon, &mut icon_info).is_err() {
+            let _ = DestroyIcon(hicon);
+            return Err(ShellError::icon_failed("GetIconInfo failed"));
+        }
+        let hbm_color = icon_info.hbmColor;
+        let hbm_mask = icon_info.hbmMask;
+
+        let mut bmp = BITMAP::default();
+        let got = GetObjectW(
+            HGDIOBJ(hbm_color.0),
+            std::mem::size_of::<BITMAP>() as i32,
+            Some(&mut bmp as *mut _ as *mut core::ffi::c_void),
+        );
+        if got == 0 {
+            let _ = DeleteObject(HGDIOBJ(hbm_color.0));
+            let _ = DeleteObject(HGDIOBJ(hbm_mask.0));
+            let _ = DestroyIcon(hicon);
+            return Err(ShellError::icon_failed("GetObjectW on icon bitmap failed"));
+        }
+        let width = bmp.bmWidth;
+        let height = bmp.bmHeight;
+        if width <= 0 || height <= 0 {
+            let _ = DeleteObject(HGDIOBJ(hbm_color.0));
+            let _ = DeleteObject(HGDIOBJ(hbm_mask.0));
+            let _ = DestroyIcon(hicon);
+            return Err(ShellError::icon_failed(
+                "Icon bitmap has invalid dimensions",
+            ));
+        }
+        let pixel_count = (width * height) as usize;
+
+        // Request top-down 32bpp BGRA from GDI (negative height = top-down).
+        let mut bi = BITMAPINFO::default();
+        bi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
+        bi.bmiHeader.biWidth = width;
+        bi.bmiHeader.biHeight = -height;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB.0 as u32;
+
+        let hdc = GetDC(HWND::default());
+        if hdc.is_invalid() {
+            // No device context: clean up GDI objects and the icon before bailing.
+            let _ = DeleteObject(HGDIOBJ(hbm_color.0));
+            let _ = DeleteObject(HGDIOBJ(hbm_mask.0));
+            let _ = DestroyIcon(hicon);
+            return Err(ShellError::icon_failed(
+                "GetDC returned a null device context",
+            ));
+        }
+
+        let mut color_bits = vec![0u8; pixel_count * 4];
+        let color_scan = GetDIBits(
+            hdc,
+            hbm_color,
+            0,
+            height as u32,
+            Some(color_bits.as_mut_ptr() as *mut core::ffi::c_void),
+            &mut bi,
+            DIB_RGB_COLORS,
+        );
+
+        // The AND mask: nonzero (white) pixels are transparent, zero are opaque.
+        let mut mask_bits = vec![0u8; pixel_count * 4];
+        let mut bi_mask = bi;
+        let mask_scan = GetDIBits(
+            hdc,
+            hbm_mask,
+            0,
+            height as u32,
+            Some(mask_bits.as_mut_ptr() as *mut core::ffi::c_void),
+            &mut bi_mask,
+            DIB_RGB_COLORS,
+        );
+
+        ReleaseDC(HWND::default(), hdc);
+        let _ = DeleteObject(HGDIOBJ(hbm_color.0));
+        let _ = DeleteObject(HGDIOBJ(hbm_mask.0));
+        let _ = DestroyIcon(hicon);
+
+        if color_scan == 0 {
+            return Err(ShellError::icon_failed("GetDIBits (color) failed"));
+        }
+
+        // GDI hands back BGRA; convert to RGBA. Modern icons carry a real alpha
+        // channel; legacy icons leave alpha zero, so derive it from the AND mask.
+        let mut rgba = vec![0u8; pixel_count * 4];
+        let mut any_alpha = false;
+        for i in 0..pixel_count {
+            let b = color_bits[i * 4];
+            let g = color_bits[i * 4 + 1];
+            let r = color_bits[i * 4 + 2];
+            let a = color_bits[i * 4 + 3];
+            if a != 0 {
+                any_alpha = true;
+            }
+            rgba[i * 4] = r;
+            rgba[i * 4 + 1] = g;
+            rgba[i * 4 + 2] = b;
+            rgba[i * 4 + 3] = a;
+        }
+        if !any_alpha && mask_scan != 0 {
+            for i in 0..pixel_count {
+                rgba[i * 4 + 3] = if mask_bits[i * 4] != 0 { 0 } else { 255 };
+            }
+        } else if !any_alpha {
+            // No usable alpha and no mask: treat as fully opaque.
+            for i in 0..pixel_count {
+                rgba[i * 4 + 3] = 255;
+            }
+        }
+
+        encode_rgba_png(&rgba, width as u32, height as u32)
+    }
+}
+
+/// Linux: resolve the freedesktop icon-theme PNG for the file's MIME type.
+#[cfg(target_os = "linux")]
+fn raster_icon(path: &str, size: u32) -> Result<Vec<u8>, ShellError> {
+    let mime = mime_guess::from_path(path).first_or_octet_stream();
+    // freedesktop icon naming: "text/plain" -> "text-plain".
+    let specific = format!("{}-{}", mime.type_(), mime.subtype());
+    // Generic per-type fallback name, e.g. "text-x-generic".
+    let generic = format!("{}-x-generic", mime.type_());
+
+    for name in [specific.as_str(), generic.as_str()] {
+        if let Some(icon_path) = find_themed_icon_png(name, size) {
+            if let Ok(bytes) = std::fs::read(&icon_path) {
+                if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+                    return Ok(bytes);
+                }
+            }
+        }
     }
 
-    #[cfg(target_os = "linux")]
-    {
-        // On Linux, we could query the icon theme
-        return Err(ShellError::not_supported(
-            "File icon retrieval requires additional native bindings",
-        ));
-    }
+    // No theme entry resolved: return a deterministic generic icon.
+    generate_generic_icon(size)
+}
 
-    #[allow(unreachable_code)]
-    Err(ShellError::not_supported(
-        "File icon retrieval not implemented for this platform",
-    ))
+/// Search the standard freedesktop icon-theme directories for a mimetype PNG.
+///
+/// Prefers the requested `size`, then falls back to common sizes. Returns the
+/// first existing PNG path, or `None` if no theme provides the icon.
+#[cfg(target_os = "linux")]
+fn find_themed_icon_png(icon_name: &str, size: u32) -> Option<PathBuf> {
+    let bases = [
+        std::env::var("HOME")
+            .map(|h| format!("{}/.local/share/icons", h))
+            .unwrap_or_default(),
+        "/usr/share/icons".to_string(),
+        "/usr/local/share/icons".to_string(),
+    ];
+    let themes = ["hicolor", "Adwaita", "gnome", "breeze", "Papirus"];
+    let mut sizes = vec![size, 48, 64, 32, 128, 256, 24, 16];
+    // Drop zero (a 0px request would search nonexistent `0x0/` dirs) and remove
+    // duplicates while preserving priority order. `Vec::dedup` only drops
+    // *consecutive* repeats, so a requested `size` that also appears later (e.g.
+    // 32) would otherwise be scanned twice.
+    let mut seen = std::collections::HashSet::new();
+    sizes.retain(|&s| s != 0 && seen.insert(s));
+
+    for base in &bases {
+        if base.is_empty() {
+            continue;
+        }
+        for theme in &themes {
+            for s in &sizes {
+                let candidate = PathBuf::from(format!(
+                    "{}/{}/{}x{}/mimetypes/{}.png",
+                    base, theme, s, s, icon_name
+                ));
+                if candidate.is_file() {
+                    return Some(candidate);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Fallback for any other platform: a valid generic icon.
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+fn raster_icon(_path: &str, size: u32) -> Result<Vec<u8>, ShellError> {
+    generate_generic_icon(size)
 }
 
 /// Get the default application for a file type
@@ -1457,5 +1838,103 @@ mod tests {
         let json = serde_json::to_string(&info).unwrap();
         assert!(json.contains("TextEdit"));
         assert!(json.contains("/Applications/TextEdit.app"));
+    }
+
+    // ------------------------------------------------------------------------
+    // File icon rasterization (getFileIcon)
+    // ------------------------------------------------------------------------
+
+    /// Decode a base64 string into bytes for assertions.
+    fn decode_b64(s: &str) -> Vec<u8> {
+        base64::engine::Engine::decode(&base64::engine::general_purpose::STANDARD, s)
+            .expect("icon data must be valid base64")
+    }
+
+    /// The 8-byte PNG file signature.
+    const PNG_MAGIC: [u8; 8] = [0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1a, b'\n'];
+
+    #[test]
+    fn test_encode_rgba_png_roundtrips_dimensions() {
+        // A 2x3 fully-opaque red image.
+        let (w, h) = (2u32, 3u32);
+        let mut rgba = Vec::new();
+        for _ in 0..(w * h) {
+            rgba.extend_from_slice(&[0xff, 0x00, 0x00, 0xff]);
+        }
+        let png = encode_rgba_png(&rgba, w, h).expect("encode must succeed");
+        assert_eq!(&png[..8], &PNG_MAGIC, "must emit a real PNG signature");
+        let (dw, dh) = png_dimensions(&png).expect("decode header must succeed");
+        assert_eq!((dw, dh), (w, h), "decoded dimensions must match encoded");
+    }
+
+    #[test]
+    fn test_encode_rgba_png_rejects_mismatched_buffer() {
+        // 2x2 expects 16 bytes; provide 12.
+        let rgba = vec![0u8; 12];
+        let err = encode_rgba_png(&rgba, 2, 2).unwrap_err();
+        // Assert on the variant (stable) rather than the formatted code string.
+        assert!(
+            matches!(err, ShellError::IconFailed { .. }),
+            "expected ShellError::IconFailed, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_generate_generic_icon_is_valid_png() {
+        let png = generate_generic_icon(40).expect("generic icon must encode");
+        assert_eq!(&png[..8], &PNG_MAGIC);
+        let (w, h) = png_dimensions(&png).unwrap();
+        assert_eq!((w, h), (40, 40), "generic icon must honor requested size");
+    }
+
+    #[test]
+    fn test_generate_generic_icon_zero_size_defaults() {
+        let png = generate_generic_icon(0).expect("zero size must default, not fail");
+        let (w, h) = png_dimensions(&png).unwrap();
+        assert_eq!((w, h), (32, 32), "zero size must default to 32x32");
+    }
+
+    #[test]
+    fn test_get_file_icon_impl_negative_size_defaults() {
+        // Negative/zero requested size must not panic and must yield a real PNG.
+        let icon = get_file_icon_impl(".", -1).expect("icon retrieval must succeed");
+        let bytes = decode_b64(&icon.data);
+        assert_eq!(&bytes[..8], &PNG_MAGIC);
+        assert!(
+            icon.width > 0 && icon.height > 0,
+            "dimensions must be reported"
+        );
+    }
+
+    /// Real system-icon path: macOS `NSWorkspace` must produce a decodable PNG
+    /// whose reported dimensions match the encoded image. This is the
+    /// load-bearing test for the native macOS code path.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_get_file_icon_impl_macos_real_icon() {
+        let icon = get_file_icon_impl("/bin/sh", 32).expect("macOS icon must resolve");
+        let bytes = decode_b64(&icon.data);
+        assert_eq!(&bytes[..8], &PNG_MAGIC, "macOS must return a real PNG");
+
+        // The base64 payload must independently decode to the reported size.
+        let (w, h) = png_dimensions(&bytes).unwrap();
+        assert_eq!(
+            (w, h),
+            (icon.width, icon.height),
+            "reported dimensions must match the PNG header"
+        );
+
+        // Prove the native NSWorkspace path ran rather than the generic fallback:
+        // NSWorkspace emits the full-resolution .icns representation (e.g.
+        // 1024x1024 for /bin/sh), while `generate_generic_icon` always returns
+        // exactly the requested size (32x32). A result larger than the request is
+        // therefore only reachable through the real native code path.
+        assert!(
+            icon.width > 32 && icon.height > 32,
+            "expected the native icon ({}x{}) to exceed the requested 32px, \
+             confirming NSWorkspace ran (not the fallback)",
+            icon.width,
+            icon.height
+        );
     }
 }
