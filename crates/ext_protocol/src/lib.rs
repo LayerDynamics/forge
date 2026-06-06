@@ -1020,8 +1020,8 @@ mod tests {
         };
         let json = serde_json::to_string(&status).unwrap();
         let parsed: RegistrationStatus = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.is_registered, true);
-        assert_eq!(parsed.is_default, true);
+        assert!(parsed.is_registered);
+        assert!(parsed.is_default);
         assert_eq!(parsed.registered_by, Some("com.myapp.handler".to_string()));
     }
 
@@ -1101,7 +1101,7 @@ mod tests {
 
         let json = serde_json::to_string(&caps).unwrap();
         let parsed: ProtocolCapabilities = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.can_register, true);
+        assert!(parsed.can_register);
         assert_eq!(parsed.platform, "macos");
     }
 
@@ -1223,7 +1223,7 @@ mod tests {
 
         // Check all codes are in the 9400-9499 range
         for code in codes {
-            assert!(code >= 9400 && code < 9500, "Code {} out of range", code);
+            assert!((9400..9500).contains(&code), "Code {} out of range", code);
         }
 
         // Check all codes are unique
