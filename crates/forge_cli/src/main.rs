@@ -931,7 +931,7 @@ fn remove_ts_sources(dir: &Path) -> Result<()> {
             remove_ts_sources(&path)?;
         } else if matches!(
             path.extension().and_then(|e| e.to_str()),
-            Some("ts") | Some("tsx") | Some("mts") | Some("cts")
+            Some("ts") | Some("tsx") | Some("mts") | Some("cts") | Some("jsx")
         ) && path.with_extension("js").is_file()
         {
             fs::remove_file(&path)?;
