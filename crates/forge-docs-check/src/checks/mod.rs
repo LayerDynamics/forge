@@ -1,0 +1,17 @@
+//! Drift rules. Each submodule exposes `check(&Workspace) -> Vec<Finding>` and
+//! derives its expectations purely from the workspace inventory + the docs tree.
+
+pub mod api_drift;
+pub mod cli_commands;
+pub mod counts;
+pub mod crate_pages;
+pub mod forge_docs;
+
+use std::path::Path;
+
+/// Read a file to a string, returning `None` (not an error) when it is absent.
+/// Rules treat "file missing" as a specific [`crate::Finding`], so they need to
+/// distinguish absence from an unreadable file explicitly.
+pub(crate) fn read_optional(path: &Path) -> Option<String> {
+    std::fs::read_to_string(path).ok()
+}
