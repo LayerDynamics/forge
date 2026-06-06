@@ -84,8 +84,7 @@ pub fn transpile_ts_with(
     specifier: &str,
     settings: &TranspileSettings,
 ) -> Result<TranspileOutput, TranspileError> {
-    let module_specifier = deno_ast::ModuleSpecifier::parse(specifier)
-        .map_err(|e| TranspileError::ParseError(e.to_string()))?;
+    let module_specifier = to_module_specifier(specifier)?;
 
     let parsed = deno_ast::parse_module(ParseParams {
         specifier: module_specifier.clone(),
@@ -103,8 +102,11 @@ pub fn transpile_ts_with(
         } else {
             SourceMapOption::None
         },
-        // Dropping comments is part of minification.
-        remove_comments: settings.minify,
+        // Dropping comments is part of minification, but only strip them in this
+        // (mapped) transpile when no source map is requested. When a map is
+        // produced it must describe a faithful unminified transpile, so we keep
+        // the comments here; the later minify pass drops them in the final code.
+        remove_comments: settings.minify && !settings.source_map,
         ..Default::default()
     };
 
@@ -127,6 +129,35 @@ pub fn transpile_ts_with(
         code,
         source_map: emitted.source_map,
     })
+}
+
+/// Normalize a caller-provided source name into a module specifier deno_ast
+/// will accept.
+///
+/// Accepts a fully-qualified URL (`file:///x.ts`, `https://…`) as-is. Anything
+/// else is treated as a filesystem path and normalized via
+/// [`ModuleSpecifier::from_file_path`] (resolving relative paths against the
+/// current directory), so platform path forms — including Windows drive paths
+/// like `C:\foo.ts` — become correct `file://` URLs instead of being mangled by
+/// naive string prefixing.
+fn to_module_specifier(name: &str) -> Result<deno_ast::ModuleSpecifier, TranspileError> {
+    // A "scheme://authority" form is a real URL. (A bare Windows path such as
+    // `C:\foo.ts` has no `://`, so it correctly falls through to from_file_path
+    // rather than being misread as a `c:` scheme.)
+    if name.contains("://") {
+        return deno_ast::ModuleSpecifier::parse(name)
+            .map_err(|e| TranspileError::ParseError(e.to_string()));
+    }
+
+    let path = Path::new(name);
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+
+    deno_ast::ModuleSpecifier::from_file_path(&absolute)
+        .map_err(|()| TranspileError::ParseError(format!("invalid source path: {name}")))
 }
 
 /// Re-emit already-transpiled JavaScript with the swc code generator's
@@ -416,5 +447,53 @@ mod tests {
         let js = transpile_ts("const x: string = 'hi';", "file:///w.ts").unwrap();
         assert!(js.contains("const x"));
         assert!(!js.contains(": string"));
+    }
+
+    #[test]
+    fn transpile_with_source_map_and_minify_together() {
+        // Both options at once: a map is still produced and the code is minified.
+        let ts = "// a comment\nfunction f(n: number): number {\n  return n + 1;\n}\n";
+        let plain = transpile_ts_with(ts, "file:///b.ts", &TranspileSettings::default())
+            .unwrap()
+            .code;
+        let out = transpile_ts_with(
+            ts,
+            "file:///b.ts",
+            &TranspileSettings {
+                source_map: true,
+                minify: true,
+            },
+        )
+        .unwrap();
+        assert!(out.source_map.is_some(), "map should still be produced");
+        assert!(out.code.len() < plain.len(), "code should be minified");
+        assert!(out.code.contains("function f") || out.code.contains("f("));
+    }
+
+    #[test]
+    fn specifier_passes_through_full_url() {
+        let spec = to_module_specifier("file:///already/qualified.ts").unwrap();
+        assert_eq!(spec.as_str(), "file:///already/qualified.ts");
+    }
+
+    #[test]
+    fn specifier_resolves_bare_name_to_absolute_file_url() {
+        // A bare name must become an absolute file:// URL (deno_ast rejects
+        // relative specifiers), without naive string prefixing.
+        let spec = to_module_specifier("input.ts").unwrap();
+        assert_eq!(spec.scheme(), "file");
+        assert!(spec.as_str().ends_with("input.ts"));
+    }
+
+    // The Windows drive-path normalization can only be exercised on Windows,
+    // where `C:\foo.ts` is absolute; from_file_path yields a proper file URL
+    // instead of the mangled `file:///C:\foo.ts` naive prefixing would produce.
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn specifier_handles_windows_drive_path() {
+        let spec = to_module_specifier(r"C:\foo\bar.ts").unwrap();
+        assert_eq!(spec.scheme(), "file");
+        assert!(spec.as_str().contains("C:/foo/bar.ts"), "got: {spec}");
+        assert!(!spec.as_str().contains('\\'));
     }
 }

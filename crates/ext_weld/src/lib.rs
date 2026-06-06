@@ -289,21 +289,15 @@ fn transpile_with_options(
 ) -> Result<TranspileResult, WeldError> {
     debug!(filename = ?opts.filename, "weld.transpile");
 
-    // deno_ast requires an absolute module specifier. Callers pass a bare file
-    // name (e.g. "input.ts"), so synthesize a file:// URL unless they already
-    // gave a fully-qualified specifier. (Passing the bare name straight through
-    // previously failed with "relative URL without a base".)
-    let filename = opts.filename.as_deref().unwrap_or("input.ts");
-    let specifier = if filename.contains("://") {
-        filename.to_string()
-    } else {
-        format!("file:///{}", filename.trim_start_matches('/'))
-    };
+    // transpile_ts_with normalizes a bare file name (e.g. "input.ts"), a
+    // relative/absolute path, or a full URL into a module specifier deno_ast
+    // accepts, so we can pass the caller's filename straight through.
+    let specifier = opts.filename.as_deref().unwrap_or("input.ts");
     let settings = TranspileSettings {
         source_map: opts.source_map.unwrap_or(false),
         minify: opts.minify.unwrap_or(false),
     };
-    let output = transpile_ts_with(source, &specifier, &settings)
+    let output = transpile_ts_with(source, specifier, &settings)
         .map_err(|e| WeldError::transpile_error(e.to_string()))?;
 
     Ok(TranspileResult {
