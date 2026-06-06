@@ -1010,24 +1010,49 @@ pub async fn op_app_set_badge_count(
 #[op2(fast)]
 pub fn op_app_set_user_model_id(
     _state: &mut OpState,
-    #[string] _app_id: String,
+    #[string] app_id: String,
 ) -> Result<(), AppError> {
-    debug!("Setting user model ID: {}", _app_id);
+    debug!("Setting user model ID: {}", app_id);
+    apply_user_model_id(&app_id)
+}
 
-    #[cfg(target_os = "windows")]
-    {
-        // Windows-specific implementation would go here
-        // Would use SetCurrentProcessExplicitAppUserModelID
-        return Err(AppError::not_supported(
-            "User model ID requires Windows-specific implementation",
+/// Apply an AppUserModelID to the current process.
+///
+/// On Windows this calls `SetCurrentProcessExplicitAppUserModelID`, which lets
+/// the shell group taskbar buttons and attribute toast notifications to this
+/// app. On every other platform the AppUserModelID concept does not exist, so
+/// this is a legitimate no-op.
+///
+/// The ID is validated as non-empty on all platforms. For the grouping to take
+/// full effect the ID should be set very early in process startup — calling it
+/// after windows are shown may have limited effect.
+fn apply_user_model_id(app_id: &str) -> Result<(), AppError> {
+    if app_id.trim().is_empty() {
+        return Err(AppError::user_model_id_failed(
+            "AppUserModelID must not be empty",
         ));
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "windows")]
     {
-        // No-op on non-Windows platforms
-        Ok(())
+        use windows::core::PCWSTR;
+        use windows::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
+
+        // Build a NUL-terminated UTF-16 buffer that outlives the call.
+        let wide: Vec<u16> = app_id.encode_utf16().chain(std::iter::once(0)).collect();
+
+        // SAFETY: `wide` is a valid NUL-terminated wide string that lives for
+        // the duration of the call; the API only reads from the pointer.
+        unsafe { SetCurrentProcessExplicitAppUserModelID(PCWSTR(wide.as_ptr())) }.map_err(|e| {
+            AppError::user_model_id_failed(format!(
+                "SetCurrentProcessExplicitAppUserModelID failed: {} (HRESULT {:#010x})",
+                e.message(),
+                e.code().0 as u32
+            ))
+        })?;
     }
+
+    Ok(())
 }
 
 // ============================================================================
@@ -1209,5 +1234,30 @@ mod tests {
     #[test]
     fn detect_packaged_false_when_exe_path_unknown() {
         assert!(!detect_packaged(None, false, &MapEnv::empty()));
+    }
+
+    // M7 regression: op_app_set_user_model_id used to always Err on Windows
+    // ("not_supported"). It now calls the real Win32 API; empty input is
+    // rejected on every platform and non-Windows remains a no-op.
+
+    #[test]
+    fn user_model_id_rejects_empty_input() {
+        assert!(apply_user_model_id("").is_err());
+        assert!(apply_user_model_id("   ").is_err());
+        assert!(apply_user_model_id("\t\n").is_err());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn user_model_id_is_noop_ok_on_non_windows() {
+        assert!(apply_user_model_id("Forge.Example.App").is_ok());
+    }
+
+    // On Windows the real SetCurrentProcessExplicitAppUserModelID must accept a
+    // valid ID (S_OK). Pre-fix this returned Err; post-fix it returns Ok.
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn user_model_id_sets_on_windows() {
+        assert!(apply_user_model_id("Forge.Example.App").is_ok());
     }
 }
