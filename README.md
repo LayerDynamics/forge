@@ -173,7 +173,7 @@ for await (const event of windowEvents()) {
 | `ext_wasm` | `runtime:wasm` | WebAssembly module loading |
 | `ext_bundler` | `runtime:bundler` | App bundling operations |
 | `ext_codesign` | `runtime:codesign` | Code signing (macOS/Windows/Linux) |
-| `ext_dock` | `runtime:dock` | macOS dock integration |
+| `ext_dock` | `runtime:dock` | macOS dock integration (icon, badge, bounce, right-click menu) |
 | `ext_encoding` | `runtime:encoding` | Text encoding/decoding |
 | `ext_etcher` | `runtime:etcher` | Documentation generation |
 | `ext_image_tools` | `runtime:image_tools` | Image conversion (PNG, SVG, WebP, ICO) |

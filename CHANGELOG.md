@@ -144,6 +144,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `forge_smelt::build::embed` build-script helper for embedding an app (Depth-2
   standalone-binary embedding is groundwork; full runtime embed deferred)
 
+#### Dock Menu (`runtime:dock`)
+
+- Implemented `dock.setMenu(items)` (previously a stub): builds an `NSMenu` from
+  `MenuItem`s — normal/checkbox/separator kinds, enabled/checked state,
+  accelerators, and nested submenus
+- Dock menu delivered by injecting `applicationDockMenu:` into the existing
+  `NSApplication` delegate via the Obj-C runtime (no delegate replacement), with
+  a delegate re-set to refresh AppKit's method cache
+- Added `dock.onMenuItemClick(cb)` / `dock.nextMenuEvent()` (new
+  `op_dock_next_menu_event`) to receive clicks of items that carry an `id`,
+  routed through an mpsc channel (the `ext_shortcuts` delivery pattern)
+- The pure menu spec-builder is unit-tested; NSMenu display + click delivery are
+  macOS-runtime-only and require manual verification (a dock menu only appears on
+  a real right-click)
+
 #### forge-etch Restructure
 
 - Complete TypeScript parser implementation

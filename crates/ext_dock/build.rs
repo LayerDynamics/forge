@@ -14,6 +14,7 @@ fn main() {
             "op_dock_is_visible",
             "op_dock_set_icon",
             "op_dock_set_menu",
+            "op_dock_next_menu_event",
         ])
         .generate_sdk_module("sdk")
         .use_inventory_types()

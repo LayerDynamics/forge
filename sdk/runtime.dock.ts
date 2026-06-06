@@ -23,6 +23,17 @@ export interface BounceResult {
   success: boolean;
 }
 
+/** A dock-menu item click event. */
+export interface MenuClickEvent {
+  /** The `id` of the clicked menu item. */
+  id: string;
+  /** Click time in epoch milliseconds. */
+  timestamp_ms: number;
+}
+
+/** Callback invoked with the clicked item's id. */
+export type MenuItemClickListener = (id: string, event: MenuClickEvent) => void;
+
 /** Menu item for dock menu */
 export interface MenuItem {
   /** Unique identifier for the menu item */
@@ -58,6 +69,7 @@ declare const Deno: {
       op_dock_is_visible(): boolean;
       op_dock_set_icon(iconPath: string): boolean;
       op_dock_set_menu(menu: MenuItem[]): boolean;
+      op_dock_next_menu_event(): Promise<MenuClickEvent | null>;
     };
   };
 };
@@ -229,6 +241,82 @@ export function setMenu(menu: MenuItem[]): boolean {
   return ops.op_dock_set_menu(menu);
 }
 
+/**
+ * Wait for the next dock-menu item click.
+ *
+ * Resolves when a menu item that has an `id` is clicked. Returns null if the
+ * event channel is unavailable (e.g. another caller is already awaiting).
+ *
+ * Most apps should use {@link onMenuItemClick} instead of polling directly.
+ *
+ * @platform macOS only (always resolves null on other platforms)
+ */
+export async function nextMenuEvent(): Promise<MenuClickEvent | null> {
+  return await ops.op_dock_next_menu_event();
+}
+
+// Internal click-dispatch machinery: a single background loop drains menu
+// events and fans them out to registered listeners.
+const menuClickListeners = new Set<MenuItemClickListener>();
+let menuDispatchRunning = false;
+
+async function runMenuDispatchLoop(): Promise<void> {
+  menuDispatchRunning = true;
+  try {
+    while (menuClickListeners.size > 0) {
+      const event = await nextMenuEvent();
+      if (!event) break;
+      for (const listener of [...menuClickListeners]) {
+        try {
+          listener(event.id, event);
+        } catch (err) {
+          console.error("dock.onMenuItemClick listener threw:", err);
+        }
+      }
+    }
+  } finally {
+    menuDispatchRunning = false;
+  }
+}
+
+/**
+ * Register a listener for dock-menu item clicks.
+ *
+ * The listener is invoked with the clicked item's `id` (the `id` you set on the
+ * corresponding {@link MenuItem}). Items without an `id` do not emit events.
+ *
+ * @returns An unsubscribe function that removes the listener.
+ *
+ * @example
+ * ```typescript
+ * import { setMenu, onMenuItemClick } from "runtime:dock";
+ *
+ * setMenu([
+ *   { id: "new-window", label: "New Window" },
+ *   { type: "separator" },
+ *   { id: "preferences", label: "Preferences..." },
+ * ]);
+ *
+ * const off = onMenuItemClick((id) => {
+ *   if (id === "new-window") openWindow();
+ *   if (id === "preferences") openPreferences();
+ * });
+ * // later: off();
+ * ```
+ *
+ * @platform macOS only (no events fire on other platforms)
+ */
+export function onMenuItemClick(listener: MenuItemClickListener): () => void {
+  menuClickListeners.add(listener);
+  if (!menuDispatchRunning) {
+    // Start (or restart) the drain loop; it stops when no listeners remain.
+    void runMenuDispatchLoop();
+  }
+  return () => {
+    menuClickListeners.delete(listener);
+  };
+}
+
 // ============================================================================
 // Default Export
 // ============================================================================
@@ -244,6 +332,8 @@ export default {
   isVisible,
   setIcon,
   setMenu,
+  nextMenuEvent,
+  onMenuItemClick,
 };
 
 
@@ -263,6 +353,7 @@ interface OpRegistry {
   isVisible: { args: []; result: void };
   setIcon: { args: []; result: void };
   setMenu: { args: []; result: void };
+  nextMenuEvent: { args: []; result: void };
 }
 
 /** Extract argument types for an operation */
@@ -272,7 +363,7 @@ type OpArgs<T extends keyof OpRegistry> = OpRegistry[T]['args'];
 type OpResult<T extends keyof OpRegistry> = OpRegistry[T]['result'];
 
 /** Valid operation names for this extension */
-type OpName = "info" | "bounce" | "cancelBounce" | "setBadge" | "getBadge" | "hide" | "show" | "isVisible" | "setIcon" | "setMenu";
+type OpName = "info" | "bounce" | "cancelBounce" | "setBadge" | "getBadge" | "hide" | "show" | "isVisible" | "setIcon" | "setMenu" | "nextMenuEvent";
 
 /** Hook callback types */
 type BeforeHookCallback<T extends OpName> = (args: OpArgs<T>) => void | Promise<void>;

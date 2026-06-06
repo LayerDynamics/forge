@@ -1,14 +1,67 @@
-//! ext_dock - macOS Dock customization extension
+//! # `runtime:dock` — macOS Dock customization extension
 //!
-//! Provides APIs for dock icon manipulation, badge text, bounce animations,
-//! and dock menu management. These are macOS-only features and will no-op
-//! on other platforms.
+//! Provides APIs for the macOS dock tile: custom icon, badge text, attention
+//! bounce, dock-icon visibility, and the right-click **dock menu** (with click
+//! events). All operations are macOS-only and no-op (or return `false`/empty) on
+//! other platforms.
+//!
+//! ## API surface
+//!
+//! | Function (TS) | Op | Purpose |
+//! |---------------|----|---------|
+//! | `setIcon(path)` | `op_dock_set_icon` | Replace the dock tile image (or reset) |
+//! | `setBadge(text)` / `getBadge()` | `op_dock_set_badge` / `_get_badge` | Badge label on the tile |
+//! | `bounce(type)` / `cancelBounce(id)` | `op_dock_bounce` / `_cancel_bounce` | Request user attention |
+//! | `hide()` / `show()` / `isVisible()` | `op_dock_hide` / `_show` / `_is_visible` | Accessory vs regular activation policy |
+//! | `setMenu(items)` | `op_dock_set_menu` | Install the dock right-click menu |
+//! | `onMenuItemClick(cb)` / `nextMenuEvent()` | `op_dock_next_menu_event` | Receive dock-menu clicks |
+//!
+//! ## Dock menu (`setMenu` + `onMenuItemClick`)
+//!
+//! ```typescript
+//! import { setMenu, onMenuItemClick } from "runtime:dock";
+//!
+//! setMenu([
+//!   { id: "new-window", label: "New Window", accelerator: "CmdOrCtrl+N" },
+//!   { type: "separator" },
+//!   { id: "wrap", label: "Word Wrap", type: "checkbox", checked: true },
+//!   { label: "Recent", submenu: [{ id: "recent-1", label: "project.ts" }] },
+//! ]);
+//!
+//! const off = onMenuItemClick((id) => {
+//!   if (id === "new-window") openWindow();
+//! });
+//! ```
+//!
+//! `MenuItem`s support `normal`/`checkbox`/`separator` kinds, `enabled`/`checked`
+//! state, `accelerator` key equivalents, and nested `submenu`s. Items with an
+//! `id` emit a click event (delivered to every `onMenuItemClick` listener);
+//! items without an `id` are display-only.
+//!
+//! ### How it works
+//!
+//! macOS has no `setDockMenu` API — it asks the `NSApplication` delegate for
+//! `applicationDockMenu:` on right-click. tao owns that delegate, so `setMenu`
+//! surgically adds a single `applicationDockMenu:` method to the delegate's
+//! existing class (via the Obj-C runtime) that returns the current menu, and
+//! re-sets the delegate to refresh AppKit's method cache. Menu construction and
+//! click routing live in [`menu`] (pure spec-builder) and `menu::mac` (AppKit).
+//!
+//! ## Verification status
+//!
+//! The pure menu spec-builder ([`menu`]) is fully unit-tested. The AppKit path —
+//! NSMenu construction, delegate injection, and click delivery — can only be
+//! confirmed by **manual interaction** (a dock menu only appears on a real
+//! right-click of a running app), so it is not covered by automated tests. See
+//! the manual verification procedure in `menu::mac`'s module docs.
 
 use deno_core::{op2, OpState};
 use forge_weld_macro::{weld_enum, weld_op, weld_struct};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use tracing::{debug, warn};
+
+pub mod menu;
 
 // ============================================================================
 // Error Types
@@ -176,6 +229,17 @@ pub struct BounceResult {
     pub success: bool,
 }
 
+/// Emitted when a dock-menu item is clicked.
+#[weld_struct]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MenuClickEvent {
+    /// The `id` of the clicked menu item.
+    pub id: String,
+    /// Click time in epoch milliseconds. Typed as a JS `number` (f64) to match
+    /// serde_v8's representation for safe-range integers.
+    pub timestamp_ms: f64,
+}
+
 // ============================================================================
 // State
 // ============================================================================
@@ -189,6 +253,9 @@ pub struct DockState {
     pub badge_text: String,
     /// Whether dock icon is visible
     pub is_visible: bool,
+    /// Receiver for dock-menu click events, drained by `op_dock_next_menu_event`.
+    /// Taken (and put back) per call, mirroring the ext_shortcuts pattern.
+    pub menu_event_rx: Option<tokio::sync::mpsc::UnboundedReceiver<MenuClickEvent>>,
 }
 
 impl Default for DockState {
@@ -196,6 +263,7 @@ impl Default for DockState {
         Self {
             badge_text: String::new(),
             is_visible: true,
+            menu_event_rx: None,
         }
     }
 }
@@ -214,7 +282,19 @@ pub fn dock_extension() -> deno_core::Extension {
 
 /// Initialize dock state - call after creating JsRuntime
 pub fn init_dock_state(op_state: &mut OpState) {
-    op_state.put(DockState::default());
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<MenuClickEvent>();
+
+    // The native menu-click handler pushes events through `tx`; the Deno side
+    // drains them via `op_dock_next_menu_event` -> the `rx` held in DockState.
+    #[cfg(target_os = "macos")]
+    menu::mac::set_click_sender(tx);
+    #[cfg(not(target_os = "macos"))]
+    let _ = tx;
+
+    op_state.put(DockState {
+        menu_event_rx: Some(rx),
+        ..Default::default()
+    });
 }
 
 // ============================================================================
@@ -509,25 +589,72 @@ pub fn op_dock_set_icon(#[string] icon_path: String) -> Result<bool, DockError> 
     }
 }
 
-/// Set the dock menu
+/// Set the dock menu (the right-click menu on the dock icon).
+///
+/// Builds an NSMenu from `menu` and installs it via the app delegate's
+/// `applicationDockMenu:`. Returns `true` on success, `false` if the menu is
+/// invalid, the delegate is not yet available (call after creating a window),
+/// or the platform is not macOS.
 #[weld_op]
 #[op2]
-pub fn op_dock_set_menu(#[serde] _menu: Vec<MenuItem>) -> bool {
-    debug!("dock.set_menu");
+pub fn op_dock_set_menu(#[serde] menu: Vec<MenuItem>) -> bool {
+    debug!("dock.set_menu ({} items)", menu.len());
+
+    let specs = match menu::build_menu_spec(&menu) {
+        Ok(specs) => specs,
+        Err(e) => {
+            warn!("dock.set_menu rejected invalid menu: {}", e);
+            return false;
+        }
+    };
 
     #[cfg(target_os = "macos")]
     {
-        // TODO: Implement dock menu using NSMenu
-        // This requires creating NSMenu and setting it via setMenu on the dock tile
-        warn!("dock.set_menu is not yet implemented");
-        false
+        match menu::mac::install_menu(&specs) {
+            Ok(()) => true,
+            Err(e) => {
+                warn!("dock.set_menu failed: {}", e);
+                false
+            }
+        }
     }
 
     #[cfg(not(target_os = "macos"))]
     {
+        let _ = specs;
         warn!("dock.set_menu is only supported on macOS");
         false
     }
+}
+
+/// Wait for the next dock-menu click event.
+///
+/// Resolves when a menu item with an `id` is clicked, or `null` if the event
+/// channel is unavailable (e.g. another caller is already awaiting). Mirrors the
+/// ext_shortcuts `next_event` delivery pattern.
+#[weld_op(async)]
+#[op2(async)]
+#[serde]
+pub async fn op_dock_next_menu_event(
+    state: std::rc::Rc<std::cell::RefCell<OpState>>,
+) -> Option<MenuClickEvent> {
+    // Take the receiver out so the await doesn't hold the OpState borrow.
+    let mut rx = {
+        let mut s = state.borrow_mut();
+        let dock = s.borrow_mut::<DockState>();
+        dock.menu_event_rx.take()
+    }?;
+
+    let event = rx.recv().await;
+
+    // Put the receiver back for the next caller.
+    {
+        let mut s = state.borrow_mut();
+        let dock = s.borrow_mut::<DockState>();
+        dock.menu_event_rx = Some(rx);
+    }
+
+    event
 }
 
 // ============================================================================
