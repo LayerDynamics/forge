@@ -3,6 +3,7 @@ members = [
   "crates/ext_app",
   "crates/ext_bundler",
   "crates/ext_codesign",
+  "crates/ext_console",
   "crates/ext_crypto",
   "crates/ext_database",
   "crates/ext_debugger",

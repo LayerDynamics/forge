@@ -28,7 +28,7 @@
  * ```
  */
 
-interface ExtensionInfo {
+export interface ExtensionInfo {
   name: string;
   version: string;
   status: string;
@@ -63,7 +63,7 @@ declare const Deno: {
 const { core } = Deno;
 
 const CONSOLE_LEVELS = ["log", "info", "warn", "error", "debug"] as const;
-type ConsoleLevel = (typeof CONSOLE_LEVELS)[number];
+export type ConsoleLevel = (typeof CONSOLE_LEVELS)[number];
 
 /** Original console methods, captured when install() runs so we can restore. */
 let originals: Partial<Record<ConsoleLevel, (...args: unknown[]) => void>> | null = null;

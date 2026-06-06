@@ -2132,6 +2132,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ext_console"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "deno_core",
+ "deno_error",
+ "forge-weld",
+ "forge-weld-macro",
+ "linkme",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "ext_crypto"
 version = "0.1.0-alpha.1"
 dependencies = [
@@ -2919,6 +2933,7 @@ dependencies = [
  "ext_app",
  "ext_bundler",
  "ext_codesign",
+ "ext_console",
  "ext_crypto",
  "ext_database",
  "ext_debugger",

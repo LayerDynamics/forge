@@ -340,6 +340,13 @@ fn create_all_descriptors() -> Vec<ExtensionDescriptor> {
             required: false,
         },
         ExtensionDescriptor {
+            name: "console",
+            specifier: "runtime:console",
+            tier: ExtensionTier::SimpleState,
+            extension_fn: ext_console::console_extension,
+            required: false,
+        },
+        ExtensionDescriptor {
             name: "weld",
             specifier: "forge:weld",
             tier: ExtensionTier::SimpleState,
@@ -507,6 +514,9 @@ fn init_simple_state(name: &str, state: &mut OpState) -> Result<(), InitError> {
         }
         "trace" => {
             ext_trace::init_trace_state(state);
+        }
+        "console" => {
+            ext_console::init_console_state(state);
         }
         "weld" => {
             ext_weld::init_weld_state(state);
