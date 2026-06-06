@@ -42,12 +42,11 @@ pub fn rewrite_specifiers(module: &ModuleNode) -> String {
         // rewritten; verbatim assets and external specifiers stay as written.
         if let DepKind::Relative(target) = &dep.kind {
             if is_ts_family(target) {
-                let new_spec = rewrite_to_js(&dep.specifier, target);
+                let new_spec = rewrite_to_js(&dep.specifier);
                 if new_spec != dep.specifier {
                     edits.push((dep.value_range.clone(), new_spec));
                 }
             }
-        }
         }
     }
 
