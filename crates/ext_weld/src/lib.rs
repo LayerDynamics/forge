@@ -8,8 +8,9 @@
 
 use deno_core::{op2, Extension, OpState};
 use forge_weld::{
-    transpile_ts, DtsGenerator, EnumVariant, OpParam, OpSymbol, StructField, TypeScriptGenerator,
-    WeldEnum, WeldModule, WeldPrimitive, WeldStruct, WeldType,
+    transpile_ts, transpile_ts_with, DtsGenerator, EnumVariant, OpParam, OpSymbol, StructField,
+    TranspileSettings, TypeScriptGenerator, WeldEnum, WeldModule, WeldPrimitive, WeldStruct,
+    WeldType,
 };
 use forge_weld_macro::{weld_op, weld_struct};
 use serde::{Deserialize, Serialize};
@@ -118,7 +119,7 @@ impl WeldState {
 // ============================================================================
 
 #[weld_struct]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TranspileOptions {
     /// Source file name (for error messages)
     pub filename: Option<String>,
@@ -277,21 +278,37 @@ pub fn op_weld_transpile(
     #[string] source: String,
     #[serde] options: Option<TranspileOptions>,
 ) -> Result<TranspileResult, WeldError> {
-    let opts = options.unwrap_or(TranspileOptions {
-        filename: None,
-        source_map: None,
-        minify: None,
-    });
+    transpile_with_options(&source, options.unwrap_or_default())
+}
 
+/// Core of [`op_weld_transpile`], factored out so the option plumbing can be
+/// unit-tested without going through the generated op wrapper.
+fn transpile_with_options(
+    source: &str,
+    opts: TranspileOptions,
+) -> Result<TranspileResult, WeldError> {
     debug!(filename = ?opts.filename, "weld.transpile");
 
-    let specifier = opts.filename.as_deref().unwrap_or("input.ts");
-    let code =
-        transpile_ts(&source, specifier).map_err(|e| WeldError::transpile_error(e.to_string()))?;
+    // deno_ast requires an absolute module specifier. Callers pass a bare file
+    // name (e.g. "input.ts"), so synthesize a file:// URL unless they already
+    // gave a fully-qualified specifier. (Passing the bare name straight through
+    // previously failed with "relative URL without a base".)
+    let filename = opts.filename.as_deref().unwrap_or("input.ts");
+    let specifier = if filename.contains("://") {
+        filename.to_string()
+    } else {
+        format!("file:///{}", filename.trim_start_matches('/'))
+    };
+    let settings = TranspileSettings {
+        source_map: opts.source_map.unwrap_or(false),
+        minify: opts.minify.unwrap_or(false),
+    };
+    let output = transpile_ts_with(source, &specifier, &settings)
+        .map_err(|e| WeldError::transpile_error(e.to_string()))?;
 
     Ok(TranspileResult {
-        code,
-        source_map: None, // TODO: implement source map support
+        code: output.code,
+        source_map: output.source_map,
     })
 }
 
@@ -924,3 +941,52 @@ pub fn init_weld_state(state: &mut OpState) {
 
 // Re-export forge_weld for the macros
 pub use forge_weld;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // M2 regression: op_weld_transpile used to hardcode `source_map: None` and
+    // ignore `minify`. The option plumbing must now flow into the real output.
+
+    #[test]
+    fn transpile_option_source_map_returns_real_map() {
+        let result = transpile_with_options(
+            "const x: string = 'hello';",
+            TranspileOptions {
+                filename: Some("input.ts".to_string()),
+                source_map: Some(true),
+                minify: None,
+            },
+        )
+        .unwrap();
+        let map = result.source_map.expect("source_map should be Some");
+        assert!(map.contains("\"mappings\""));
+    }
+
+    #[test]
+    fn transpile_option_no_source_map_is_none() {
+        let result =
+            transpile_with_options("const x: number = 1;", TranspileOptions::default()).unwrap();
+        assert!(result.source_map.is_none());
+    }
+
+    #[test]
+    fn transpile_option_minify_shortens_code() {
+        let source = "function f(n: number): number {\n  const y = n + 1;\n  return y;\n}\n";
+        let plain = transpile_with_options(source, TranspileOptions::default())
+            .unwrap()
+            .code;
+        let minified = transpile_with_options(
+            source,
+            TranspileOptions {
+                filename: None,
+                source_map: None,
+                minify: Some(true),
+            },
+        )
+        .unwrap()
+        .code;
+        assert!(minified.len() < plain.len());
+    }
+}

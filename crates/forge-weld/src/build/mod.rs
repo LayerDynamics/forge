@@ -18,4 +18,7 @@ pub use preload::{
     generate_preload, generate_preload_to_file, PreloadBuilder, PreloadBuilderError,
 };
 pub use schema::{SchemaConfig, SchemaError, SchemaFormat};
-pub use transpile::{transpile_file, transpile_ts, TranspileError};
+pub use transpile::{
+    transpile_file, transpile_ts, transpile_ts_with, TranspileError, TranspileOutput,
+    TranspileSettings,
+};
