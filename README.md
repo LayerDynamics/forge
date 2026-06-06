@@ -149,11 +149,11 @@ for await (const event of windowEvents()) {
 | Crate | Description |
 |-------|-------------|
 | `forge-runtime` | Main runtime binary with extension registry |
-| `forge_cli` | CLI tool (dev, build, bundle, sign, icon, docs) |
+| `forge_cli` | CLI tool (dev, build, bundle, smelt, sign, icon, docs) |
 | `forge-weld` | Code generation framework for TypeScript bindings |
 | `forge-weld-macro` | Proc macros (#[weld_op], #[weld_struct], #[weld_enum]) |
 | `forge-etch` | Documentation generation and TypeScript parsing |
-| `forge-smelt` | Binary compilation and transpilation |
+| `forge-smelt` | Ahead-of-time TypeScript→JavaScript compilation of app source |
 
 ### Extensions (runtime:* modules)
 

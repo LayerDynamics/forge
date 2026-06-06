@@ -80,3 +80,6 @@ gtk = "0.18"
 
 [build-dependencies]
 deno_ast = { version = "0.52", features = ["transpiling"] }
+
+[dev-dependencies]
+tempfile = "3"

@@ -105,12 +105,13 @@ mod bundler;
 mod docs;
 
 fn usage() {
-    eprintln!("forge <dev|build|bundle|sign|icon|docs> [options] <app-dir>");
+    eprintln!("forge <dev|build|bundle|smelt|sign|icon|docs> [options] <app-dir>");
     eprintln!();
     eprintln!("Commands:");
     eprintln!("  dev <app-dir>                       Run in development mode");
     eprintln!("  build <app-dir>                     Build for production");
     eprintln!("  bundle <app-dir>                    Package into distributable");
+    eprintln!("  smelt <app-dir> [--out <dir>]       Compile app TypeScript -> JavaScript");
     eprintln!("  sign <artifact>                     Sign a package artifact");
     eprintln!("  icon <subcommand>                   Manage app icons");
     eprintln!("  docs [options] [target]             Generate API documentation");
@@ -843,9 +844,29 @@ fn cmd_build(app_dir: &Path) -> Result<()> {
     // Copy manifest
     fs::copy(&manifest_path, dist_dir.join("manifest.app.toml"))?;
 
-    // Copy src (Deno runtime code)
-    fs::create_dir_all(dist_dir.join("src"))?;
-    copy_dir_recursive(&src_dir, &dist_dir.join("src"))?;
+    // Copy src (Deno runtime code), then smelt it ahead-of-time so the bundle
+    // ships a precompiled JS entry instead of loose TypeScript that the runtime
+    // would re-transpile on every launch.
+    let dist_src = dist_dir.join("src");
+    fs::create_dir_all(&dist_src)?;
+    copy_dir_recursive(&src_dir, &dist_src)?;
+
+    println!("  Smelting TypeScript -> JavaScript...");
+    let smelt_out =
+        forge_smelt::smelt(app_dir, &dist_src).map_err(|e| anyhow!("Smelt failed: {}", e))?;
+    println!(
+        "    Compiled {} module(s); entry: {}",
+        smelt_out.modules.len(),
+        smelt_out
+            .entry
+            .strip_prefix(&dist_dir)
+            .unwrap_or(&smelt_out.entry)
+            .display()
+    );
+    // The compiled `.js` outputs supersede the copied TypeScript sources; remove
+    // them so the package ships compiled code only. (dist/ is regenerated every
+    // build, so this only affects build output, never working-tree source.)
+    remove_ts_sources(&dist_src)?;
 
     // Bundle based on framework
     match framework {
@@ -890,6 +911,34 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     }
     Ok(())
 }
+
+/// Recursively remove TypeScript-family source files (`.ts`/`.tsx`/`.mts`/`.cts`)
+/// from a build-output directory after they have been smelted to JavaScript.
+///
+/// A `.ts` is removed **only if its compiled `.js` sibling exists** — i.e. it was
+/// actually reached by smelt's static module graph. A `.ts` reached only through
+/// a dynamic `import("./x.ts")` is not in that graph, so it is neither compiled
+/// nor rewritten; deleting it would leave a dangling specifier, so it is left in
+/// place as a working fallback (the runtime transpiles it on demand).
+///
+/// Only operates within the generated `dist/` tree, which is rebuilt from
+/// scratch on every `forge build` — never working-tree source.
+fn remove_ts_sources(dir: &Path) -> Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            remove_ts_sources(&path)?;
+        } else if matches!(
+            path.extension().and_then(|e| e.to_str()),
+            Some("ts") | Some("tsx") | Some("mts") | Some("cts") | Some("jsx")
+        ) && path.with_extension("js").is_file()
+        {
+            fs::remove_file(&path)?;
+        }
+    }
+    Ok(())
+}
 fn cmd_bundle(app_dir: &Path) -> Result<()> {
     println!("Bundling app at {}", app_dir.display());
 
@@ -921,6 +970,47 @@ fn cmd_bundle(app_dir: &Path) -> Result<()> {
 
     println!("\nBundle complete!");
     println!("  Output: {}", result.display());
+
+    Ok(())
+}
+
+/// `forge smelt <app-dir> [--out <dir>] [--embed]`
+///
+/// Ahead-of-time compile an app's `src/` TypeScript to a JavaScript tree. With
+/// `--embed`, also writes the stable bootstrap module and returns an embeddable
+/// artifact (the Depth-2 path); without it, emits the compiled `.js` tree only.
+fn cmd_smelt(app_dir: &Path, out_dir: Option<&Path>, embed: bool) -> Result<()> {
+    if !app_dir.join("src").join("main.ts").is_file() {
+        return Err(anyhow!(
+            "No src/main.ts found under {}. Is this a Forge app?",
+            app_dir.display()
+        ));
+    }
+
+    let default_out = app_dir.join("dist").join("src");
+    let out = out_dir.unwrap_or(&default_out);
+
+    println!("Smelting {} -> {}", app_dir.display(), out.display());
+
+    if embed {
+        let manifest =
+            forge_smelt::build::embed(app_dir, out).map_err(|e| anyhow!("Smelt failed: {}", e))?;
+        println!("\nSmelt complete (embeddable artifact):");
+        println!("  Bootstrap: {}", manifest.bootstrap.display());
+        println!("  App entry: {}", manifest.app_entry.display());
+        println!("  Files:     {}", manifest.files.len());
+        println!("  Bytes:     {}", manifest.bytes_written);
+    } else {
+        let result =
+            forge_smelt::smelt(app_dir, out).map_err(|e| anyhow!("Smelt failed: {}", e))?;
+        println!("\nSmelt complete:");
+        println!("  Entry:   {}", result.entry.display());
+        println!("  Modules: {}", result.modules.len());
+        if !result.assets.is_empty() {
+            println!("  Assets:  {}", result.assets.len());
+        }
+        println!("  Bytes:   {}", result.bytes_written);
+    }
 
     Ok(())
 }
@@ -1226,6 +1316,40 @@ fn main() -> Result<()> {
                 .map(PathBuf::from)
                 .ok_or_else(|| anyhow!("Usage: forge bundle <app-dir>"))?;
             cmd_bundle(&app_dir)?;
+        }
+        "smelt" => {
+            // forge smelt <app-dir> [--out <dir>] [--embed]
+            let mut app_dir: Option<PathBuf> = None;
+            let mut out_dir: Option<PathBuf> = None;
+            let mut embed = false;
+
+            let mut i = 0;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--out" | "-o" => {
+                        let value = args
+                            .get(i + 1)
+                            .ok_or_else(|| anyhow!("--out requires a value"))?;
+                        out_dir = Some(PathBuf::from(value));
+                        i += 2;
+                    }
+                    "--embed" => {
+                        embed = true;
+                        i += 1;
+                    }
+                    flag if flag.starts_with('-') => {
+                        return Err(anyhow!("Unknown flag: {}", flag));
+                    }
+                    value => {
+                        app_dir = Some(PathBuf::from(value));
+                        i += 1;
+                    }
+                }
+            }
+
+            let app_dir = app_dir
+                .ok_or_else(|| anyhow!("Usage: forge smelt <app-dir> [--out <dir>] [--embed]"))?;
+            cmd_smelt(&app_dir, out_dir.as_deref(), embed)?;
         }
         "sign" => {
             // Parse --identity flag

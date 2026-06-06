@@ -27,3 +27,6 @@ which = "7.0"         # Find forge-host binary in PATH
 
 # Documentation generation
 forge-etch = { path = "../forge-etch" }
+
+# Ahead-of-time TypeScript -> JavaScript compilation for app source
+forge-smelt = { path = "../forge-smelt" }
