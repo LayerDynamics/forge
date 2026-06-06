@@ -30,6 +30,8 @@ pub enum EtcherErrorCode {
     IoError = 9003,
     /// Source not found
     SourceNotFound = 9004,
+    /// Rust parse error
+    RustParseError = 9005,
 }
 
 #[derive(Debug, thiserror::Error, deno_error::JsError)]
@@ -53,6 +55,10 @@ pub enum EtcherError {
     #[error("[{code}] Source not found: {message}")]
     #[class(generic)]
     SourceNotFound { code: u32, message: String },
+
+    #[error("[{code}] Rust parse error: {message}")]
+    #[class(generic)]
+    RustParseError { code: u32, message: String },
 }
 
 impl EtcherError {
@@ -88,6 +94,38 @@ impl EtcherError {
         Self::SourceNotFound {
             code: EtcherErrorCode::SourceNotFound as u32,
             message: message.into(),
+        }
+    }
+
+    pub fn rust_parse_error(message: impl Into<String>) -> Self {
+        Self::RustParseError {
+            code: EtcherErrorCode::RustParseError as u32,
+            message: message.into(),
+        }
+    }
+}
+
+/// Map a forge-etch error onto the closest op-facing [`EtcherError`] variant so
+/// callers can distinguish failure kinds (a Rust-parse failure stays a
+/// `RustParseError`, a missing file stays `SourceNotFound`, etc.) instead of
+/// everything collapsing into a generic parse error.
+impl From<forge_etch::EtchError> for EtcherError {
+    fn from(err: forge_etch::EtchError) -> Self {
+        use forge_etch::EtchError as E;
+        let message = err.to_string();
+        match err {
+            E::RustParse(_) => EtcherError::rust_parse_error(message),
+            E::Io(_) => EtcherError::io_error(message),
+            E::FileNotFound(_) => EtcherError::source_not_found(message),
+            E::Config(_) | E::InvalidPath(_) | E::EnvVarMissing(_) => {
+                EtcherError::config_error(message)
+            }
+            E::Template(_) | E::Build(_) | E::Serialization(_) => {
+                EtcherError::generation_error(message)
+            }
+            // TypeScriptParse, Parse, ModuleNotFound, SymbolNotFound, and any
+            // future variants are content/parse-level failures.
+            _ => EtcherError::parse_error(message),
         }
     }
 }
@@ -314,8 +352,9 @@ pub async fn op_etcher_parse_rust(
         )));
     }
 
-    let nodes =
-        forge_etch::parse_rust_file(&path).map_err(|e| EtcherError::parse_error(e.to_string()))?;
+    // `?` preserves the specific EtchError kind (RustParse/Io/...) via the
+    // From<EtchError> mapping above.
+    let nodes = forge_etch::parse_rust_file(&path)?;
 
     let node_infos: Vec<DocNodeInfo> = nodes.iter().map(etch_node_to_info).collect();
 
@@ -323,6 +362,27 @@ pub async fn op_etcher_parse_rust(
         node_count: node_infos.len(),
         nodes: node_infos,
     })
+}
+
+/// Parse an optional source file into nodes, treating a *provided* path that
+/// does not exist as a [`EtcherError::source_not_found`] (rather than silently
+/// dropping it), while `None` means "no source" and yields no nodes. The
+/// `parse` step's specific [`forge_etch::EtchError`] propagates via `?`.
+fn parse_optional_source(
+    source: Option<&String>,
+    parse: impl Fn(&std::path::Path) -> forge_etch::EtchResult<Vec<EtchNode>>,
+) -> Result<Vec<EtchNode>, EtcherError> {
+    let Some(raw) = source else {
+        return Ok(Vec::new());
+    };
+    let path = PathBuf::from(raw);
+    if !path.exists() {
+        return Err(EtcherError::source_not_found(format!(
+            "Source not found: {}",
+            path.display()
+        )));
+    }
+    Ok(parse(&path)?)
 }
 
 /// Merge TypeScript and Rust documentation (using EtchBuilder internally)
@@ -337,31 +397,14 @@ pub async fn op_etcher_merge_nodes(
 ) -> Result<ParseResult, EtcherError> {
     debug!(name = %name, specifier = %specifier, ?ts_source, ?rust_source, "etcher.merge_nodes");
 
-    // Parse TypeScript source if provided
-    let ts_nodes = if let Some(ts_path) = &ts_source {
-        let path = PathBuf::from(ts_path);
-        if path.exists() {
-            forge_etch::parser::parse_typescript(&path)
-                .map_err(|e| EtcherError::parse_error(e.to_string()))?
-        } else {
-            Vec::new()
-        }
-    } else {
-        Vec::new()
-    };
-
-    // Parse Rust source if provided (top-level fn/struct/enum -> EtchNodes).
-    let rust_nodes: Vec<EtchNode> = if let Some(rust_path) = &rust_source {
-        let path = PathBuf::from(rust_path);
-        if path.exists() {
-            forge_etch::parse_rust_file(&path)
-                .map_err(|e| EtcherError::parse_error(e.to_string()))?
-        } else {
-            Vec::new()
-        }
-    } else {
-        Vec::new()
-    };
+    // Parse each provided source; a provided-but-missing path is a
+    // source_not_found error (consistent with op_etcher_parse_ts/parse_rust)
+    // rather than a silent drop, and the parser's specific error propagates.
+    let ts_nodes = parse_optional_source(ts_source.as_ref(), |p| {
+        forge_etch::parser::parse_typescript(p)
+    })?;
+    let rust_nodes =
+        parse_optional_source(rust_source.as_ref(), |p| forge_etch::parse_rust_file(p))?;
 
     // Merge nodes (TSDoc/JSDoc takes precedence)
     let merged = if rust_nodes.is_empty() {
@@ -883,3 +926,56 @@ pub fn init_etcher_state(state: &mut OpState) {
 
 // Re-export forge_etch for direct access if needed
 pub use forge_etch;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // M3 review: forge-etch error kinds must be preserved (not flattened into a
+    // generic parse error) so callers can distinguish failures.
+    #[test]
+    fn etch_error_maps_to_specific_variants() {
+        let rust = EtcherError::from(forge_etch::EtchError::RustParse("bad".into()));
+        assert!(matches!(rust, EtcherError::RustParseError { .. }));
+
+        let missing = EtcherError::from(forge_etch::EtchError::FileNotFound("x.rs".into()));
+        assert!(matches!(missing, EtcherError::SourceNotFound { .. }));
+
+        let io = EtcherError::from(forge_etch::EtchError::Io(std::io::Error::other("boom")));
+        assert!(matches!(io, EtcherError::IoError { .. }));
+
+        let cfg = EtcherError::from(forge_etch::EtchError::Config("nope".into()));
+        assert!(matches!(cfg, EtcherError::ConfigError { .. }));
+
+        // Unmapped/content variants fall back to a parse error.
+        let ts = EtcherError::from(forge_etch::EtchError::TypeScriptParse("x".into()));
+        assert!(matches!(ts, EtcherError::ParseError { .. }));
+    }
+
+    // M3 review: a provided-but-missing source path is a source_not_found error
+    // (not a silent empty result); None means "no source" and yields no nodes.
+    #[test]
+    fn parse_optional_source_missing_path_errors() {
+        let missing = "/definitely/not/a/real/path_xyz.rs".to_string();
+        let err =
+            parse_optional_source(Some(&missing), |p| forge_etch::parse_rust_file(p)).unwrap_err();
+        assert!(matches!(err, EtcherError::SourceNotFound { .. }));
+    }
+
+    #[test]
+    fn parse_optional_source_none_is_empty() {
+        let nodes = parse_optional_source(None, |p| forge_etch::parse_rust_file(p)).unwrap();
+        assert!(nodes.is_empty());
+    }
+
+    #[test]
+    fn parse_optional_source_parses_existing_file() {
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        write!(file, "pub fn alpha() {{}}").unwrap();
+        let path = file.path().to_string_lossy().to_string();
+        let nodes = parse_optional_source(Some(&path), |p| forge_etch::parse_rust_file(p)).unwrap();
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].name, "alpha");
+    }
+}
