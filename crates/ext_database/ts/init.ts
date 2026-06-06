@@ -1457,7 +1457,7 @@ function createDatabase(result: RawOpenResult, name: string): Database {
 
     async prepare(sql: string): Promise<PreparedStatement> {
       const info = await core.ops.op_database_prepare(dbId, sql);
-      return createPreparedStatement(dbId, sql, info);
+      return createPreparedStatement(dbId, info);
     },
 
     async begin(mode?: "deferred" | "immediate" | "exclusive"): Promise<void> {
@@ -1577,7 +1577,6 @@ function createDatabase(result: RawOpenResult, name: string): Database {
 /** Create a prepared statement handle */
 function createPreparedStatement(
   dbId: string,
-  sql: string,
   info: RawPreparedStatementInfo
 ): PreparedStatement {
   return {
@@ -1586,9 +1585,9 @@ function createPreparedStatement(
     parameterCount: info.parameter_count,
 
     async query<T = Record<string, unknown>>(params?: unknown[]): Promise<QueryResult<T>> {
-      // Note: Prepared statement caching is not implemented in this version
-      // We fall back to regular query execution
-      const raw = await core.ops.op_database_query(dbId, sql, params);
+      // Execute against the registered prepared statement (resolved by id on the
+      // Rust side via prepare_cached) rather than re-parsing the raw SQL.
+      const raw = await core.ops.op_database_stmt_query(dbId, info.id, params);
       return {
         columns: raw.columns.map(toColumnInfo),
         rows: rowsToObjects<T>(raw.columns, raw.rows),
@@ -1598,9 +1597,9 @@ function createPreparedStatement(
     },
 
     async execute(params?: unknown[]): Promise<ExecuteResult> {
-      // Note: Prepared statement caching is not implemented in this version
-      // We fall back to regular execute
-      const raw = await core.ops.op_database_execute(dbId, sql, params);
+      // Execute against the registered prepared statement (resolved by id on the
+      // Rust side via prepare_cached) rather than re-parsing the raw SQL.
+      const raw = await core.ops.op_database_stmt_execute(dbId, info.id, params);
       return {
         rowsAffected: raw.rows_affected,
         lastInsertRowid: raw.last_insert_rowid ?? undefined,

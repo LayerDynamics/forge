@@ -713,6 +713,12 @@ pub struct DatabaseHandle {
     pub path: PathBuf,
     pub readonly: bool,
     pub next_stmt_id: u64,
+    /// Prepared statements for this connection, keyed by `stmt_id`.
+    ///
+    /// rusqlite's `Statement<'conn>` borrows the `Connection`, which can't be
+    /// stored across async ops, so we keep the validated SQL text and re-resolve
+    /// it via `Connection::prepare_cached` on each execute/query.
+    pub prepared_statements: HashMap<String, String>,
 }
 
 /// Streaming query state
@@ -810,6 +816,37 @@ fn get_db_state(state: &OpState) -> &DatabaseState {
 
 fn get_db_state_mut(state: &mut OpState) -> &mut DatabaseState {
     state.borrow_mut::<DatabaseState>()
+}
+
+/// Resolve a prepared statement id to its connection and validated SQL text.
+///
+/// Returns a typed error (not a panic) if the database handle or the statement
+/// id is unknown — e.g. the statement was never prepared or was already
+/// finalized. Clones the SQL and the connection handle so no OpState borrow is
+/// held across the subsequent async work.
+fn resolve_prepared(
+    state: &Rc<RefCell<OpState>>,
+    db_id: &str,
+    stmt_id: &str,
+) -> Result<(Arc<tokio::sync::Mutex<Connection>>, String), DatabaseError> {
+    let s = state.borrow();
+    let db_state = get_db_state(&s);
+    let handle = db_state
+        .databases
+        .get(db_id)
+        .ok_or_else(|| DatabaseError::invalid_handle(format!("Database '{}' not found", db_id)))?;
+    let sql = handle
+        .prepared_statements
+        .get(stmt_id)
+        .cloned()
+        .ok_or_else(|| DatabaseError::PreparedStatementError {
+            code: DatabaseErrorCode::PreparedStatementError as u32,
+            message: format!(
+                "Prepared statement '{}' not found (never prepared or already finalized)",
+                stmt_id
+            ),
+        })?;
+    Ok((handle.connection.clone(), sql))
 }
 
 fn json_to_sql_params(params: &[serde_json::Value]) -> Vec<Box<dyn ToSql>> {
@@ -957,6 +994,7 @@ pub async fn op_database_open(
                 path: db_path,
                 readonly,
                 next_stmt_id: 1,
+                prepared_statements: HashMap::new(),
             },
         );
     }
@@ -1181,6 +1219,31 @@ async fn query_internal(
     .map_err(|e| DatabaseError::generic(e.to_string()))?
 }
 
+/// Internal helper to run a write statement - shared by op_database_execute and
+/// op_database_stmt_execute.
+async fn execute_internal(
+    conn: Arc<tokio::sync::Mutex<Connection>>,
+    sql: String,
+    params: Vec<serde_json::Value>,
+) -> Result<ExecuteResult, DatabaseError> {
+    tokio::task::spawn_blocking(move || {
+        let conn = conn.blocking_lock();
+
+        let sql_params = json_to_sql_params(&params);
+        let param_refs: Vec<&dyn ToSql> = sql_params.iter().map(|p| p.as_ref()).collect();
+
+        let rows_affected = conn.execute(&sql, params_from_iter(param_refs))?;
+        let last_insert_rowid = conn.last_insert_rowid();
+
+        Ok(ExecuteResult {
+            rows_affected: rows_affected as u64,
+            last_insert_rowid: Some(last_insert_rowid),
+        })
+    })
+    .await
+    .map_err(|e| DatabaseError::generic(e.to_string()))?
+}
+
 #[weld_op(async)]
 #[op2(async)]
 #[serde]
@@ -1221,25 +1284,8 @@ pub async fn op_database_execute(
         handle.connection.clone()
     };
 
-    let params = params.unwrap_or_default();
     debug!(db_id = %db_id, sql = %sql, "database.execute");
-
-    tokio::task::spawn_blocking(move || {
-        let conn = conn.blocking_lock();
-
-        let sql_params = json_to_sql_params(&params);
-        let param_refs: Vec<&dyn ToSql> = sql_params.iter().map(|p| p.as_ref()).collect();
-
-        let rows_affected = conn.execute(&sql, params_from_iter(param_refs))?;
-        let last_insert_rowid = conn.last_insert_rowid();
-
-        Ok(ExecuteResult {
-            rows_affected: rows_affected as u64,
-            last_insert_rowid: Some(last_insert_rowid),
-        })
-    })
-    .await
-    .map_err(|e| DatabaseError::generic(e.to_string()))?
+    execute_internal(conn, sql, params.unwrap_or_default()).await
 }
 
 #[weld_op(async)]
@@ -1398,6 +1444,17 @@ pub async fn op_database_prepare(
     .await
     .map_err(|e| DatabaseError::generic(e.to_string()))??;
 
+    // Register the validated SQL so stmt_query / stmt_execute can resolve it.
+    {
+        let mut s = state.borrow_mut();
+        let db_state = get_db_state_mut(&mut s);
+        if let Some(handle) = db_state.databases.get_mut(&db_id) {
+            handle
+                .prepared_statements
+                .insert(stmt_id.clone(), sql.clone());
+        }
+    }
+
     Ok(PreparedStatementInfo {
         id: stmt_id,
         sql,
@@ -1414,15 +1471,9 @@ pub async fn op_database_stmt_query(
     #[string] stmt_id: String,
     #[serde] params: Option<Vec<serde_json::Value>>,
 ) -> Result<QueryResult, DatabaseError> {
-    // Acknowledge unused parameters - prepared statement caching not implemented
-    let _ = (&state, &db_id, &stmt_id, &params);
-
-    // In a more sophisticated implementation, we'd cache prepared statements
-    // and retrieve them by stmt_id. For now, return an error directing to direct query.
-    Err(DatabaseError::PreparedStatementError {
-        code: DatabaseErrorCode::PreparedStatementError as u32,
-        message: "Prepared statement execution requires using the original SQL. Use op_database_query instead.".to_string(),
-    })
+    let (conn, sql) = resolve_prepared(&state, &db_id, &stmt_id)?;
+    debug!(db_id = %db_id, stmt_id = %stmt_id, "database.stmt_query");
+    query_internal(conn, sql, params.unwrap_or_default()).await
 }
 
 #[weld_op(async)]
@@ -1434,13 +1485,9 @@ pub async fn op_database_stmt_execute(
     #[string] stmt_id: String,
     #[serde] params: Option<Vec<serde_json::Value>>,
 ) -> Result<ExecuteResult, DatabaseError> {
-    // Acknowledge unused parameters - prepared statement caching not implemented
-    let _ = (&state, &db_id, &stmt_id, &params);
-
-    Err(DatabaseError::PreparedStatementError {
-        code: DatabaseErrorCode::PreparedStatementError as u32,
-        message: "Prepared statement execution requires using the original SQL. Use op_database_execute instead.".to_string(),
-    })
+    let (conn, sql) = resolve_prepared(&state, &db_id, &stmt_id)?;
+    debug!(db_id = %db_id, stmt_id = %stmt_id, "database.stmt_execute");
+    execute_internal(conn, sql, params.unwrap_or_default()).await
 }
 
 #[weld_op(async)]
@@ -1451,9 +1498,11 @@ pub async fn op_database_stmt_finalize(
     #[string] stmt_id: String,
 ) -> Result<(), DatabaseError> {
     debug!(db_id = %db_id, stmt_id = %stmt_id, "database.stmt_finalize");
-    // Acknowledge state for future use
-    let _ = &state;
-    // No-op since we don't cache statements
+    let mut s = state.borrow_mut();
+    let db_state = get_db_state_mut(&mut s);
+    if let Some(handle) = db_state.databases.get_mut(&db_id) {
+        handle.prepared_statements.remove(&stmt_id);
+    }
     Ok(())
 }
 
@@ -2185,4 +2234,101 @@ include!(concat!(env!("OUT_DIR"), "/extension.rs"));
 
 pub fn database_extension() -> Extension {
     runtime_database::ext()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build an OpState with an in-memory database handle and a created table.
+    fn mem_state() -> (Rc<RefCell<OpState>>, String) {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
+        conn.execute(
+            "CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT NOT NULL)",
+            [],
+        )
+        .expect("create table");
+
+        let mut op_state = OpState::new(None);
+        let mut db_state = DatabaseState::new("test-app".to_string(), 10);
+        db_state.databases.insert(
+            "db1".to_string(),
+            DatabaseHandle {
+                connection: Arc::new(Mutex::new(conn)),
+                name: "test".to_string(),
+                path: PathBuf::from(":memory:"),
+                readonly: false,
+                next_stmt_id: 1,
+                prepared_statements: HashMap::new(),
+            },
+        );
+        op_state.put(db_state);
+        (Rc::new(RefCell::new(op_state)), "db1".to_string())
+    }
+
+    fn register(state: &Rc<RefCell<OpState>>, db_id: &str, stmt_id: &str, sql: &str) {
+        let mut s = state.borrow_mut();
+        let db = get_db_state_mut(&mut s);
+        db.databases
+            .get_mut(db_id)
+            .unwrap()
+            .prepared_statements
+            .insert(stmt_id.to_string(), sql.to_string());
+    }
+
+    // M4 regression: stmt_query / stmt_execute previously always returned
+    // PreparedStatementError and discarded their params. They must now resolve
+    // the prepared SQL by id, bind params, and return real results.
+    #[tokio::test]
+    async fn prepared_statement_execute_then_query_round_trips() {
+        let (state, db_id) = mem_state();
+        register(&state, &db_id, "ins", "INSERT INTO items (name) VALUES (?)");
+        register(
+            &state,
+            &db_id,
+            "sel",
+            "SELECT id, name FROM items ORDER BY id",
+        );
+
+        // Execute the prepared INSERT twice with real params.
+        for name in ["alpha", "beta"] {
+            let (conn, sql) = resolve_prepared(&state, &db_id, "ins").unwrap();
+            let res = execute_internal(conn, sql, vec![serde_json::json!(name)])
+                .await
+                .unwrap();
+            assert_eq!(res.rows_affected, 1);
+        }
+
+        // Query the prepared SELECT and assert both rows came back.
+        let (conn, sql) = resolve_prepared(&state, &db_id, "sel").unwrap();
+        let result = query_internal(conn, sql, vec![]).await.unwrap();
+        assert_eq!(result.rows.len(), 2);
+        assert_eq!(result.rows[0][1], serde_json::json!("alpha"));
+        assert_eq!(result.rows[1][1], serde_json::json!("beta"));
+    }
+
+    #[test]
+    fn unknown_prepared_statement_is_typed_error_not_panic() {
+        let (state, db_id) = mem_state();
+        let err = resolve_prepared(&state, &db_id, "never-prepared").unwrap_err();
+        assert!(matches!(err, DatabaseError::PreparedStatementError { .. }));
+    }
+
+    #[test]
+    fn finalize_removes_then_resolve_fails() {
+        let (state, db_id) = mem_state();
+        register(&state, &db_id, "s1", "SELECT 1");
+        assert!(resolve_prepared(&state, &db_id, "s1").is_ok());
+        // Simulate finalize.
+        {
+            let mut s = state.borrow_mut();
+            get_db_state_mut(&mut s)
+                .databases
+                .get_mut(&db_id)
+                .unwrap()
+                .prepared_statements
+                .remove("s1");
+        }
+        assert!(resolve_prepared(&state, &db_id, "s1").is_err());
+    }
 }
