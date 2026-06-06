@@ -228,10 +228,17 @@ export function info(): ExtensionInfo {
 }
 
 /**
- * Transpile TypeScript to JavaScript
+ * Transpile TypeScript to JavaScript.
+ *
+ * When `options.sourceMap` is true, the result includes a real separate source
+ * map (the `sourceMap` field). When `options.minify` is true, the returned code
+ * is minified (whitespace collapsed, comments dropped). If both are set, the
+ * source map describes the unminified transpile, since minification runs as a
+ * subsequent pass.
+ *
  * @param source - TypeScript source code
  * @param options - Transpilation options
- * @returns Transpiled JavaScript code and optional source map
+ * @returns Transpiled JavaScript code and, if requested, a source map
  */
 export function transpile(source: string, options?: TranspileOptions): TranspileResult {
   return core.ops.op_weld_transpile(source, options);
