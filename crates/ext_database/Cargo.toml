@@ -25,3 +25,6 @@ dirs = "5"
 
 [build-dependencies]
 forge-weld = { path = "../forge-weld" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }
