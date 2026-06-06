@@ -44,7 +44,7 @@ export interface ConsoleRecord {
   /** Arguments passed to the console call, preserved as JSON values. */
   args: unknown[];
   /** Capture time in milliseconds since the UNIX epoch. */
-  timestamp_ms: bigint;
+  timestamp_ms: number;
   /** Whether the record came from the Deno side or the renderer. */
   source: ConsoleSource;
 }

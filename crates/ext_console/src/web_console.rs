@@ -36,11 +36,12 @@ pub fn parse_renderer_message(payload: &Value) -> Option<ConsoleRecord> {
         None => Vec::new(),
     };
 
-    // Accept either "timestamp" or "timestamp_ms"; renderers vary.
+    // Accept either "timestamp" or "timestamp_ms"; renderers vary. Read as f64
+    // to match the record's millisecond representation (JS time is a number).
     let timestamp_ms = obj
         .get("timestamp")
         .or_else(|| obj.get("timestamp_ms"))
-        .and_then(Value::as_u64);
+        .and_then(Value::as_f64);
 
     Some(build_record(
         level,
@@ -66,7 +67,7 @@ mod tests {
         assert_eq!(rec.level, "error");
         assert_eq!(rec.args.len(), 2);
         assert_eq!(rec.args[0], json!("boom"));
-        assert_eq!(rec.timestamp_ms, 1_700_000_000_000);
+        assert_eq!(rec.timestamp_ms, 1_700_000_000_000.0);
         assert_eq!(rec.source, ConsoleSource::Renderer);
     }
 

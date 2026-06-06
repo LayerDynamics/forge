@@ -45,7 +45,12 @@ pub struct ConsoleRecord {
     /// The arguments passed to the console call, preserved as JSON values.
     pub args: Vec<Value>,
     /// Wall-clock capture time in milliseconds since the UNIX epoch.
-    pub timestamp_ms: u64,
+    ///
+    /// Stored as `f64` to match JavaScript's native time representation
+    /// (`Date.now()` is a `number`): millisecond timestamps are exact in `f64`
+    /// well beyond any realistic date, and serde_v8 serializes safe-range
+    /// values as a JS `number` rather than a `bigint`.
+    pub timestamp_ms: f64,
     /// Whether the record came from the Deno side or the renderer.
     pub source: ConsoleSource,
 }
@@ -117,7 +122,7 @@ mod tests {
         ConsoleRecord {
             level: level.to_string(),
             args: vec![json!(msg)],
-            timestamp_ms: 0,
+            timestamp_ms: 0.0,
             source: ConsoleSource::Deno,
         }
     }

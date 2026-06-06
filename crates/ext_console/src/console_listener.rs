@@ -13,13 +13,15 @@ use crate::console_log::{ConsoleRecord, ConsoleSource};
 
 /// Current wall-clock time in milliseconds since the UNIX epoch.
 ///
-/// Returns 0 if the system clock is set before the epoch (it never is in
-/// practice), so capture can't fail on a timestamp.
-pub fn now_millis() -> u64 {
+/// Returned as `f64` to match the [`ConsoleRecord::timestamp_ms`] field and
+/// JavaScript's native time representation. Returns 0 if the system clock is set
+/// before the epoch (it never is in practice), so capture can't fail on a
+/// timestamp.
+pub fn now_millis() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
-        .unwrap_or(0)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0)
 }
 
 /// Build a [`ConsoleRecord`] from its parts, stamping it with the current time
@@ -29,7 +31,7 @@ pub fn build_record(
     level: impl Into<String>,
     args: Vec<Value>,
     source: ConsoleSource,
-    timestamp_ms: Option<u64>,
+    timestamp_ms: Option<f64>,
 ) -> ConsoleRecord {
     ConsoleRecord {
         level: normalize_level(&level.into()),
@@ -70,22 +72,22 @@ mod tests {
 
     #[test]
     fn build_record_honors_explicit_timestamp() {
-        let r = build_record("log", vec![], ConsoleSource::Renderer, Some(42));
-        assert_eq!(r.timestamp_ms, 42);
+        let r = build_record("log", vec![], ConsoleSource::Renderer, Some(42.0));
+        assert_eq!(r.timestamp_ms, 42.0);
     }
 
     #[test]
     fn level_aliases_normalize() {
         assert_eq!(
-            build_record("WARNING", vec![], ConsoleSource::Deno, Some(0)).level,
+            build_record("WARNING", vec![], ConsoleSource::Deno, Some(0.0)).level,
             "warn"
         );
         assert_eq!(
-            build_record("", vec![], ConsoleSource::Deno, Some(0)).level,
+            build_record("", vec![], ConsoleSource::Deno, Some(0.0)).level,
             "log"
         );
         assert_eq!(
-            build_record("err", vec![], ConsoleSource::Deno, Some(0)).level,
+            build_record("err", vec![], ConsoleSource::Deno, Some(0.0)).level,
             "error"
         );
     }
