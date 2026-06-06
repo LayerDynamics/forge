@@ -29,6 +29,10 @@ pub enum EtchError {
     #[error("TypeScript parse error: {0}")]
     TypeScriptParse(String),
 
+    /// Rust parse error
+    #[error("Rust parse error: {0}")]
+    RustParse(String),
+
     /// Template rendering error
     #[error("Template error: {0}")]
     Template(String),

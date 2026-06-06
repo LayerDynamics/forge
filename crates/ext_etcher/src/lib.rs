@@ -296,19 +296,33 @@ pub async fn op_etcher_parse_ts(#[string] source_path: String) -> Result<ParseRe
     })
 }
 
-/// Parse Rust source file (extracts weld metadata)
+/// Parse a Rust source file and extract its top-level API (functions, structs,
+/// enums) as documentation nodes.
 #[weld_op(async)]
 #[op2(async)]
 #[serde]
 pub async fn op_etcher_parse_rust(
-    #[string] _source_path: String,
+    #[string] source_path: String,
 ) -> Result<ParseResult, EtcherError> {
-    // Note: Rust parsing in forge-etch is primarily done through the weld
-    // inventory system at build time. For runtime usage, use EtchBuilder
-    // which automatically handles Rust source extraction.
-    Err(EtcherError::config_error(
-        "Direct Rust parsing not yet implemented. Use op_etcher_generate_docs with rust_source option instead.",
-    ))
+    debug!(path = %source_path, "etcher.parse_rust");
+
+    let path = PathBuf::from(&source_path);
+    if !path.exists() {
+        return Err(EtcherError::source_not_found(format!(
+            "Rust source not found: {}",
+            source_path
+        )));
+    }
+
+    let nodes =
+        forge_etch::parse_rust_file(&path).map_err(|e| EtcherError::parse_error(e.to_string()))?;
+
+    let node_infos: Vec<DocNodeInfo> = nodes.iter().map(etch_node_to_info).collect();
+
+    Ok(ParseResult {
+        node_count: node_infos.len(),
+        nodes: node_infos,
+    })
 }
 
 /// Merge TypeScript and Rust documentation (using EtchBuilder internally)
@@ -336,12 +350,15 @@ pub async fn op_etcher_merge_nodes(
         Vec::new()
     };
 
-    // Note: Runtime Rust parsing is not yet implemented. Rust source metadata
-    // is collected at build time via the weld inventory system.
-    // For full merge including Rust types, use op_etcher_generate_docs instead.
-    let rust_nodes: Vec<EtchNode> = if rust_source.is_some() {
-        debug!("rust_source provided but runtime Rust parsing not implemented");
-        Vec::new()
+    // Parse Rust source if provided (top-level fn/struct/enum -> EtchNodes).
+    let rust_nodes: Vec<EtchNode> = if let Some(rust_path) = &rust_source {
+        let path = PathBuf::from(rust_path);
+        if path.exists() {
+            forge_etch::parse_rust_file(&path)
+                .map_err(|e| EtcherError::parse_error(e.to_string()))?
+        } else {
+            Vec::new()
+        }
     } else {
         Vec::new()
     };

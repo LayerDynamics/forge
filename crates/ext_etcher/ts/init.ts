@@ -252,8 +252,13 @@ export async function parseTs(sourcePath: string): Promise<ParseResult> {
 }
 
 /**
- * Parse Rust source file for weld metadata
- * Note: Direct Rust parsing is not yet implemented. Use generateDocs with rust_source option instead.
+ * Parse a Rust source file and extract its top-level API as documentation nodes.
+ *
+ * Extracts top-level functions, structs, and enums (with doc comments,
+ * visibility, parameters/fields, and types) by parsing the source with `syn`.
+ * This complements build-time weld-inventory extraction with runtime parsing of
+ * arbitrary Rust source.
+ *
  * @param sourcePath - Path to the Rust source file
  * @returns Parse result with node information
  */
