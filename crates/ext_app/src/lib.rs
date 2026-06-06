@@ -314,6 +314,68 @@ impl Default for AppInfo {
     }
 }
 
+/// Abstraction over process environment lookups so packaged-mode detection can
+/// be unit-tested without mutating the real process environment.
+pub trait EnvLike {
+    /// Return the value of an environment variable, or `None` if unset or empty.
+    fn get(&self, key: &str) -> Option<String>;
+}
+
+/// [`EnvLike`] backed by the real process environment.
+pub struct SystemEnv;
+
+impl EnvLike for SystemEnv {
+    fn get(&self, key: &str) -> Option<String> {
+        std::env::var(key).ok().filter(|v| !v.is_empty())
+    }
+}
+
+/// Determine whether the runtime is executing from a packaged/bundled artifact
+/// (`.app`/`.dmg` on macOS, `.msix`/installed on Windows, AppImage on Linux)
+/// rather than a development run via `forge dev`.
+///
+/// Detection combines two independent signals:
+/// 1. **Embedded assets** (`assets_embedded`) — release bundles are built with
+///    `FORGE_EMBED_DIR`, which sets `ASSET_EMBEDDED = true` in the generated
+///    assets module. This is the most reliable signal because it is set exactly
+///    for release builds.
+/// 2. **Executable location / environment** — a secondary heuristic for the
+///    unusual case of a bundled run without embedded assets: a macOS
+///    `.app/Contents/MacOS/` path, a Windows `WindowsApps`/`Program Files`
+///    install path, or the `APPIMAGE` environment variable that the AppImage
+///    runtime sets to the bundle path.
+pub fn detect_packaged(
+    exe_path: Option<&std::path::Path>,
+    assets_embedded: bool,
+    env: &impl EnvLike,
+) -> bool {
+    if assets_embedded {
+        return true;
+    }
+    // The AppImage runtime exports APPIMAGE pointing at the bundle path; the
+    // generated AppRun also re-exports it. Present and non-empty ⇒ packaged.
+    if env.get("APPIMAGE").is_some() {
+        return true;
+    }
+    exe_path.map(exe_in_bundle).unwrap_or(false)
+}
+
+/// Heuristic: does the executable path indicate it lives inside a platform
+/// bundle or install location?
+fn exe_in_bundle(path: &std::path::Path) -> bool {
+    let p = path.to_string_lossy();
+    // macOS: the forge_cli bundler places the binary at
+    // `<App>.app/Contents/MacOS/<bin>` (see bundler/macos.rs).
+    if p.contains(".app/Contents/MacOS/") {
+        return true;
+    }
+    // Windows: MSIX packages install under `...\WindowsApps\<package>\...`, and
+    // the NSIS installer targets Program Files. Match case-insensitively since
+    // drive-letter paths vary in casing.
+    let lower = p.to_lowercase();
+    lower.contains(r"\windowsapps\") || lower.contains(r"\program files")
+}
+
 /// Types of special paths that can be requested
 #[weld_enum]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -998,5 +1060,77 @@ mod tests {
         assert!(checker.can_get_paths());
         assert!(checker.can_lock());
         assert!(checker.can_control_windows());
+    }
+
+    /// Test [`EnvLike`] backed by an in-memory map (no real env mutation).
+    struct MapEnv(std::collections::HashMap<String, String>);
+
+    impl MapEnv {
+        fn empty() -> Self {
+            MapEnv(std::collections::HashMap::new())
+        }
+        fn with(key: &str, val: &str) -> Self {
+            let mut m = std::collections::HashMap::new();
+            m.insert(key.to_string(), val.to_string());
+            MapEnv(m)
+        }
+    }
+
+    impl EnvLike for MapEnv {
+        fn get(&self, key: &str) -> Option<String> {
+            self.0.get(key).filter(|v| !v.is_empty()).cloned()
+        }
+    }
+
+    // M1 regression: is_packaged was hardcoded `false`. detect_packaged must
+    // return true for every real bundle signal and false for a dev run.
+
+    #[test]
+    fn detect_packaged_true_when_assets_embedded() {
+        // Embedded assets is the primary signal — true regardless of exe path.
+        let exe = std::path::PathBuf::from("/anything/target/debug/forge-runtime");
+        assert!(detect_packaged(Some(&exe), true, &MapEnv::empty()));
+    }
+
+    #[test]
+    fn detect_packaged_true_for_macos_app_bundle() {
+        let exe = std::path::PathBuf::from("/Applications/MyApp.app/Contents/MacOS/MyApp");
+        assert!(detect_packaged(Some(&exe), false, &MapEnv::empty()));
+    }
+
+    #[test]
+    fn detect_packaged_true_when_appimage_env_set() {
+        // AppImage runs from a temp mount, so the bundle signal is the env var.
+        let exe = std::path::PathBuf::from("/tmp/.mount_MyAppXXXX/usr/bin/forge-runtime");
+        let env = MapEnv::with("APPIMAGE", "/home/user/MyApp.AppImage");
+        assert!(detect_packaged(Some(&exe), false, &env));
+    }
+
+    #[test]
+    fn detect_packaged_true_for_windows_install_paths() {
+        let msix = std::path::PathBuf::from(
+            r"C:\Program Files\WindowsApps\MyApp_1.0_x64__abc\forge-runtime.exe",
+        );
+        assert!(detect_packaged(Some(&msix), false, &MapEnv::empty()));
+        let nsis = std::path::PathBuf::from(r"C:\Program Files (x86)\MyApp\forge-runtime.exe");
+        assert!(detect_packaged(Some(&nsis), false, &MapEnv::empty()));
+    }
+
+    #[test]
+    fn detect_packaged_false_for_dev_run() {
+        // Plain cargo dev run: no embed, no bundle path, empty env, empty APPIMAGE.
+        let exe = std::path::PathBuf::from("/Users/dev/forge/target/debug/forge-runtime");
+        assert!(!detect_packaged(Some(&exe), false, &MapEnv::empty()));
+        // An explicitly-empty APPIMAGE (as the AppRun exports when unset) is not packaged.
+        assert!(!detect_packaged(
+            Some(&exe),
+            false,
+            &MapEnv::with("APPIMAGE", "")
+        ));
+    }
+
+    #[test]
+    fn detect_packaged_false_when_exe_path_unknown() {
+        assert!(!detect_packaged(None, false, &MapEnv::empty()));
     }
 }
