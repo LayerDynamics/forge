@@ -38,6 +38,7 @@ members = [
   "crates/ext_weld",
   "crates/ext_window",
   "crates/forge_cli",
+  "crates/forge-docs-check",
   "crates/forge-etch",
   "crates/forge-runtime",
   "crates/forge-smelt",

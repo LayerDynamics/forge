@@ -2227,7 +2227,7 @@ mod tests {
 
         // Check all codes are in the 9600-9699 range
         for code in codes {
-            assert!(code >= 9600 && code < 9700, "Code {} out of range", code);
+            assert!((9600..9700).contains(&code), "Code {} out of range", code);
         }
 
         // Check all codes are unique

@@ -1,0 +1,26 @@
+[package]
+name = "forge-docs-check"
+version = "0.1.0-alpha.1"
+edition = "2021"
+description = "Forge Docs Check - fails the build when the documentation site drifts from the code"
+license = "MIT"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--document-private-items"]
+
+[[bin]]
+name = "forge-docs-check"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+# Parse the workspace Cargo.toml (members) and each crate's [package] name —
+# the authoritative roots from which every check derives expectations.
+toml = "0.8"
+# Match SDK exports, doc headings, count phrases, and CLI usage strings.
+regex = "1"
+
+[dev-dependencies]
+# Drift-rule unit tests build throwaway crate/doc trees on disk.
+tempfile = "3"

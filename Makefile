@@ -1,0 +1,38 @@
+# Forge developer convenience targets.
+# CI enforces fmt, clippy (-D warnings), tests, and the documentation drift gate.
+
+.PHONY: docs-check docs-report docs-baseline install-hooks fmt clippy test check ci
+
+# Documentation drift gate (baseline-aware): fails only on NEW drift beyond the
+# recorded baseline. Same logic as CI and the pre-commit hook.
+docs-check:
+	cargo test -q -p forge-docs-check --test docs_sync
+
+# Full drift report: list ALL current drift (fails if any exists at all).
+# Useful for seeing the whole backlog; not the burn-down gate.
+docs-report:
+	cargo run -q -p forge-docs-check
+
+# Re-record the known-drift baseline after intentionally changing docs/code.
+docs-baseline:
+	UPDATE_DOCS_BASELINE=1 cargo test -q -p forge-docs-check --test docs_sync
+
+# Install the git pre-commit hook that runs the drift gate locally.
+install-hooks:
+	scripts/install-hooks.sh
+
+fmt:
+	cargo fmt --all
+
+clippy:
+	cargo clippy --workspace -- -D warnings
+
+test:
+	cargo test --workspace
+
+check:
+	cargo check --workspace
+
+# Everything CI runs, locally.
+ci: fmt clippy test docs-check
+	cargo fmt --all -- --check
