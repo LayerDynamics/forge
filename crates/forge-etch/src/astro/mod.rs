@@ -255,6 +255,78 @@ impl AstroGenerator {
 
         Ok(path)
     }
+
+    /// Render a whole module as a SINGLE Starlight documentation page.
+    ///
+    /// Unlike [`generate`](Self::generate) — which emits a directory of category
+    /// files with `module`/`category` frontmatter — this produces one page whose
+    /// frontmatter matches the Forge site's `docs` content collection exactly:
+    /// `title`, `description`, and `slug`. That makes the output drop-in for
+    /// `site/src/content/docs/api/<file>.md` (Starlight). The page body inlines
+    /// every documented section (operations, functions, interfaces, classes,
+    /// enums, types) under stable `##` headings.
+    pub fn render_single_page(&self, doc: &ExtensionDoc, slug: &str) -> String {
+        let mut content = String::new();
+
+        // Frontmatter — Starlight content-collection shape.
+        content.push_str("---\n");
+        content.push_str(&format!("title: \"{}\"\n", escape_yaml(&doc.title)));
+        if let Some(desc) = &doc.description {
+            content.push_str(&format!("description: \"{}\"\n", escape_yaml(desc)));
+        }
+        content.push_str(&format!("slug: {slug}\n"));
+        content.push_str("---\n\n");
+
+        // Title + description prose.
+        content.push_str(&format!("# {}\n\n", doc.title));
+        if let Some(desc) = &doc.description {
+            content.push_str(desc);
+            content.push_str("\n\n");
+        }
+
+        // Import section.
+        content.push_str("## Import\n\n```typescript\n");
+        content.push_str(&format!("import {{ ... }} from \"{}\";\n", doc.specifier));
+        content.push_str("```\n\n");
+
+        // One section per node kind, in a stable order, skipping empty kinds.
+        const SECTIONS: &[(EtchNodeKind, &str)] = &[
+            (EtchNodeKind::Op, "Operations"),
+            (EtchNodeKind::Function, "Functions"),
+            (EtchNodeKind::Interface, "Interfaces"),
+            (EtchNodeKind::Class, "Classes"),
+            (EtchNodeKind::Enum, "Enums"),
+            (EtchNodeKind::TypeAlias, "Types"),
+        ];
+        for (kind, heading) in SECTIONS {
+            let nodes: Vec<&EtchNode> = doc.nodes.iter().filter(|n| n.kind() == *kind).collect();
+            if nodes.is_empty() {
+                continue;
+            }
+            content.push_str(&format!("## {heading}\n\n"));
+            for node in nodes {
+                content.push_str(&self.renderer.render_node(node));
+                content.push('\n');
+            }
+        }
+
+        content
+    }
+
+    /// Render a single Starlight page and write it to
+    /// `<output_dir>/<file_stem>.md`.
+    pub fn generate_single_page(
+        &self,
+        doc: &ExtensionDoc,
+        slug: &str,
+        file_stem: &str,
+    ) -> EtchResult<PathBuf> {
+        fs::create_dir_all(&self.output_dir)?;
+        let content = self.render_single_page(doc, slug);
+        let path = self.output_dir.join(format!("{file_stem}.md"));
+        fs::write(&path, content)?;
+        Ok(path)
+    }
 }
 
 /// Escape a string for use in YAML frontmatter
@@ -271,5 +343,35 @@ mod tests {
         assert_eq!(escape_yaml("hello"), "hello");
         assert_eq!(escape_yaml("hello \"world\""), "hello \\\"world\\\"");
         assert_eq!(escape_yaml("line1\nline2"), "line1 line2");
+    }
+
+    #[test]
+    fn single_page_emits_starlight_frontmatter() {
+        let generator = AstroGenerator::new(PathBuf::from("/tmp/forge-etch-unused"));
+        let mut doc = ExtensionDoc::new("host_fs", "runtime:fs", "runtime:fs");
+        doc.description = Some("File system operations.".to_string());
+
+        let page = generator.render_single_page(&doc, "api/runtime-fs");
+
+        // Exactly the Starlight content-collection frontmatter the site uses.
+        assert!(page.starts_with("---\n"), "page must open with frontmatter");
+        assert!(page.contains("title: \"runtime:fs\"\n"));
+        assert!(page.contains("description: \"File system operations.\"\n"));
+        assert!(page.contains("slug: api/runtime-fs\n"));
+        // No leftover `module:`/`category:` keys from the multi-file generator.
+        assert!(!page.contains("module:"));
+        assert!(!page.contains("category:"));
+        // Body has the import block.
+        assert!(page.contains("## Import"));
+        assert!(page.contains("import { ... } from \"runtime:fs\""));
+    }
+
+    #[test]
+    fn single_page_omits_description_when_absent() {
+        let generator = AstroGenerator::new(PathBuf::from("/tmp/forge-etch-unused"));
+        let doc = ExtensionDoc::new("host_x", "runtime:x", "runtime:x");
+        let page = generator.render_single_page(&doc, "api/runtime-x");
+        assert!(!page.contains("description:"));
+        assert!(page.contains("slug: api/runtime-x\n"));
     }
 }
