@@ -1,3 +1,0 @@
-crate-page	crate `ext_console` has no documentation page (expected site/src/content/docs/crates/ext-console.md)
-crate-page	crate `forge-docs-check` has no documentation page (expected site/src/content/docs/crates/forge-docs-check.md)
-crate-page	crate `forge-smelt` has no documentation page (expected site/src/content/docs/crates/forge-smelt.md)

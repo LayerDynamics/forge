@@ -36,6 +36,14 @@ fn main() -> Result<ExitCode> {
         return Ok(ExitCode::SUCCESS);
     }
 
+    // `--write-crate-pages`: generate a page for any crate that lacks one (from
+    // its //! doc + Cargo.toml), never overwriting an existing page, then exit.
+    if std::env::args().any(|a| a == "--write-crate-pages") {
+        let written = forge_docs_check::cratepage::write_missing(&ws)?;
+        report_written("crate page", &written, &ws.root);
+        return Ok(ExitCode::SUCCESS);
+    }
+
     let report = run_all_checks(&ws);
 
     println!("{}", report.render());
