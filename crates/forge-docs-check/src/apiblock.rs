@@ -23,6 +23,7 @@ use crate::checks::{read_optional, HOOK_PLUMBING};
 use crate::discovery::Workspace;
 use crate::Finding;
 use regex::Regex;
+use std::collections::{HashMap, HashSet};
 
 pub const BLOCK_OPEN: &str = "<!-- forge:api -->";
 pub const BLOCK_CLOSE: &str = "<!-- /forge:api -->";
@@ -32,23 +33,81 @@ pub const BLOCK_CLOSE: &str = "<!-- /forge:api -->";
 /// from the function name up to the body brace, whitespace-collapsed
 /// (e.g. `info(): OsInfo`).
 pub fn public_signatures(sdk_src: &str) -> Vec<String> {
-    let name_re = Regex::new(r"export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)")
+    // 1. Map every declared function name -> the signature tail after the name,
+    //    i.e. "(params): ret". Covers both `export function foo` and bare
+    //    `function foo` (which modules like runtime:timers/webview declare and
+    //    then re-export via `export { foo }`).
+    let decl_re =
+        Regex::new(r"(?m)^\s*(?:export\s+)?(?:async\s+)?function\s*\*?\s*([A-Za-z0-9_]+)")
+            .expect("valid decl regex");
+    let mut decl_tail: HashMap<String, String> = HashMap::new();
+    for cap in decl_re.captures_iter(sdk_src) {
+        let name = cap[1].to_string();
+        let name_start = cap.get(1).expect("name group").start();
+        if let Some(brace_rel) = sdk_src[name_start..].find('{') {
+            let collapsed = sdk_src[name_start..name_start + brace_rel]
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            let tail = collapsed
+                .strip_prefix(&name)
+                .unwrap_or(&collapsed)
+                .to_string();
+            decl_tail.entry(name).or_insert(tail);
+        }
+    }
+
+    // 2. Collect the public surface as (exported_name, source_name) pairs:
+    //    `export function foo` (source == export), and `export { a, b as c }`
+    //    re-export lists (source is the name before `as`, export is after).
+    let mut public: Vec<(String, String)> = Vec::new();
+    let exp_fn = Regex::new(r"(?m)^\s*export\s+(?:async\s+)?function\s*\*?\s*([A-Za-z0-9_]+)")
         .expect("valid export-fn regex");
+    for cap in exp_fn.captures_iter(sdk_src) {
+        let n = cap[1].to_string();
+        public.push((n.clone(), n));
+    }
+    let exp_list = Regex::new(r"(?m)^\s*export\s*\{([^}]*)\}").expect("valid export-list regex");
+    for cap in exp_list.captures_iter(sdk_src) {
+        let cleaned: String = cap[1]
+            .lines()
+            .map(|l| l.split("//").next().unwrap_or(""))
+            .collect::<Vec<_>>()
+            .join("\n");
+        for item in cleaned.split(',') {
+            let parts: Vec<&str> = item
+                .split(" as ")
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .collect();
+            if parts.is_empty() {
+                continue;
+            }
+            let source = parts[0].trim_end_matches(',').trim().to_string();
+            let exported = parts
+                .last()
+                .unwrap()
+                .trim_end_matches(',')
+                .trim()
+                .to_string();
+            let ident = |s: &str| s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+            if source.is_empty() || !ident(&source) || !ident(&exported) {
+                continue;
+            }
+            public.push((exported, source));
+        }
+    }
+
+    // 3. Render `exportedName(params): ret`, excluding hook plumbing, first
+    //    occurrence wins, only for names that have a known declaration.
+    let mut seen = HashSet::new();
     let mut sigs = Vec::new();
-    for cap in name_re.captures_iter(sdk_src) {
-        let name = &cap[1];
-        if HOOK_PLUMBING.contains(&name) {
+    for (exported, source) in public {
+        if HOOK_PLUMBING.contains(&exported.as_str()) || !seen.insert(exported.clone()) {
             continue;
         }
-        let name_start = cap.get(1).expect("name group").start();
-        // Signature runs from the name up to the first `{` (the body opener).
-        if let Some(brace_rel) = sdk_src[name_start..].find('{') {
-            let raw = &sdk_src[name_start..name_start + brace_rel];
-            let sig = raw.split_whitespace().collect::<Vec<_>>().join(" ");
-            let sig = sig.trim().to_string();
-            if !sig.is_empty() {
-                sigs.push(sig);
-            }
+        if let Some(tail) = decl_tail.get(&source) {
+            sigs.push(format!("{exported}{tail}"));
         }
     }
     sigs
@@ -180,6 +239,26 @@ export async function invokeHandler(name: string): Promise<unknown> {}
             vec![
                 "info(): OsInfo".to_string(),
                 "pathSep(): string".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn signatures_resolve_reexports_and_aliases() {
+        // Declared as bare `function` then re-exported (timers/webview pattern),
+        // including an `as` alias.
+        let sdk = r#"
+function setTimeout(cb: () => void, delay?: number): number { return 0; }
+async function execute(cmd: string): Promise<string> { return ""; }
+export { setTimeout };
+export { execute as exec };
+"#;
+        assert_eq!(
+            public_signatures(sdk),
+            vec![
+                "setTimeout(cb: () => void, delay?: number): number".to_string(),
+                // alias `exec` rendered with execute's parameters
+                "exec(cmd: string): Promise<string>".to_string(),
             ]
         );
     }

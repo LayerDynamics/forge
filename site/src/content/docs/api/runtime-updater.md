@@ -120,6 +120,37 @@ Self-hosted updates use a JSON manifest with the following structure:
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.updater.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+info(): ExtensionInfo
+echo(message: string): string
+configureGitHub(config:
+configureCustom(config:
+configure(config: UpdateConfig): Promise<void>
+check(): Promise<UpdateInfo | null>
+download(): Promise<string>
+getProgress(): UpdateProgress
+cancel(): Promise<void>
+verify(): Promise<boolean>
+install(): Promise<void>
+getStatus(): UpdaterStatus
+getCurrentVersion(): string
+getPendingUpdate(): PendingUpdate | null
+checkAndDownload( onProgress?: (progress: UpdateProgress) => void ): Promise<
+fullUpdate(callbacks?:
+formatBytes(bytes: number): string
+isUpdateAvailable(): boolean
+isDownloading(): boolean
+isReadyToInstall(): boolean
+checkForUpdates(): Promise<UpdateInfo | null>
+downloadUpdate(): Promise<string>
+installUpdate(): Promise<void>
+status(): UpdaterStatus
+progress(): UpdateProgress
+```
+<!-- /forge:api -->
+
 ### Configuration
 
 #### configure(config)

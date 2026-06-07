@@ -77,6 +77,24 @@ import {
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.protocol.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+info(): ExtensionInfo
+register( scheme: string, options: RegistrationOptions =
+unregister(scheme: string): Promise<boolean>
+isRegistered(scheme: string): Promise<RegistrationStatus>
+listRegistered(): ProtocolInfo[]
+setAsDefault(scheme: string): Promise<boolean>
+getLaunchUrl(): string | null
+receiveInvocation(): Promise<ProtocolInvocation>
+onInvoke( callback: (invocation: ProtocolInvocation) => void ): () => void
+parseUrl(url: string): ParsedProtocolUrl
+buildUrl( scheme: string, path: string, query?: Record<string, string> ): string
+checkCapabilities(): ProtocolCapabilities
+```
+<!-- /forge:api -->
+
 ### Registration
 
 #### register(scheme, options?)

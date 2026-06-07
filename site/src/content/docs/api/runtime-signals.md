@@ -24,6 +24,14 @@ import { supportedSignals, subscribe, type SignalEvent, type SignalSubscription 
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.signals.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+supportedSignals(): string[]
+subscribe(signals: string[]): Promise<SignalSubscription>
+```
+<!-- /forge:api -->
+
 ### supportedSignals()
 
 Get list of supported signals on the current platform.

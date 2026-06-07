@@ -75,6 +75,20 @@ import {
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.webview.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+webviewNew(opts: WebViewOptions): WebViewHandle
+webviewExit(id: string): void
+webviewEval(id: string, js: string): void
+webviewSetColor(id: string, r: number, g: number, b: number, a: number): void
+webviewSetTitle(id: string, title: string): void
+webviewSetFullscreen(id: string, fullscreen: boolean): void
+webviewLoop(id: string, blocking: number): Promise<
+webviewRun(id: string): Promise<void>
+```
+<!-- /forge:api -->
+
 ### webviewNew(options)
 
 Create a new WebView window.

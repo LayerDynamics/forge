@@ -77,6 +77,32 @@ Shortcuts are defined using an accelerator string that combines modifiers and ke
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.shortcuts.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+info(): ExtensionInfo
+echo(message: string): string
+register(config: ShortcutConfig): ShortcutInfo
+unregister(id: string): void
+unregisterAll(): void
+list(): ShortcutInfo[]
+enable(id: string, enabled: boolean): void
+nextEvent(): Promise<ShortcutEvent | null>
+save(): Promise<void>
+load(): Promise<ShortcutConfig[]>
+setAutoPersist(enabled: boolean): void
+getAutoPersist(): boolean
+registerAll(configs: ShortcutConfig[]): ShortcutInfo[]
+listen( callback: (event: ShortcutEvent) => void ): Promise<() => void>
+handleShortcuts( handlers: Record<string, () => void> ): Promise<() => void>
+parseAccelerator(accelerator: string):
+formatAccelerator(accelerator: string): string
+add(config: ShortcutConfig): ShortcutInfo
+remove(id: string): void
+getAll(): ShortcutInfo[]
+```
+<!-- /forge:api -->
+
 ### Registration
 
 #### register(config)

@@ -63,6 +63,34 @@ import {
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.display.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+info(): ExtensionInfo
+echo(message: string): string
+getAll(): MonitorInfo[]
+getPrimary(): MonitorInfo | null
+getById(id: string): MonitorInfo | null
+getAtPoint(x: number, y: number): MonitorInfo | null
+getCursorPosition(): CursorPosition
+getCount(): number
+subscribe(options: SubscribeOptions =
+nextEvent(subscriptionId: string): Promise<DisplayEvent | null>
+unsubscribe(subscriptionId: string): void
+getSubscriptions(): SubscriptionInfo[]
+getDisplayInfo():
+getMonitorAtCursor(): MonitorInfo | null
+watchDisplays( callback: (event: DisplayEvent) => void, options: SubscribeOptions =
+formatRefreshRate(millihertz: number): string
+formatResolution(size: Size, scaleFactor?: number): string
+all(): MonitorInfo[]
+monitors(): MonitorInfo[]
+primary(): MonitorInfo | null
+count(): number
+cursor(): CursorPosition
+```
+<!-- /forge:api -->
+
 ### Query Functions
 
 #### getAll()

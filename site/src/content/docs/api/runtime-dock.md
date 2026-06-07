@@ -45,6 +45,24 @@ import {
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.dock.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+info(): ExtensionInfo
+bounce(type: BounceType = "informational"): BounceResult
+cancelBounce(bounceId: number): void
+setBadge(text: string): void
+getBadge(): string
+hide(): void
+show(): void
+isVisible(): boolean
+setIcon(iconPath: string): boolean
+setMenu(menu: MenuItem[]): boolean
+nextMenuEvent(): Promise<MenuClickEvent | null>
+onMenuItemClick(listener: MenuItemClickListener): () => void
+```
+<!-- /forge:api -->
+
 ### bounce(type?)
 
 Bounce the dock icon to get user attention.
