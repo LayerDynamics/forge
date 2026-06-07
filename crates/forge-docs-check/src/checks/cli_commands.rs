@@ -153,6 +153,12 @@ fn variant_name(line: &str) -> Option<String> {
 }
 
 /// Replicate clap's default subcommand rename (PascalCase -> kebab-case).
+///
+/// This is a simple per-uppercase-boundary split, which matches clap's
+/// `heck`-based kebab-casing for single-word variants (every current forge
+/// subcommand). It diverges only on multi-word acronyms — `HTTPServer` here
+/// becomes `h-t-t-p-server` where clap/heck emits `http-server`. No forge
+/// subcommand triggers that, so the simpler form is kept intentionally.
 fn to_kebab(name: &str) -> String {
     let mut out = String::new();
     for (i, c) in name.chars().enumerate() {
