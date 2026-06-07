@@ -8,6 +8,11 @@ The simplest Forge app - demonstrates basic window creation and IPC communicatio
 
 ## Overview
 
+<!-- forge:example -->
+<!-- generated from examples/example-deno-app/src — run `make docs-examples` to refresh -->
+**Runtime modules used:** `runtime:window`
+<!-- /forge:example -->
+
 This example shows:
 - Minimal `manifest.app.toml` configuration
 - Basic window creation

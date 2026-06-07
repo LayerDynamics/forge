@@ -21,6 +21,7 @@
 
 use crate::checks::{read_optional, HOOK_PLUMBING};
 use crate::discovery::Workspace;
+use crate::markers;
 use crate::Finding;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
@@ -129,25 +130,6 @@ pub fn render_block_body(module: &str, signatures: &[String]) -> String {
     out
 }
 
-/// Locate a marker region in `page`. Returns `(open_start, close_end, body)`
-/// where `body` is the exact text strictly between the open and close markers
-/// (trimmed of the single surrounding newlines).
-fn find_block(page: &str) -> Option<(usize, usize, String)> {
-    let open = page.find(BLOCK_OPEN)?;
-    let after_open = open + BLOCK_OPEN.len();
-    let close_rel = page[after_open..].find(BLOCK_CLOSE)?;
-    let close = after_open + close_rel;
-    let close_end = close + BLOCK_CLOSE.len();
-    // Normalize CRLF -> LF so the comparison is line-ending-agnostic: on Windows
-    // git may check the docs out with CRLF, while the generated `expected` body
-    // uses LF. Without this the gate reports a phantom "stale" block on Windows.
-    let body = page[after_open..close]
-        .replace("\r\n", "\n")
-        .trim_matches('\n')
-        .to_string();
-    Some((open, close_end, body))
-}
-
 /// Rule `api-block`: every page that opts in (contains `<!-- forge:api -->`) has
 /// a block whose body matches the current SDK signatures.
 pub fn check(ws: &Workspace) -> Vec<Finding> {
@@ -167,7 +149,7 @@ pub fn check(ws: &Workspace) -> Vec<Finding> {
             None => continue,
         };
         let expected = render_block_body(&module.name, &public_signatures(&sdk));
-        match find_block(&page) {
+        match markers::find_region(&page, BLOCK_OPEN, BLOCK_CLOSE) {
             Some((_, _, body)) if body == expected => {}
             Some((_, _, _)) => findings.push(Finding::new(
                 "api-block",
@@ -209,20 +191,16 @@ pub fn write_all(ws: &Workspace) -> std::io::Result<Vec<std::path::PathBuf>> {
             None => continue,
         };
         let expected = render_block_body(&module.name, &public_signatures(&sdk));
-        if let Some((open, close_end, body)) = find_block(&page) {
+        if let Some((_, _, body)) = markers::find_region(&page, BLOCK_OPEN, BLOCK_CLOSE) {
             if body == expected {
                 continue;
             }
-            let mut updated = String::with_capacity(page.len());
-            updated.push_str(&page[..open]);
-            updated.push_str(BLOCK_OPEN);
-            updated.push('\n');
-            updated.push_str(&expected);
-            updated.push('\n');
-            updated.push_str(BLOCK_CLOSE);
-            updated.push_str(&page[close_end..]);
-            std::fs::write(&page_path, updated)?;
-            written.push(page_path);
+            if let Some(updated) =
+                markers::replace_region(&page, BLOCK_OPEN, BLOCK_CLOSE, &expected)
+            {
+                std::fs::write(&page_path, updated)?;
+                written.push(page_path);
+            }
         }
     }
     Ok(written)
@@ -270,23 +248,6 @@ export { execute as exec };
     }
 
     #[test]
-    fn find_block_extracts_body() {
-        let page = "intro\n<!-- forge:api -->\nBODY\nLINE2\n<!-- /forge:api -->\noutro\n";
-        let (_, _, body) = find_block(page).expect("block present");
-        assert_eq!(body, "BODY\nLINE2");
-    }
-
-    #[test]
-    fn find_block_normalizes_crlf() {
-        // Windows git checkout may use CRLF; the extracted body must match the
-        // LF-generated `expected`, so the gate is line-ending-agnostic.
-        let page =
-            "intro\r\n<!-- forge:api -->\r\nBODY\r\nLINE2\r\n<!-- /forge:api -->\r\nouttro\r\n";
-        let (_, _, body) = find_block(page).expect("block present");
-        assert_eq!(body, "BODY\nLINE2");
-    }
-
-    #[test]
     fn public_signatures_is_line_ending_agnostic() {
         // Same source, LF vs CRLF, must yield identical signatures — otherwise a
         // Windows checkout would generate a different block than the gate expects.
@@ -310,7 +271,8 @@ export { execute as exec };
             "# page\r\n\r\n{BLOCK_OPEN}\r\n{}\r\n{BLOCK_CLOSE}\r\n\r\n## next\r\n",
             expected.replace('\n', "\r\n")
         );
-        let (_, _, body) = find_block(&on_disk).expect("block present");
+        let (_, _, body) =
+            markers::find_region(&on_disk, BLOCK_OPEN, BLOCK_CLOSE).expect("block present");
         assert_eq!(body, expected, "CRLF on-disk block must match LF expected");
     }
 

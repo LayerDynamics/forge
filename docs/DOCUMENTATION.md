@@ -92,6 +92,47 @@ The `forge docs` command:
 
 Unlike `cargo doc`, the `forge docs` command never processes dependency code because it only looks at specific source files in your Forge workspace.
 
+## 3. Documentation Site Drift Gate (`forge-docs-check`)
+
+The marketing/reference site under `site/src/content/docs/` is kept in sync with
+the code by **`forge-docs-check`**, a workspace tool that fails the build when the
+docs drift from the source of truth. It runs three ways — the `Docs Sync` CI job,
+the pre-commit hook (`scripts/install-hooks.sh`), and the `docs_in_sync`
+integration test (`cargo test --workspace`).
+
+### What it checks
+
+| Rule | Fails when… |
+|------|-------------|
+| `crate-page` | a workspace crate has no `docs/crates/<name>.md` page |
+| `api-drift` | a `sdk/runtime.*.ts` export is undocumented, or a documented `### method(` no longer exists |
+| `api-block` | a `<!-- forge:api -->` signature block is stale |
+| `count` | a `<!-- forge:count:* -->` marker (or a count phrase) disagrees with the real workspace counts |
+| `cli-command` | a `forge` subcommand is missing from `crates/forge.md` |
+| `example-block` | an example page's `<!-- forge:example -->` block doesn't match the app's `runtime:*` imports |
+
+### Fixing a red gate
+
+Most drift is auto-fixable — run the matching generator and commit the result:
+
+```bash
+make docs-api       # refresh <!-- forge:api --> signature blocks from the SDK
+make docs-counts    # refresh <!-- forge:count:* --> numbers
+make docs-crates    # generate a page for any crate that lacks one
+make docs-examples  # refresh <!-- forge:example --> module lists
+make docs-check     # the baseline-aware gate (what CI runs)
+make docs-report    # list ALL current drift (not just new)
+```
+
+The extension list `forge docs` documents is **discovered** from `crates/ext_*`
+(no hardcoded array), so adding an extension is picked up automatically; you only
+need to add its crate page (`make docs-crates`) and, if it has an API page,
+document its methods.
+
+Marker blocks (`<!-- forge:* -->`) are generated; **edit the source** (the SDK,
+`Cargo.toml`, the example app) and regenerate — never hand-edit inside the markers.
+Prose **outside** the markers is yours to author freely.
+
 ## Best Practices
 
 ### 1. Always Exclude Dependencies

@@ -44,6 +44,14 @@ fn main() -> Result<ExitCode> {
         return Ok(ExitCode::SUCCESS);
     }
 
+    // `--write-example-blocks`: regenerate every `<!-- forge:example -->` block
+    // in place from each example app's runtime:* imports, then exit.
+    if std::env::args().any(|a| a == "--write-example-blocks") {
+        let written = forge_docs_check::exampleblock::write_all(&ws)?;
+        report_written("example block", &written, &ws.root);
+        return Ok(ExitCode::SUCCESS);
+    }
+
     let report = run_all_checks(&ws);
 
     println!("{}", report.render());

@@ -380,6 +380,55 @@ fn write_counts_updates_markers_to_derived_value() {
 }
 
 #[test]
+fn example_block_check_matches_app_imports() {
+    use forge_docs_check::exampleblock;
+    let fx = Fixture::new();
+    fx.write(
+        "examples/demo/manifest.app.toml",
+        "[app]\nname = \"demo\"\n",
+    );
+    fx.write(
+        "examples/demo/src/main.ts",
+        "import { readText } from \"runtime:fs\";\nimport { open } from \"runtime:window\";\n",
+    );
+    let ws = fx.discover();
+
+    // A page whose block matches the app's real imports must not be flagged.
+    let expected = exampleblock::render_block_body(
+        "demo",
+        &exampleblock::runtime_modules(&ws.root.join("examples/demo")),
+    );
+    let page = format!(
+        "# Demo\n\n## Capabilities\n\n{}\n{}\n{}\n\nprose\n",
+        exampleblock::BLOCK_OPEN,
+        expected,
+        exampleblock::BLOCK_CLOSE
+    );
+    fx.write("site/src/content/docs/examples/demo.md", &page);
+    let ws = fx.discover();
+    assert!(
+        exampleblock::check(&ws).is_empty(),
+        "current example block must not be flagged: {:?}",
+        messages(&exampleblock::check(&ws))
+    );
+
+    // A stale block (missing runtime:window) is flagged.
+    let stale = format!(
+        "## Capabilities\n\n{}\n**Runtime modules used:** `runtime:fs`\n{}\n",
+        exampleblock::BLOCK_OPEN,
+        exampleblock::BLOCK_CLOSE
+    );
+    fx.write("site/src/content/docs/examples/demo.md", &stale);
+    let ws = fx.discover();
+    assert!(
+        exampleblock::check(&ws)
+            .iter()
+            .any(|f| f.rule == "example-block"),
+        "stale example block must be flagged"
+    );
+}
+
+#[test]
 fn count_marker_finding_uses_forward_slashes() {
     let mut fx = Fixture::new();
     fx.add_crate("ext_a");
