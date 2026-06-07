@@ -29,6 +29,11 @@ forge dev examples/todo-app
 
 ## Capabilities
 
+<!-- forge:example -->
+<!-- generated from examples/todo-app/src — run `make docs-examples` to refresh -->
+**Runtime modules used:** `runtime:fs`, `runtime:ipc`, `runtime:sys`, `runtime:window`
+<!-- /forge:example -->
+
 ```toml
 [capabilities.fs]
 read = ["~/.forge-todo.json"]

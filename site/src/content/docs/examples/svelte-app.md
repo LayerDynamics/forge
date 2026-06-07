@@ -33,6 +33,11 @@ forge dev examples/svelte-app
 
 ## Capabilities
 
+<!-- forge:example -->
+<!-- generated from examples/svelte-app/src — run `make docs-examples` to refresh -->
+**Runtime modules used:** `runtime:crypto`, `runtime:fs`, `runtime:ipc`, `runtime:log`, `runtime:storage`, `runtime:sys`, `runtime:trace`, `runtime:window`
+<!-- /forge:example -->
+
 ```toml
 [capabilities.channels]
 allowed = ["*"]

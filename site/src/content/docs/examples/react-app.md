@@ -28,6 +28,11 @@ forge dev examples/react-app
 
 ## Capabilities
 
+<!-- forge:example -->
+<!-- generated from examples/react-app/src — run `make docs-examples` to refresh -->
+**Runtime modules used:** `runtime:ipc`, `runtime:window`
+<!-- /forge:example -->
+
 ```toml
 [capabilities.channels]
 allowed = ["*"]

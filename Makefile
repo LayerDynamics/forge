@@ -1,7 +1,7 @@
 # Forge developer convenience targets.
 # CI enforces fmt, clippy (-D warnings), tests, and the documentation drift gate.
 
-.PHONY: docs-check docs-report docs-api docs-counts docs-crates docs-baseline install-hooks fmt clippy test check ci
+.PHONY: docs-check docs-report docs-api docs-counts docs-crates docs-examples docs-baseline install-hooks fmt clippy test check ci
 
 # Documentation drift gate (baseline-aware): fails only on NEW drift beyond the
 # recorded baseline. Same logic as CI and the pre-commit hook.
@@ -22,6 +22,11 @@ docs-counts:
 # doc + Cargo.toml). Gap-fill only: never overwrites an existing crate page.
 docs-crates:
 	cargo run -q -p forge-docs-check -- --write-crate-pages
+
+# Regenerate every <!-- forge:example --> block from each example app's
+# runtime:* imports.
+docs-examples:
+	cargo run -q -p forge-docs-check -- --write-example-blocks
 
 # Full drift report: list ALL current drift (fails if any exists at all).
 # Useful for seeing the whole backlog; not the burn-down gate.

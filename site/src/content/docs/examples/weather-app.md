@@ -29,6 +29,11 @@ forge dev examples/weather-app
 
 ## Capabilities
 
+<!-- forge:example -->
+<!-- generated from examples/weather-app/src — run `make docs-examples` to refresh -->
+**Runtime modules used:** `runtime:ipc`, `runtime:net`, `runtime:sys`, `runtime:window`
+<!-- /forge:example -->
+
 ```toml
 [capabilities.net]
 fetch = ["https://api.open-meteo.com/*", "https://geocoding-api.open-meteo.com/*"]

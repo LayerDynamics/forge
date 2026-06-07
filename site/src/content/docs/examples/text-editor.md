@@ -30,6 +30,11 @@ forge dev examples/text-editor
 
 ## Capabilities
 
+<!-- forge:example -->
+<!-- generated from examples/text-editor/src — run `make docs-examples` to refresh -->
+**Runtime modules used:** `runtime:fs`, `runtime:ipc`, `runtime:sys`, `runtime:window`
+<!-- /forge:example -->
+
 ```toml
 [capabilities.fs]
 read = ["~/*", "./*"]   # Home directory and current directory

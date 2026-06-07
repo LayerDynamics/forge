@@ -29,6 +29,11 @@ forge dev examples/wasm-forge-example
 
 ## Capabilities
 
+<!-- forge:example -->
+<!-- generated from examples/wasm-forge-example/src — run `make docs-examples` to refresh -->
+**Runtime modules used:** `runtime:fs`, `runtime:ipc`, `runtime:wasm`, `runtime:window`
+<!-- /forge:example -->
+
 ```toml
 [capabilities.channels]
 allowed = ["*"]

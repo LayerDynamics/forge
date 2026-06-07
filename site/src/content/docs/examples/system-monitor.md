@@ -30,6 +30,11 @@ forge dev examples/system-monitor
 
 ## Capabilities
 
+<!-- forge:example -->
+<!-- generated from examples/system-monitor/src — run `make docs-examples` to refresh -->
+**Runtime modules used:** `runtime:ipc`, `runtime:process`, `runtime:sys`, `runtime:window`
+<!-- /forge:example -->
+
 ```toml
 [capabilities.sys]
 info = true           # System information
