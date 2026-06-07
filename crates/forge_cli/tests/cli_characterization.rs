@@ -25,11 +25,16 @@ fn forge(args: &[&str]) -> Output {
 }
 
 fn combined(out: &Output) -> String {
+    // clap renders its `Usage:` line from the real binary file name, which is
+    // `forge.exe` on Windows and `forge` elsewhere. Normalize it so assertions
+    // like `contains("forge dev")` hold cross-platform (otherwise the infix
+    // `.exe` splits `forge` from the subcommand and the match fails on Windows).
     format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     )
+    .replace("forge.exe", "forge")
 }
 
 // --- Edge-case behavior (clap conventions) ---------------------------------
