@@ -15,6 +15,7 @@
 
 pub mod apiblock;
 pub mod checks;
+pub mod cratepage;
 pub mod discovery;
 
 use discovery::Workspace;
