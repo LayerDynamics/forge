@@ -157,9 +157,15 @@ fn walk_markdown(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     out
 }
 
+/// Workspace-relative path as a string with forward slashes on every platform.
+/// Findings are compared against a checked-in baseline; using the OS-native
+/// separator (`\` on Windows) would make the same drift produce a different
+/// message on Windows and spuriously fail the gate there.
 fn rel(ws: &Workspace, path: &std::path::Path) -> String {
     path.strip_prefix(&ws.root)
         .unwrap_or(path)
-        .display()
-        .to_string()
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
 }

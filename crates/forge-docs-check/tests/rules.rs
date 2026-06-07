@@ -286,3 +286,92 @@ fn discovery_classifies_crates() {
     assert!(stems.contains(&"forge".to_string())); // forge_cli special case
     assert!(stems.contains(&"forge-smelt".to_string()));
 }
+
+// --- Cross-platform robustness ---------------------------------------------
+// These guard the class of bug that escaped to the Windows CI matrix: drift
+// findings must be identical regardless of file line endings (CRLF on a Windows
+// checkout vs LF) and finding messages must use forward-slash paths so they
+// match the checked-in baseline on every OS.
+
+use forge_docs_check::apiblock;
+
+#[test]
+fn api_block_check_is_line_ending_agnostic() {
+    let sdk_src =
+        "export function foo(a: number): void {}\nexport function bar(): string { return \"\"; }\n";
+
+    let make_page = |eol: &str| {
+        let body = apiblock::render_block_body("x", &apiblock::public_signatures(sdk_src));
+        let lf = format!(
+            "---\ntitle: x\n---\n\n## API Reference\n\n{}\n{}\n{}\n\n### foo\nprose\n",
+            apiblock::BLOCK_OPEN,
+            body,
+            apiblock::BLOCK_CLOSE
+        );
+        lf.replace('\n', eol)
+    };
+
+    for eol in ["\n", "\r\n"] {
+        let mut fx = Fixture::new();
+        fx.add_crate("ext_x");
+        fx.write("sdk/runtime.x.ts", sdk_src);
+        fx.write("site/src/content/docs/api/runtime-x.md", &make_page(eol));
+        let ws = fx.discover();
+        let findings = apiblock::check(&ws);
+        assert!(
+            findings.is_empty(),
+            "a current block must not be flagged (eol={eol:?}): {:?}",
+            messages(&findings)
+        );
+    }
+}
+
+#[test]
+fn api_block_check_flags_stale_regardless_of_eol() {
+    let sdk_src = "export function foo(a: number): void {}\n";
+    for eol in ["\n", "\r\n"] {
+        let mut fx = Fixture::new();
+        fx.add_crate("ext_x");
+        fx.write("sdk/runtime.x.ts", sdk_src);
+        let page = format!(
+            "## API Reference\n\n{}\n```typescript\nWRONG(): void\n```\n{}\n",
+            apiblock::BLOCK_OPEN,
+            apiblock::BLOCK_CLOSE
+        )
+        .replace('\n', eol);
+        fx.write("site/src/content/docs/api/runtime-x.md", &page);
+        let ws = fx.discover();
+        assert!(
+            apiblock::check(&ws).iter().any(|f| f.rule == "api-block"),
+            "a stale block must be flagged (eol={eol:?})"
+        );
+    }
+}
+
+#[test]
+fn count_marker_finding_uses_forward_slashes() {
+    let mut fx = Fixture::new();
+    fx.add_crate("ext_a");
+    fx.add_crate("ext_b");
+    fx.add_crate("forge_cli");
+    // Wrong marker value (claims 9; the fixture has 2 ext crates), in a nested page.
+    fx.write(
+        "site/src/content/docs/guides/platform.md",
+        "x <!-- forge:count:ext_crates -->9<!-- /forge:count --> y\n",
+    );
+    let ws = fx.discover();
+    let msg = checks::counts::check(&ws)
+        .into_iter()
+        .find(|f| f.rule == "count")
+        .map(|f| f.message)
+        .unwrap_or_default();
+    assert!(
+        msg.contains("guides/platform.md"),
+        "finding should reference the nested page with forward slashes: {msg}"
+    );
+    // The protective assertion on the Windows matrix: never OS-native backslashes.
+    assert!(
+        !msg.contains('\\'),
+        "finding paths must not use backslashes: {msg}"
+    );
+}

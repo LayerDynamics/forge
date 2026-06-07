@@ -287,6 +287,34 @@ export { execute as exec };
     }
 
     #[test]
+    fn public_signatures_is_line_ending_agnostic() {
+        // Same source, LF vs CRLF, must yield identical signatures — otherwise a
+        // Windows checkout would generate a different block than the gate expects.
+        let lf = "export function info(): OsInfo { return x; }\n\
+                  export function pathSep(): string { return y; }\n";
+        let crlf = lf.replace('\n', "\r\n");
+        assert_eq!(public_signatures(lf), public_signatures(&crlf));
+        assert!(!public_signatures(&crlf).is_empty());
+    }
+
+    #[test]
+    fn whole_block_round_trips_through_crlf() {
+        // Render an LF block, simulate a CRLF on-disk copy, and confirm the
+        // extracted body still equals the freshly-rendered (LF) expected body.
+        let sigs = vec![
+            "info(): OsInfo".to_string(),
+            "pathSep(): string".to_string(),
+        ];
+        let expected = render_block_body("os_compat", &sigs);
+        let on_disk = format!(
+            "# page\r\n\r\n{BLOCK_OPEN}\r\n{}\r\n{BLOCK_CLOSE}\r\n\r\n## next\r\n",
+            expected.replace('\n', "\r\n")
+        );
+        let (_, _, body) = find_block(&on_disk).expect("block present");
+        assert_eq!(body, expected, "CRLF on-disk block must match LF expected");
+    }
+
+    #[test]
     fn render_block_body_is_deterministic() {
         let sigs = vec!["info(): OsInfo".to_string()];
         let a = render_block_body("os_compat", &sigs);
