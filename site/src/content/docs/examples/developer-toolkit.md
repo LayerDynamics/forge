@@ -33,6 +33,11 @@ forge dev examples/developer-toolkit
 
 ## Capabilities
 
+<!-- forge:example -->
+<!-- generated from examples/developer-toolkit/src — run `make docs-examples` to refresh -->
+**Runtime modules used:** `runtime:codesign`, `runtime:crypto`, `runtime:fs`, `runtime:ipc`, `runtime:process`, `runtime:storage`, `runtime:sys`, `runtime:window`
+<!-- /forge:example -->
+
 ```toml
 [capabilities.fs]
 read = ["**/*"]
