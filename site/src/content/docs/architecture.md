@@ -563,6 +563,13 @@ All extension crates use forge-weld macros for automatic TypeScript SDK generati
 | `ext_protocol` | `runtime:protocol` | Custom protocol handlers |
 | `ext_os_compat` | `runtime:os_compat` | OS compatibility layer |
 | `ext_debugger` | `runtime:debugger` | Debugging support |
+| `ext_console` | `runtime:console` | Console output capture (Deno + renderer) |
+| `ext_dock` | `runtime:dock` | macOS dock customization (badge, bounce, menu) |
+| `ext_encoding` | `runtime:encoding` | Text encoding/decoding |
+| `ext_image_tools` | `runtime:image_tools` | Image conversion (PNG, SVG, WebP, ICO) |
+| `ext_svelte` | `runtime:svelte` | SvelteKit integration |
+| `ext_web_inspector` | `runtime:web_inspector` | Chrome DevTools Protocol bridge |
+| `ext_codesign` | `runtime:codesign` | Code signing (macOS / Windows / Linux) |
 
 ### Forge Tool Extension Crates
 
@@ -570,6 +577,7 @@ All extension crates use forge-weld macros for automatic TypeScript SDK generati
 |-------|--------|---------|
 | `ext_weld` | `forge:weld` | Runtime code generation, TypeScript transpilation |
 | `ext_bundler` | `forge:bundler` | Icon management, manifest parsing, bundling utilities |
+| `ext_etcher` | `forge:etcher` | Documentation generation (forge-etch access) |
 
 ---
 

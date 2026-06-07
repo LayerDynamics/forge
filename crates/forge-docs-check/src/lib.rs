@@ -18,6 +18,7 @@ pub mod checks;
 pub mod cratepage;
 pub mod discovery;
 pub mod exampleblock;
+pub mod extindex;
 pub mod markers;
 
 use discovery::Workspace;
@@ -93,5 +94,6 @@ pub fn run_all_checks(ws: &Workspace) -> Report {
     report.extend(checks::forge_docs::check(ws));
     report.extend(apiblock::check(ws));
     report.extend(exampleblock::check(ws));
+    report.extend(extindex::check(ws));
     report
 }
