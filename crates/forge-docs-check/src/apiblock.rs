@@ -138,7 +138,13 @@ fn find_block(page: &str) -> Option<(usize, usize, String)> {
     let close_rel = page[after_open..].find(BLOCK_CLOSE)?;
     let close = after_open + close_rel;
     let close_end = close + BLOCK_CLOSE.len();
-    let body = page[after_open..close].trim_matches('\n').to_string();
+    // Normalize CRLF -> LF so the comparison is line-ending-agnostic: on Windows
+    // git may check the docs out with CRLF, while the generated `expected` body
+    // uses LF. Without this the gate reports a phantom "stale" block on Windows.
+    let body = page[after_open..close]
+        .replace("\r\n", "\n")
+        .trim_matches('\n')
+        .to_string();
     Some((open, close_end, body))
 }
 
@@ -266,6 +272,16 @@ export { execute as exec };
     #[test]
     fn find_block_extracts_body() {
         let page = "intro\n<!-- forge:api -->\nBODY\nLINE2\n<!-- /forge:api -->\noutro\n";
+        let (_, _, body) = find_block(page).expect("block present");
+        assert_eq!(body, "BODY\nLINE2");
+    }
+
+    #[test]
+    fn find_block_normalizes_crlf() {
+        // Windows git checkout may use CRLF; the extracted body must match the
+        // LF-generated `expected`, so the gate is line-ending-agnostic.
+        let page =
+            "intro\r\n<!-- forge:api -->\r\nBODY\r\nLINE2\r\n<!-- /forge:api -->\r\nouttro\r\n";
         let (_, _, body) = find_block(page).expect("block present");
         assert_eq!(body, "BODY\nLINE2");
     }
