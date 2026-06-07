@@ -196,7 +196,7 @@ runtime:fs → ext:runtime_fs/init.js
 | `count()` | 143-146 | Returns count |
 | `build_extensions()` | 148-160 | Builds Extension vector for JsRuntime |
 | `init_all_states()` | 162-189 | Initializes states in tier order |
-| `create_all_descriptors()` | 202-428 | Defines all 28 extensions |
+| `create_all_descriptors()` | 202-428 | Defines all 37 extensions |
 
 ### 3.4 State Initialization Dispatchers
 
@@ -709,7 +709,7 @@ Lines 541-549: Channel creation
 │  - Parse manifest.app.toml                                  │
 │  - Create Capabilities from permissions                     │
 │  - Create IPC channels                                      │
-│  - Build Deno JsRuntime with 28 extensions                  │
+│  - Build Deno JsRuntime with 37 extensions                  │
 │  - Load src/main.ts                                         │
 │  - Start tao event loop                                     │
 └─────────────────────────────────────────────────────────────┘

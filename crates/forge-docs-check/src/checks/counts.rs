@@ -135,6 +135,39 @@ fn check_freeform(ws: &Workspace, counts: &HashMap<&'static str, usize>) -> Vec<
     findings
 }
 
+/// Regenerate every `<!-- forge:count:KEY -->N<!-- /forge:count -->` marker in
+/// the docs tree to the current derived value, canonicalizing spacing. Returns
+/// the pages that changed. This is the counts half of the index generator: it
+/// lets `make docs-counts` keep embedded numbers correct the same way
+/// `make docs-api` keeps signatures correct.
+pub fn write_counts(ws: &Workspace) -> std::io::Result<Vec<std::path::PathBuf>> {
+    let counts = derived_counts(ws);
+    let re = Regex::new(r"<!--\s*forge:count:([a-z_]+)\s*-->\s*\d+\s*<!--\s*/forge:count\s*-->")
+        .expect("valid count marker regex");
+    let mut written = Vec::new();
+    for entry in walk_markdown(&ws.docs_dir()) {
+        let content = match read_optional(&entry) {
+            Some(c) => c,
+            None => continue,
+        };
+        if !content.contains("forge:count:") {
+            continue;
+        }
+        let new = re.replace_all(&content, |caps: &regex::Captures| {
+            let key = &caps[1];
+            match counts.get(key) {
+                Some(v) => format!("<!-- forge:count:{key} -->{v}<!-- /forge:count -->"),
+                None => caps[0].to_string(), // unknown key: leave as-is (check flags it)
+            }
+        });
+        if new != content {
+            std::fs::write(&entry, new.as_ref())?;
+            written.push(entry);
+        }
+    }
+    Ok(written)
+}
+
 /// Recursively collect `.md` files under `dir`.
 fn walk_markdown(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();

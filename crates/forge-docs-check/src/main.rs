@@ -2,8 +2,20 @@
 //! non-zero (with a punch-list) if the docs have drifted from the code.
 
 use anyhow::Result;
-use forge_docs_check::{apiblock, discovery::Workspace, run_all_checks};
+use forge_docs_check::{apiblock, checks, discovery::Workspace, run_all_checks};
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+
+fn report_written(kind: &str, written: &[PathBuf], root: &Path) {
+    if written.is_empty() {
+        println!("{kind}s already up to date.");
+    } else {
+        println!("Refreshed {} {kind}(s):", written.len());
+        for path in written {
+            println!("  {}", path.strip_prefix(root).unwrap_or(path).display());
+        }
+    }
+}
 
 fn main() -> Result<ExitCode> {
     let ws = Workspace::discover()?;
@@ -12,17 +24,15 @@ fn main() -> Result<ExitCode> {
     // in place from the SDK, then exit. This is the marker-hybrid "generator".
     if std::env::args().any(|a| a == "--write-api-blocks") {
         let written = apiblock::write_all(&ws)?;
-        if written.is_empty() {
-            println!("API signature blocks already up to date.");
-        } else {
-            println!("Refreshed {} API block(s):", written.len());
-            for path in &written {
-                println!(
-                    "  {}",
-                    path.strip_prefix(&ws.root).unwrap_or(path).display()
-                );
-            }
-        }
+        report_written("API signature block", &written, &ws.root);
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    // `--write-counts`: regenerate every `<!-- forge:count:* -->` marker in place
+    // from the derived workspace counts, then exit.
+    if std::env::args().any(|a| a == "--write-counts") {
+        let written = checks::counts::write_counts(&ws)?;
+        report_written("count marker", &written, &ws.root);
         return Ok(ExitCode::SUCCESS);
     }
 

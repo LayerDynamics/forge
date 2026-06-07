@@ -349,6 +349,37 @@ fn api_block_check_flags_stale_regardless_of_eol() {
 }
 
 #[test]
+fn write_counts_updates_markers_to_derived_value() {
+    let mut fx = Fixture::new();
+    fx.add_crate("ext_a");
+    fx.add_crate("ext_b");
+    fx.add_crate("forge_cli");
+    // Marker has a wrong value (9); the fixture has 2 ext crates.
+    fx.write(
+        "site/src/content/docs/architecture.md",
+        "x <!-- forge:count:ext_crates -->9<!-- /forge:count --> y\n",
+    );
+    let ws = fx.discover();
+
+    let written = checks::counts::write_counts(&ws).expect("write counts");
+    assert_eq!(written.len(), 1, "the stale page should be rewritten");
+
+    let updated =
+        std::fs::read_to_string(ws.docs_dir().join("architecture.md")).expect("read updated page");
+    assert!(
+        updated.contains("<!-- forge:count:ext_crates -->2<!-- /forge:count -->"),
+        "marker should be corrected to 2: {updated}"
+    );
+    // Idempotent: a second pass changes nothing.
+    assert!(
+        checks::counts::write_counts(&ws)
+            .expect("write counts again")
+            .is_empty(),
+        "second pass must be a no-op"
+    );
+}
+
+#[test]
 fn count_marker_finding_uses_forward_slashes() {
     let mut fx = Fixture::new();
     fx.add_crate("ext_a");
