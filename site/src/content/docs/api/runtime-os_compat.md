@@ -32,6 +32,14 @@ import {
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.os_compat.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+info(): OsInfo
+pathSep(): string
+```
+<!-- /forge:api -->
+
 ### info()
 
 Get comprehensive operating system information.

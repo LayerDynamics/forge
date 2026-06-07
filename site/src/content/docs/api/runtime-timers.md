@@ -21,6 +21,16 @@ import { setTimeout, setInterval, clearTimeout, clearInterval } from "runtime:ti
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.timers.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+setTimeout(callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]): number
+clearTimeout(timerId: number): void
+setInterval(callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]): number
+clearInterval(timerId: number): void
+```
+<!-- /forge:api -->
+
 ### setTimeout(callback, delay?, ...args)
 
 Schedules a function to execute after a specified delay.

@@ -67,6 +67,20 @@ import {
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.log.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+info(): ExtensionInfo
+emit(level: LogLevel, message: string, fields?: Record<string, unknown>): void
+trace(message: string, fields?: Record<string, unknown>): void
+debug(message: string, fields?: Record<string, unknown>): void
+infoLog(message: string, fields?: Record<string, unknown>): void
+warn(message: string, fields?: Record<string, unknown>): void
+error(message: string, fields?: Record<string, unknown>): void
+setDefaultWindow(windowId: string): void
+```
+<!-- /forge:api -->
+
 ### Host Logging (Terminal)
 
 These functions output to the terminal via the Rust tracing system. Controlled by the `FORGE_LOG` environment variable.

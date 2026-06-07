@@ -494,6 +494,34 @@ if (result.code === 0) {
 - Error [8212] if command times out
 - Error [8208] if permission denied
 
+### kill(handle, signal?)
+
+Terminate a spawned child process. The `handle` is a `SpawnHandle` obtained when starting a long-running process; `signal` defaults to a graceful termination signal (e.g. `SIGTERM`).
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `handle` | `SpawnHandle` | Handle of the spawned process to terminate |
+| `signal` | `string` (optional) | Signal name, e.g. `"SIGTERM"`, `"SIGINT"`, `"SIGKILL"` |
+
+**Returns:** `Promise<void>`
+
+**Example:**
+
+```typescript
+import { kill } from "runtime:shell";
+
+// Graceful stop
+await kill(handle);
+
+// Force kill if not responding
+await kill(handle, "SIGKILL");
+
+// Send an interrupt
+await kill(handle, "SIGINT");
+```
+
 ### cwd()
 
 Get the current working directory.
@@ -523,17 +551,17 @@ function resolveRelativePath(relativePath: string): string {
 
 - Error [8211] if operation fails
 
-### setCwd(path)
+### chdir(path)
 
 Set the current working directory for shell commands.
 
 Changes the working directory for subsequent `execute()` calls.
 
 ```typescript
-import { setCwd, execute } from "runtime:shell";
+import { chdir, execute } from "runtime:shell";
 
 // Change to project directory
-setCwd("./my-project");
+chdir("./my-project");
 
 // Commands now execute in new directory
 const result = await execute("npm install");
@@ -542,15 +570,15 @@ const result = await execute("npm install");
 **Use for scoped operations:**
 
 ```typescript
-import { cwd, setCwd, execute } from "runtime:shell";
+import { cwd, chdir, execute } from "runtime:shell";
 
 async function runInDirectory(dir: string, callback: () => Promise<void>) {
   const originalCwd = cwd();
   try {
-    setCwd(dir);
+    chdir(dir);
     await callback();
   } finally {
-    setCwd(originalCwd); // Restore original directory
+    chdir(originalCwd); // Restore original directory
   }
 }
 
@@ -882,7 +910,7 @@ import {
   execute,
   which,
   cwd,
-  setCwd,
+  chdir,
   getEnv,
   setEnv,
   getAllEnv
@@ -903,7 +931,7 @@ async function setupProject(projectPath: string) {
 
   // Change to project directory
   const originalCwd = cwd();
-  setCwd(projectPath);
+  chdir(projectPath);
 
   try {
     // Install dependencies
@@ -939,7 +967,7 @@ async function setupProject(projectPath: string) {
     return true;
   } finally {
     // Restore original directory
-    setCwd(originalCwd);
+    chdir(originalCwd);
   }
 }
 
@@ -1000,7 +1028,7 @@ function checkDevelopmentEnvironment() {
 
 async function cleanupTempFiles() {
   const tempDir = getPath("temp");
-  setCwd(tempDir);
+  chdir(tempDir);
 
   // Find temp files
   const result = await execute("ls *.tmp *.cache 2>/dev/null || true");

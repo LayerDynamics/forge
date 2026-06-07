@@ -1,11 +1,3 @@
-api-drift	runtime:dock: SDK exports `info` but runtime-dock.md does not document it
-api-drift	runtime:dock: SDK exports `nextMenuEvent` but runtime-dock.md does not document it
-api-drift	runtime:dock: SDK exports `onMenuItemClick` but runtime-dock.md does not document it
-api-drift	runtime:shell: SDK exports `chdir` but runtime-shell.md does not document it
-api-drift	runtime:shell: SDK exports `kill` but runtime-shell.md does not document it
-api-drift	runtime:shell: runtime-shell.md documents `setCwd()` but it is no longer an SDK export (renamed or removed?)
-cli-command	`forge docs` is a real subcommand but is not documented in crates/forge.md
-cli-command	`forge smelt` is a real subcommand but is not documented in crates/forge.md
 count	architecture.md: text says "27+ extension crates" but the workspace has 37 ext_crates (add a <!-- forge:count:ext_crates --> marker to make this exact)
 count	architecture.md: text says "27+ runtime modules" but the workspace has 36 runtime_modules (add a <!-- forge:count:runtime_modules --> marker to make this exact)
 count	architecture.md: text says "30+ crates" but the workspace has 44 total_crates (add a <!-- forge:count:total_crates --> marker to make this exact)

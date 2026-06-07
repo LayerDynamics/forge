@@ -83,6 +83,31 @@ import {
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.image_tools.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+pngInfo(data: Uint8Array): ImageInfo
+pngLoad(data: Uint8Array): ImageInfo
+pngSave(data: Uint8Array, options?: PngSaveOptions): Uint8Array
+pngOptimize(data: Uint8Array): Uint8Array
+svgInfo(svgData: string): SvgInfo
+svgLoad(svgData: string): SvgInfo
+webpEncode(data: Uint8Array, quality: number = 80): Uint8Array
+webpDecode(data: Uint8Array): Uint8Array
+webpInfo(data: Uint8Array): WebPInfo
+svgToPng(svgData: string, width: number, height: number): Uint8Array
+pngToIco(pngData: Uint8Array[]): Uint8Array
+icoExtract(icoData: Uint8Array): Uint8Array[]
+faviconCreate(pngData: Uint8Array): FaviconSet
+pngToWebp(data: Uint8Array, quality: number = 80): Uint8Array
+resize( data: Uint8Array, width: number, height: number, filter: FilterType = "Lanczos3" ): Uint8Array
+scale(data: Uint8Array, factor: number): Uint8Array
+crop( data: Uint8Array, x: number, y: number, width: number, height: number ): Uint8Array
+rotate(data: Uint8Array, degrees: 90 | 180 | 270): Uint8Array
+flip(data: Uint8Array, direction: FlipDirection): Uint8Array
+```
+<!-- /forge:api -->
+
 ### PNG Operations
 
 #### pngInfo(data)

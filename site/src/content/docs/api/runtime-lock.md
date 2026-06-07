@@ -36,6 +36,16 @@ import {
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.lock.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+acquire(name: string, timeoutMs?: number): Promise<bigint>
+tryAcquire(name: string): Promise<bigint | null>
+release(name: string, token: bigint): boolean
+list(): LockInfo[]
+```
+<!-- /forge:api -->
+
 ### acquire(name, timeoutMs?)
 
 Acquire a named lock, waiting if necessary.

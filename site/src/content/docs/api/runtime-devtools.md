@@ -54,6 +54,15 @@ import {
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.devtools.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+open(windowId: string): Promise<boolean>
+close(windowId: string): Promise<boolean>
+isOpen(windowId: string): Promise<boolean>
+```
+<!-- /forge:api -->
+
 ### open(windowId)
 
 Open the DevTools panel for a window.

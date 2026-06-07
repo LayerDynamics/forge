@@ -9,6 +9,21 @@ pub mod forge_docs;
 
 use std::path::Path;
 
+/// Generic hook/handler plumbing emitted into every extensibility-enabled SDK
+/// module. These are not part of a module's documented public surface, so the
+/// drift rules and the API-signature block both exclude them.
+pub(crate) const HOOK_PLUMBING: &[&str] = &[
+    "invokeHandler",
+    "hasHandler",
+    "listHandlers",
+    "onAfter",
+    "onBefore",
+    "onError",
+    "registerHandler",
+    "removeAllHooks",
+    "removeHandler",
+];
+
 /// Read a file to a string, returning `None` (not an error) when it is absent.
 /// Rules treat "file missing" as a specific [`crate::Finding`], so they need to
 /// distinguish absence from an unreadable file explicitly.

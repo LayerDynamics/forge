@@ -37,6 +37,17 @@ import { join, dirname, basename, extname, parts } from "runtime:path";
 
 ## API Reference
 
+<!-- forge:api -->
+<!-- generated from sdk/runtime.path.ts — edit signatures in the SDK, run `make docs-api` to refresh -->
+```typescript
+join(base: string, ...segments: string[]): string
+dirname(path: string): string
+basename(path: string): string
+extname(path: string): string
+parts(path: string): PathParts
+```
+<!-- /forge:api -->
+
 ### join(base, ...segments)
 
 Joins path segments into a single path using platform-appropriate separators.

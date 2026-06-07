@@ -154,3 +154,18 @@ This is the bulk of the human effort, done per module so the site is never broke
 - **Tooling home**: a **standalone workspace crate** `crates/forge-docs-check` (testable via `cargo test -p forge-docs-check`, runnable as a binary), not an `xtask`.
 
 No open decisions remain blocking. Implementation can begin at Phase 1.
+
+## 11. Revised API-page strategy — marker hybrid (decided 2026-06-07)
+
+During Phase 2.3, generating the API pages from doc-comments was found **infeasible**, with concrete proof on `runtime:os_compat`: the page is ~350 lines of bespoke hand-authored prose (Features, Platform Values tables, 6 Complete Examples, Best Practices) while `ts/init.ts` is 33 lines. "Full doc-comment migration + generate" is internally contradictory for these pages — you can faithfully preserve the bespoke prose **or** auto-sync the signatures, **not both**, unless the synced part is a delimited region inside otherwise-authored prose.
+
+**Decision:** API pages use the **same marker model already chosen for the guides**. A page opts in by embedding one region under `## API Reference`:
+
+- `<!-- forge:api -->` … a generated fenced `typescript` list of the module's public signatures (excluding hook plumbing) … `<!-- /forge:api -->`.
+
+The bespoke prose outside the markers is authored and never touched. The `forge-docs-check` `api-block` rule fails CI when a block is stale; `make docs-api` (`forge-docs-check --write-api-blocks`) regenerates every block in place from `sdk/runtime.<mod>.ts`. This supersedes the original P2.3/P3.2 "migrate all prose into doc-comments" plan for the rich API pages.
+
+**Implications:**
+- P3.2 (migrate API prose into doc-comments) is **dropped** for the rich pages; replaced by per-page marker opt-in (mechanical: insert the two markers, run `make docs-api`).
+- forge-etch's single-page emitter (P2.2) is retained for genuinely-empty/new modules (e.g. `runtime:console`) where there is no prose to preserve.
+- Piloted on `runtime:os_compat` (block inserted + populated; all bespoke prose preserved, page 392 → 400 lines).
