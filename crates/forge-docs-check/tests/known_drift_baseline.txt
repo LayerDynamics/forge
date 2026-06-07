@@ -15,10 +15,3 @@ count	roadmap.md: text says "40+ implemented extension modules" but the workspac
 crate-page	crate `ext_console` has no documentation page (expected site/src/content/docs/crates/ext-console.md)
 crate-page	crate `forge-docs-check` has no documentation page (expected site/src/content/docs/crates/forge-docs-check.md)
 crate-page	crate `forge-smelt` has no documentation page (expected site/src/content/docs/crates/forge-smelt.md)
-forge-docs-list	`forge docs` EXTENSIONS array (forge_cli/src/docs.rs) is missing `codesign` (crate `ext_codesign` exists). It will be skipped by `forge docs --all-extensions`.
-forge-docs-list	`forge docs` EXTENSIONS array (forge_cli/src/docs.rs) is missing `console` (crate `ext_console` exists). It will be skipped by `forge docs --all-extensions`.
-forge-docs-list	`forge docs` EXTENSIONS array (forge_cli/src/docs.rs) is missing `dock` (crate `ext_dock` exists). It will be skipped by `forge docs --all-extensions`.
-forge-docs-list	`forge docs` EXTENSIONS array (forge_cli/src/docs.rs) is missing `encoding` (crate `ext_encoding` exists). It will be skipped by `forge docs --all-extensions`.
-forge-docs-list	`forge docs` EXTENSIONS array (forge_cli/src/docs.rs) is missing `image_tools` (crate `ext_image_tools` exists). It will be skipped by `forge docs --all-extensions`.
-forge-docs-list	`forge docs` EXTENSIONS array (forge_cli/src/docs.rs) is missing `svelte` (crate `ext_svelte` exists). It will be skipped by `forge docs --all-extensions`.
-forge-docs-list	`forge docs` EXTENSIONS array (forge_cli/src/docs.rs) is missing `web_inspector` (crate `ext_web_inspector` exists). It will be skipped by `forge docs --all-extensions`.
