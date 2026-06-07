@@ -1,11 +1,14 @@
-//! Rule `forge-docs-list`: the hardcoded `EXTENSIONS` array in
-//! `forge_cli/src/docs.rs` covers every `crates/ext_*` crate.
+//! Rule `forge-docs-list`: regression guard for `forge_cli/src/docs.rs`.
 //!
-//! This guards the exact bug the `Site.md` audit found: the generator's own
-//! extension list had silently fallen behind the crates on disk (missing
-//! `console`, `dock`, `image_tools`, `encoding`, `svelte`, `web_inspector`,
-//! `codesign`). It is a deliberately temporary rule — Phase 2 replaces the
-//! array with filesystem discovery, after which this rule is deleted.
+//! Originally this caught the `Site.md` bug where the generator's hardcoded
+//! `EXTENSIONS` array had fallen behind the crates on disk. Phase 2 replaced
+//! that array with filesystem discovery (`discover_extensions`), so in the
+//! normal case there is no array and this rule is inert (returns no findings).
+//!
+//! It is kept as a guard: if anyone ever re-introduces a static
+//! `EXTENSIONS: &[(&str, &str)] = &[ … ]` list in `docs.rs`, this rule fires
+//! again unless that list covers every `crates/ext_*` crate — preventing a
+//! silent relapse to the stale-list failure mode.
 
 use crate::checks::read_optional;
 use crate::discovery::Workspace;

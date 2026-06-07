@@ -3,7 +3,7 @@
 //! This module provides the `forge docs` command for generating API documentation
 //! from extension TypeScript and Rust source files.
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
 /// Run the docs command with the given arguments
@@ -90,40 +90,67 @@ impl DocsCommand {
     }
 }
 
-/// All known extensions with their names and specifiers
-const EXTENSIONS: &[(&str, &str)] = &[
-    ("fs", "runtime:fs"),
-    ("window", "runtime:window"),
-    ("ipc", "runtime:ipc"),
-    ("net", "runtime:net"),
-    ("sys", "runtime:sys"),
-    ("process", "runtime:process"),
-    ("app", "runtime:app"),
-    ("crypto", "runtime:crypto"),
-    ("storage", "runtime:storage"),
-    ("shell", "runtime:shell"),
-    ("database", "runtime:database"),
-    ("webview", "runtime:webview"),
-    ("devtools", "runtime:devtools"),
-    ("timers", "runtime:timers"),
-    ("shortcuts", "runtime:shortcuts"),
-    ("signals", "runtime:signals"),
-    ("updater", "runtime:updater"),
-    ("monitor", "runtime:monitor"),
-    ("display", "runtime:display"),
-    ("log", "runtime:log"),
-    ("trace", "runtime:trace"),
-    ("lock", "runtime:lock"),
-    ("path", "runtime:path"),
-    ("protocol", "runtime:protocol"),
-    ("os_compat", "runtime:os_compat"),
-    ("debugger", "runtime:debugger"),
-    ("wasm", "runtime:wasm"),
-    // Build/tooling extensions
-    ("weld", "forge:weld"),
-    ("etcher", "forge:etcher"),
-    ("bundler", "forge:bundler"),
-];
+/// Discover every runtime extension by scanning `crates/ext_*` and reading the
+/// module specifier from each crate's `build.rs`. This is the single source of
+/// truth used by the binding generator (`ExtensionBuilder::new(reg, specifier)`),
+/// so the list can never silently fall behind the crates on disk the way a
+/// hardcoded array did.
+///
+/// Returns sorted `(short_name, specifier)` pairs where `short_name` is the
+/// crate directory without the `ext_` prefix (e.g. `image_tools` →
+/// `runtime:image_tools`, `etcher` → `forge:etcher`).
+fn discover_extensions(workspace_root: &Path) -> Result<Vec<(String, String)>> {
+    let crates_dir = workspace_root.join("crates");
+    let mut extensions = Vec::new();
+
+    for entry in std::fs::read_dir(&crates_dir)
+        .with_context(|| format!("reading crates directory {}", crates_dir.display()))?
+    {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let dir_name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+        let short = match dir_name.strip_prefix("ext_") {
+            Some(s) => s,
+            None => continue,
+        };
+
+        // Prefer the specifier declared in build.rs; fall back to runtime:<name>
+        // for an extension crate that has no ExtensionBuilder call.
+        let specifier = std::fs::read_to_string(path.join("build.rs"))
+            .ok()
+            .and_then(|src| extract_specifier(&src))
+            .unwrap_or_else(|| format!("runtime:{short}"));
+
+        extensions.push((short.to_string(), specifier));
+    }
+
+    extensions.sort();
+    Ok(extensions)
+}
+
+/// Extract the module specifier (second string argument) from a build.rs
+/// containing `ExtensionBuilder::new("<reg_name>", "<specifier>")`.
+fn extract_specifier(build_src: &str) -> Option<String> {
+    let start = build_src.find("ExtensionBuilder::new")?;
+    // Quoted string literals after the call site appear at odd split indices:
+    // [before] " arg1 " [between] " arg2 " ...  → arg2 is the specifier.
+    let mut parts = build_src[start..].split('"');
+    parts.next()?; // text before the first quote
+    parts.next()?; // arg1: registration name
+    parts.next()?; // separator between the two string args
+    let specifier = parts.next()?; // arg2: module specifier
+    if specifier.is_empty() {
+        None
+    } else {
+        Some(specifier.to_string())
+    }
+}
 
 fn generate_all_extensions(cmd: &DocsCommand) -> Result<()> {
     println!("Generating documentation for all extensions...");
@@ -132,10 +159,12 @@ fn generate_all_extensions(cmd: &DocsCommand) -> Result<()> {
     let workspace_root = find_workspace_root()?;
     let crates_dir = workspace_root.join("crates");
 
+    let extensions = discover_extensions(&workspace_root)?;
+
     let mut generated_count = 0;
     let mut skipped_count = 0;
 
-    for (name, specifier) in EXTENSIONS {
+    for (name, specifier) in &extensions {
         let ext_path = crates_dir.join(format!("ext_{}", name));
         if ext_path.exists() {
             let output_dir = cmd.output.join(name);
@@ -165,29 +194,30 @@ fn generate_single_extension(name: &str, cmd: &DocsCommand) -> Result<()> {
     let workspace_root = find_workspace_root()?;
     let ext_path = workspace_root.join("crates").join(format!("ext_{}", name));
 
+    let extensions = discover_extensions(&workspace_root)?;
+
     if !ext_path.exists() {
         bail!(
             "Extension not found: ext_{}\n\
             Available extensions: {}",
             name,
-            EXTENSIONS
+            extensions
                 .iter()
-                .map(|(n, _)| *n)
+                .map(|(n, _)| n.as_str())
                 .collect::<Vec<_>>()
                 .join(", ")
         );
     }
 
-    let specifier = EXTENSIONS
+    // Use the specifier discovered from the crate's build.rs; fall back to the
+    // conventional runtime:<name> form for a crate without an ExtensionBuilder.
+    let specifier = extensions
         .iter()
-        .find(|(n, _)| *n == name)
-        .map(|(_, s)| *s)
-        .unwrap_or_else(|| {
-            // Fallback specifier format
-            Box::leak(format!("runtime:{}", name).into_boxed_str())
-        });
+        .find(|(n, _)| n == name)
+        .map(|(_, s)| s.clone())
+        .unwrap_or_else(|| format!("runtime:{name}"));
 
-    generate_extension_docs(&ext_path, name, specifier, &cmd.output, &cmd.format)
+    generate_extension_docs(&ext_path, name, &specifier, &cmd.output, &cmd.format)
 }
 
 fn generate_extension_docs(
@@ -311,4 +341,54 @@ pub fn usage() {
     eprintln!("  forge docs my-app                              Document an app");
     eprintln!("  forge docs --extension fs -o docs/api/fs       Document runtime:fs");
     eprintln!("  forge docs --all-extensions -o site/docs/api   Document all extensions");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_specifier_reads_second_string_arg() {
+        assert_eq!(
+            extract_specifier(r#"ExtensionBuilder::new("runtime_dock", "runtime:dock")"#),
+            Some("runtime:dock".to_string())
+        );
+        // forge:* tooling specifier.
+        assert_eq!(
+            extract_specifier(
+                r#"    let b = ExtensionBuilder::new("ext_etcher_runtime", "forge:etcher");"#
+            ),
+            Some("forge:etcher".to_string())
+        );
+        // No ExtensionBuilder call -> None (caller falls back to runtime:<name>).
+        assert_eq!(extract_specifier("fn main() {}"), None);
+    }
+
+    #[test]
+    fn discover_extensions_finds_every_ext_crate_with_correct_specifier() {
+        let root = find_workspace_root().expect("workspace root");
+        let exts = discover_extensions(&root).expect("discover extensions");
+
+        // Count matches the number of crates/ext_* directories on disk.
+        let on_disk = std::fs::read_dir(root.join("crates"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir() && e.file_name().to_string_lossy().starts_with("ext_"))
+            .count();
+        assert_eq!(
+            exts.len(),
+            on_disk,
+            "discovery must cover every ext_* crate"
+        );
+
+        let find = |name: &str| -> Option<String> {
+            exts.iter().find(|(n, _)| n == name).map(|(_, s)| s.clone())
+        };
+        // Previously-missing extensions are now discovered.
+        assert_eq!(find("console").as_deref(), Some("runtime:console"));
+        assert_eq!(find("dock").as_deref(), Some("runtime:dock"));
+        assert_eq!(find("image_tools").as_deref(), Some("runtime:image_tools"));
+        // forge:* tooling specifiers are read correctly (not assumed runtime:*).
+        assert_eq!(find("etcher").as_deref(), Some("forge:etcher"));
+    }
 }
