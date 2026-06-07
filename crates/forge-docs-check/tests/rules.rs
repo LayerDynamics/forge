@@ -248,37 +248,12 @@ fn counts_marker_is_authoritative() {
 
 #[test]
 fn cli_command_flags_missing_subcommand() {
-    let mut fx = Fixture::new();
-    fx.add_crate("forge_cli");
-    // The clap command model is the source of truth (post-P5.2 migration).
-    // Includes doc comments, attributes, and a struct variant with nested
-    // braces to exercise the brace-matching parser.
-    fx.write(
-        "crates/forge_cli/src/main.rs",
-        r#"#[derive(Subcommand)]
-enum Commands {
-    /// Run an app
-    Dev {
-        app_dir: PathBuf,
-    },
-    /// Build assets
-    Build {
-        app_dir: PathBuf,
-    },
-    /// AOT compile
-    Smelt {
-        app_dir: PathBuf,
-        #[arg(long, short)]
-        out: Option<PathBuf>,
-    },
-}
-"#,
-    );
-    // forge.md documents dev and build but not smelt.
-    fx.write(
-        "site/src/content/docs/crates/forge.md",
-        "### `forge dev`\n### `forge build`\n",
-    );
+    // The subcommand list is introspected from the real `forge_cli::cli()`
+    // clap model (post-P5.2), so the fixture only controls the docs page.
+    // `smelt` is a real subcommand; documenting `dev` but not `smelt` must
+    // flag the gap.
+    let fx = Fixture::new();
+    fx.write("site/src/content/docs/crates/forge.md", "### `forge dev`\n");
     let ws = fx.discover();
     let findings = checks::cli_commands::check(&ws);
     assert!(
@@ -289,6 +264,49 @@ enum Commands {
     assert!(
         !any_contains(&findings, "forge dev"),
         "documented dev must not be flagged"
+    );
+}
+
+#[test]
+fn cli_doc_flags_stale_region_and_passes_when_current() {
+    use forge_docs_check::clidoc::{self, BLOCK_CLOSE, BLOCK_OPEN};
+
+    // A `<!-- forge:cli -->` region whose body does not match the clap model
+    // must be flagged stale.
+    let fx = Fixture::new();
+    fx.write(
+        "site/src/content/docs/crates/forge.md",
+        &format!("# forge\n\n{BLOCK_OPEN}\nstale, hand-edited content\n{BLOCK_CLOSE}\n"),
+    );
+    let ws = fx.discover();
+    assert!(
+        any_contains(&clidoc::check(&ws), "stale"),
+        "a region that doesn't match the clap model must be flagged: {:?}",
+        messages(&clidoc::check(&ws))
+    );
+
+    // The canonical generated body (open\n{body}\n close) must pass.
+    let body = clidoc::render_block_body();
+    fx.write(
+        "site/src/content/docs/crates/forge.md",
+        &format!("# forge\n\n{BLOCK_OPEN}\n{body}\n{BLOCK_CLOSE}\n"),
+    );
+    let ws = fx.discover();
+    assert!(
+        clidoc::check(&ws).is_empty(),
+        "the freshly generated region must be in sync: {:?}",
+        messages(&clidoc::check(&ws))
+    );
+
+    // A page that never opts in (no marker) is silently skipped.
+    fx.write(
+        "site/src/content/docs/crates/forge.md",
+        "# forge\n\nno markers here\n",
+    );
+    let ws = fx.discover();
+    assert!(
+        clidoc::check(&ws).is_empty(),
+        "a page without the marker must not be flagged"
     );
 }
 

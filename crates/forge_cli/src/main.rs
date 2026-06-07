@@ -95,7 +95,8 @@
 //! - Main module - Command dispatch and build orchestration
 
 use anyhow::{anyhow, bail, Context, Result};
-use clap::{Parser, Subcommand};
+use clap::Parser;
+use forge_cli::{Cli, Commands, IconCommand};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -105,103 +106,9 @@ use std::{
 mod bundler;
 mod docs;
 
-/// Extra help shown under the generated command list (kept from the original
-/// hand-written usage banner so `forge --help` still points at the examples).
-const AFTER_HELP: &str = "\
-Getting Started:
-  Copy an example from the examples/ folder to start a new app:
-  - examples/example-deno-app   Minimal TypeScript app
-  - examples/react-app          React with TypeScript
-  - examples/nextjs-app         Next.js-style patterns
-  - examples/svelte-app         Svelte with TypeScript
-  - examples/todo-app           Todo app with persistence
-  - examples/text-editor        File operations example
-
-Bundle output formats:
-  Windows: .msix package
-  macOS:   .app bundle + .dmg disk image
-  Linux:   .AppImage or .tar.gz";
-
-/// Forge — build cross-platform desktop apps with TypeScript and Deno.
-#[derive(Parser)]
-#[command(
-    name = "forge",
-    version,
-    about = "Forge — build cross-platform desktop apps with TypeScript and Deno",
-    after_help = AFTER_HELP,
-    subcommand_required = true,
-    arg_required_else_help = true
-)]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Run an app in development mode (hot reload, full debugging)
-    Dev {
-        /// App directory (contains manifest.app.toml)
-        app_dir: PathBuf,
-    },
-    /// Build an app's web assets for production
-    Build {
-        /// App directory
-        app_dir: PathBuf,
-    },
-    /// Package an app into a platform distributable (.app/.dmg, .msix, AppImage)
-    Bundle {
-        /// App directory
-        app_dir: PathBuf,
-    },
-    /// Ahead-of-time compile an app's TypeScript to JavaScript
-    Smelt {
-        /// App directory
-        app_dir: PathBuf,
-        /// Output directory for the compiled JavaScript tree
-        #[arg(long, short)]
-        out: Option<PathBuf>,
-        /// Also write the standalone-binary bootstrap shim
-        #[arg(long)]
-        embed: bool,
-    },
-    /// Code-sign a bundled artifact for distribution
-    Sign {
-        /// Signing identity (e.g. "Developer ID Application: Name (TEAM)")
-        #[arg(long, short)]
-        identity: Option<String>,
-        /// The bundled artifact to sign
-        artifact: PathBuf,
-    },
-    /// Manage app icons
-    Icon {
-        #[command(subcommand)]
-        command: IconCommand,
-    },
-    /// Generate API documentation from extension TypeScript/Rust source
-    #[command(disable_help_flag = true)]
-    Docs {
-        /// Options/target forwarded to the docs generator: --all-extensions,
-        /// --extension <name>, --output <dir>, --format <astro|html|both>
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-        args: Vec<String>,
-    },
-}
-
-#[derive(Subcommand)]
-enum IconCommand {
-    /// Create the default Forge-branded icon at <path>
-    Create {
-        /// Output path for the icon (PNG)
-        path: PathBuf,
-    },
-    /// Validate an app's icon meets platform requirements
-    Validate {
-        /// App directory (defaults to the current directory)
-        #[arg(default_value = ".")]
-        app_dir: PathBuf,
-    },
-}
+// The clap command model (`Cli`, `Commands`, `IconCommand`, `AFTER_HELP`) lives
+// in `lib.rs` so `forge-docs-check` can introspect the exact CLI surface to
+// generate the docs. The binary imports it above and dispatches in `main()`.
 
 /// Find the forge-runtime binary in standard locations
 ///
