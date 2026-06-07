@@ -8,7 +8,7 @@ This document outlines the Forge SDK development roadmap, including planned exte
 
 ## Current State
 
-Forge currently has **40+ implemented extension modules** (as of v1.0.0p-steel-donut 🍩):
+Forge currently has **<!-- forge:count:ext_crates -->37<!-- /forge:count --> implemented extension modules** (as of v0.1.0-alpha.1):
 
 ### Core Extensions (Fully Implemented)
 
@@ -60,6 +60,7 @@ Forge currently has **40+ implemented extension modules** (as of v1.0.0p-steel-d
 | `runtime:updater` | ext_updater | App update system | Complete |
 | `runtime:protocol` | ext_protocol | Custom protocol handlers | Complete |
 | `runtime:shortcuts` | ext_shortcuts | Keyboard shortcuts | Complete |
+| `runtime:console` | ext_console | Console output capture (Deno + renderer) | Complete |
 
 ---
 
@@ -159,11 +160,13 @@ Core application management and lifecycle control.
 
 ---
 
-## Phase 1: High Priority Modules (In Progress)
+## Phase 1: High Priority Modules
+
+> **Status update (v0.1.0-alpha.1):** Most modules in this section have since shipped and appear as **Complete** above — `runtime:screen` → `runtime:display`, `runtime:globalShortcut` → `runtime:shortcuts`, `runtime:autoUpdater` → `runtime:updater`, plus `runtime:database`. The detailed operation tables below are retained for reference. `runtime:theme` remains planned.
 
 ### runtime:screen - Display Information
 
-Multi-monitor support and display information. Currently a stub extension (`ext_display`).
+Multi-monitor support and display information. Shipped as the `ext_display` extension (`runtime:display`).
 
 | Operation | Description | Signature |
 |-----------|-------------|-----------|

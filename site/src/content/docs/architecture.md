@@ -519,7 +519,7 @@ forge-weld-macro
 
 ## Crate Structure
 
-Forge consists of 30+ crates organized into core and extension crates:
+Forge consists of <!-- forge:count:total_crates -->44<!-- /forge:count --> crates organized into core and extension crates:
 
 ### Core Crates
 
@@ -623,7 +623,7 @@ forge/
 │   ├── ext_timers/             # runtime:timers extension
 │   ├── ext_weld/               # forge:weld extension
 │   ├── ext_bundler/            # forge:bundler extension
-│   └── ... (27+ extension crates)
+│   └── ... (37 extension crates)
 │
 ├── sdk/                        # TypeScript SDK (auto-generated)
 │   ├── generated/              # Type declarations
@@ -639,7 +639,7 @@ forge/
 │   ├── runtime.crypto.ts       # Generated from ext_crypto
 │   ├── runtime.weld.ts         # Generated from ext_weld (forge:weld)
 │   ├── runtime.bundler.ts      # Generated from ext_bundler (forge:bundler)
-│   ├── ... (27+ runtime modules)
+│   ├── ... (36 runtime modules)
 │   └── preload.ts              # Renderer bridge
 │
 ├── examples/                   # Example apps
