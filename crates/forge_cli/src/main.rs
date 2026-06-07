@@ -95,6 +95,7 @@
 //! - Main module - Command dispatch and build orchestration
 
 use anyhow::{anyhow, bail, Context, Result};
+use clap::{Parser, Subcommand};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -104,41 +105,102 @@ use std::{
 mod bundler;
 mod docs;
 
-fn usage() {
-    eprintln!("forge <dev|build|bundle|smelt|sign|icon|docs> [options] <app-dir>");
-    eprintln!();
-    eprintln!("Commands:");
-    eprintln!("  dev <app-dir>                       Run in development mode");
-    eprintln!("  build <app-dir>                     Build for production");
-    eprintln!("  bundle <app-dir>                    Package into distributable");
-    eprintln!("  smelt <app-dir> [--out <dir>]       Compile app TypeScript -> JavaScript");
-    eprintln!("  sign <artifact>                     Sign a package artifact");
-    eprintln!("  icon <subcommand>                   Manage app icons");
-    eprintln!("  docs [options] [target]             Generate API documentation");
-    eprintln!();
-    eprintln!("Icon subcommands:");
-    eprintln!("  icon create <path>                  Create a placeholder icon");
-    eprintln!("  icon validate <app-dir>             Validate app icon requirements");
-    eprintln!();
-    eprintln!("Docs options:");
-    eprintln!("  --all-extensions                    Generate docs for all extensions");
-    eprintln!("  --extension, -e <name>              Generate docs for specific extension");
-    eprintln!("  --output, -o <dir>                  Output directory (default: docs)");
-    eprintln!("  --format, -f <astro|html|both>      Output format (default: astro)");
-    eprintln!();
-    eprintln!("Getting Started:");
-    eprintln!("  Copy an example from the examples/ folder to start a new app:");
-    eprintln!("  - examples/example-deno-app   Minimal TypeScript app");
-    eprintln!("  - examples/react-app          React with TypeScript");
-    eprintln!("  - examples/nextjs-app         Next.js-style patterns");
-    eprintln!("  - examples/svelte-app         Svelte with TypeScript");
-    eprintln!("  - examples/todo-app           Todo app with persistence");
-    eprintln!("  - examples/text-editor        File operations example");
-    eprintln!();
-    eprintln!("Bundle output formats:");
-    eprintln!("  Windows: .msix package");
-    eprintln!("  macOS:   .app bundle + .dmg disk image");
-    eprintln!("  Linux:   .AppImage or .tar.gz");
+/// Extra help shown under the generated command list (kept from the original
+/// hand-written usage banner so `forge --help` still points at the examples).
+const AFTER_HELP: &str = "\
+Getting Started:
+  Copy an example from the examples/ folder to start a new app:
+  - examples/example-deno-app   Minimal TypeScript app
+  - examples/react-app          React with TypeScript
+  - examples/nextjs-app         Next.js-style patterns
+  - examples/svelte-app         Svelte with TypeScript
+  - examples/todo-app           Todo app with persistence
+  - examples/text-editor        File operations example
+
+Bundle output formats:
+  Windows: .msix package
+  macOS:   .app bundle + .dmg disk image
+  Linux:   .AppImage or .tar.gz";
+
+/// Forge — build cross-platform desktop apps with TypeScript and Deno.
+#[derive(Parser)]
+#[command(
+    name = "forge",
+    version,
+    about = "Forge — build cross-platform desktop apps with TypeScript and Deno",
+    after_help = AFTER_HELP,
+    subcommand_required = true,
+    arg_required_else_help = true
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Run an app in development mode (hot reload, full debugging)
+    Dev {
+        /// App directory (contains manifest.app.toml)
+        app_dir: PathBuf,
+    },
+    /// Build an app's web assets for production
+    Build {
+        /// App directory
+        app_dir: PathBuf,
+    },
+    /// Package an app into a platform distributable (.app/.dmg, .msix, AppImage)
+    Bundle {
+        /// App directory
+        app_dir: PathBuf,
+    },
+    /// Ahead-of-time compile an app's TypeScript to JavaScript
+    Smelt {
+        /// App directory
+        app_dir: PathBuf,
+        /// Output directory for the compiled JavaScript tree
+        #[arg(long, short)]
+        out: Option<PathBuf>,
+        /// Also write the standalone-binary bootstrap shim
+        #[arg(long)]
+        embed: bool,
+    },
+    /// Code-sign a bundled artifact for distribution
+    Sign {
+        /// Signing identity (e.g. "Developer ID Application: Name (TEAM)")
+        #[arg(long, short)]
+        identity: Option<String>,
+        /// The bundled artifact to sign
+        artifact: PathBuf,
+    },
+    /// Manage app icons
+    Icon {
+        #[command(subcommand)]
+        command: IconCommand,
+    },
+    /// Generate API documentation from extension TypeScript/Rust source
+    #[command(disable_help_flag = true)]
+    Docs {
+        /// Options/target forwarded to the docs generator: --all-extensions,
+        /// --extension <name>, --output <dir>, --format <astro|html|both>
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum IconCommand {
+    /// Create the default Forge-branded icon at <path>
+    Create {
+        /// Output path for the icon (PNG)
+        path: PathBuf,
+    },
+    /// Validate an app's icon meets platform requirements
+    Validate {
+        /// App directory (defaults to the current directory)
+        #[arg(default_value = ".")]
+        app_dir: PathBuf,
+    },
 }
 
 /// Find the forge-runtime binary in standard locations
@@ -1077,23 +1139,6 @@ fn cmd_sign(artifact_path: &Path, identity: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-fn icon_usage() {
-    eprintln!("forge icon <create|validate> [options]");
-    eprintln!();
-    eprintln!("Subcommands:");
-    eprintln!("  create <path>       Create a placeholder icon at the specified path");
-    eprintln!("  validate <app-dir>  Validate icon for the specified app directory");
-    eprintln!();
-    eprintln!("Icon Requirements:");
-    eprintln!("  • Format: PNG with transparency (RGBA)");
-    eprintln!("  • Size: 1024x1024 pixels (minimum 512x512)");
-    eprintln!("  • Shape: Square (1:1 aspect ratio)");
-    eprintln!();
-    eprintln!("Examples:");
-    eprintln!("  forge icon create my-app/assets/icon.png");
-    eprintln!("  forge icon validate my-app");
-}
-
 fn cmd_icon_create(output_path: &Path) -> Result<()> {
     use bundler::{IconProcessor, RECOMMENDED_ICON_SIZE};
 
@@ -1253,141 +1298,30 @@ fn cmd_icon_validate(app_dir: &Path) -> Result<()> {
     }
 }
 
-fn cmd_icon(args: &[String]) -> Result<()> {
-    if args.is_empty() {
-        icon_usage();
-        return Ok(());
-    }
-
-    let subcommand = &args[0];
-    let rest = &args[1..];
-
-    match subcommand.as_str() {
-        "create" => {
-            if rest.is_empty() {
-                return Err(anyhow!("Usage: forge icon create <path>\n\nExample: forge icon create my-app/assets/icon.png"));
-            }
-            let output_path = PathBuf::from(&rest[0]);
-            cmd_icon_create(&output_path)
-        }
-        "validate" => {
-            let app_dir = if rest.is_empty() {
-                PathBuf::from(".")
-            } else {
-                PathBuf::from(&rest[0])
-            };
-            cmd_icon_validate(&app_dir)
-        }
-        _ => {
-            icon_usage();
-            Err(anyhow!("Unknown icon subcommand: {}", subcommand))
-        }
-    }
-}
-
 fn main() -> Result<()> {
-    let mut args: Vec<String> = env::args().skip(1).collect();
-
-    if args.is_empty() {
-        usage();
-        return Ok(());
-    }
-
-    let cmd = args.remove(0);
-
-    match cmd.as_str() {
-        "dev" => {
-            let app_dir = args
-                .first()
-                .map(PathBuf::from)
-                .ok_or_else(|| anyhow!("Usage: forge dev <app-dir>"))?;
-            cmd_dev(&app_dir)?;
-        }
-        "build" => {
-            let app_dir = args
-                .first()
-                .map(PathBuf::from)
-                .ok_or_else(|| anyhow!("Usage: forge build <app-dir>"))?;
-            cmd_build(&app_dir)?;
-        }
-        "bundle" => {
-            let app_dir = args
-                .first()
-                .map(PathBuf::from)
-                .ok_or_else(|| anyhow!("Usage: forge bundle <app-dir>"))?;
-            cmd_bundle(&app_dir)?;
-        }
-        "smelt" => {
-            // forge smelt <app-dir> [--out <dir>] [--embed]
-            let mut app_dir: Option<PathBuf> = None;
-            let mut out_dir: Option<PathBuf> = None;
-            let mut embed = false;
-
-            let mut i = 0;
-            while i < args.len() {
-                match args[i].as_str() {
-                    "--out" | "-o" => {
-                        let value = args
-                            .get(i + 1)
-                            .ok_or_else(|| anyhow!("--out requires a value"))?;
-                        out_dir = Some(PathBuf::from(value));
-                        i += 2;
-                    }
-                    "--embed" => {
-                        embed = true;
-                        i += 1;
-                    }
-                    flag if flag.starts_with('-') => {
-                        return Err(anyhow!("Unknown flag: {}", flag));
-                    }
-                    value => {
-                        app_dir = Some(PathBuf::from(value));
-                        i += 1;
-                    }
-                }
-            }
-
-            let app_dir = app_dir
-                .ok_or_else(|| anyhow!("Usage: forge smelt <app-dir> [--out <dir>] [--embed]"))?;
-            cmd_smelt(&app_dir, out_dir.as_deref(), embed)?;
-        }
-        "sign" => {
-            // Parse --identity flag
-            let mut identity: Option<String> = None;
-            let mut artifact_path = None;
-
-            let mut i = 0;
-            while i < args.len() {
-                if args[i] == "--identity" || args[i] == "-i" {
-                    if i + 1 < args.len() {
-                        identity = Some(args[i + 1].clone());
-                        i += 2;
-                    } else {
-                        return Err(anyhow!("--identity requires a value"));
-                    }
-                } else if !args[i].starts_with('-') {
-                    artifact_path = Some(PathBuf::from(&args[i]));
-                    i += 1;
-                } else {
-                    return Err(anyhow!("Unknown flag: {}", args[i]));
-                }
-            }
-
-            let artifact_path = artifact_path
-                .ok_or_else(|| anyhow!("Usage: forge sign [--identity <IDENTITY>] <artifact>"))?;
-            cmd_sign(&artifact_path, identity.as_deref())?;
-        }
-        "icon" => {
-            cmd_icon(&args)?;
-        }
-        "docs" => {
+    match Cli::parse().command {
+        Commands::Dev { app_dir } => cmd_dev(&app_dir),
+        Commands::Build { app_dir } => cmd_build(&app_dir),
+        Commands::Bundle { app_dir } => cmd_bundle(&app_dir),
+        Commands::Smelt {
+            app_dir,
+            out,
+            embed,
+        } => cmd_smelt(&app_dir, out.as_deref(), embed),
+        Commands::Sign { identity, artifact } => cmd_sign(&artifact, identity.as_deref()),
+        Commands::Icon { command } => match command {
+            IconCommand::Create { path } => cmd_icon_create(&path),
+            IconCommand::Validate { app_dir } => cmd_icon_validate(&app_dir),
+        },
+        // `docs` keeps its own argument parser (docs::run); clap forwards the raw
+        // tail to it. `forge docs` with no args or `--help` prints the docs usage.
+        Commands::Docs { args } => {
             if args.is_empty() || args.iter().any(|a| a == "--help" || a == "-h") {
                 docs::usage();
+                Ok(())
             } else {
-                docs::run(&args)?;
+                docs::run(&args)
             }
         }
-        _ => usage(),
     }
-    Ok(())
 }
