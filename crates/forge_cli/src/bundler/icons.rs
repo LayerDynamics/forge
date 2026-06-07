@@ -18,10 +18,18 @@
 //! - Or specify path in manifest: `[bundle] icon = "path/to/icon"`
 
 use anyhow::{bail, Context, Result};
-use image::{imageops::FilterType, DynamicImage, ImageFormat, Rgba, RgbaImage};
+use image::{imageops::FilterType, DynamicImage, ImageFormat};
+// `Rgba`/`RgbaImage` are only used by the Windows-only `save_wide` below.
+#[cfg(target_os = "windows")]
+use image::{Rgba, RgbaImage};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// The Forge brand icon (1024x1024 ember plate + emblem + "Forge" wordmark),
+/// embedded at build time. Used as the default art produced by
+/// `forge icon create`. Regenerate via `scripts/generate-brand-icon.sh`.
+const FORGE_BRAND_ICON: &[u8] = include_bytes!("../../assets/forge-icon-1024.png");
 
 /// Minimum recommended icon size
 pub const MIN_ICON_SIZE: u32 = 512;
@@ -274,46 +282,24 @@ impl IconProcessor {
         }
     }
 
-    /// Create a placeholder icon (for `forge icon create` command)
+    /// Create the default Forge-branded icon at the requested size
+    /// (for the `forge icon create` command).
+    ///
+    /// Decodes the embedded 1024x1024 Forge brand master ([`FORGE_BRAND_ICON`])
+    /// and resizes it to `size`x`size`. The master is square and carries an
+    /// alpha channel (the rounded-corner plate), so the result satisfies the
+    /// square + transparency parts of [`validate`](Self::validate); a `size`
+    /// below [`MIN_ICON_SIZE`] still fails the minimum-size check, exactly as a
+    /// custom icon of that size would.
+    ///
+    /// This is intentionally the real Forge logo rather than a generic
+    /// placeholder, so scaffolded apps start with a polished identity. Apps are
+    /// expected to replace it with their own icon before release.
     pub fn create_placeholder(size: u32) -> Self {
-        let mut img = RgbaImage::new(size, size);
-
-        // Create a blue-purple gradient
-        for y in 0..size {
-            for x in 0..size {
-                let gradient_x = x as f32 / size as f32;
-                let gradient_y = y as f32 / size as f32;
-                let gradient = (gradient_x + gradient_y) / 2.0;
-
-                // Blue to purple gradient
-                let r = (60.0 + gradient * 100.0) as u8;
-                let g = (80.0 + gradient * 60.0) as u8;
-                let b = (180.0 + gradient * 40.0) as u8;
-
-                // Simple circular mask for rounded appearance
-                let cx = size as f32 / 2.0;
-                let cy = size as f32 / 2.0;
-                let dx = x as f32 - cx;
-                let dy = y as f32 - cy;
-                let dist = (dx * dx + dy * dy).sqrt();
-                let radius = size as f32 * 0.45;
-
-                let alpha = if dist < radius {
-                    255
-                } else if dist < radius + 20.0 {
-                    // Smooth edge
-                    ((radius + 20.0 - dist) / 20.0 * 255.0) as u8
-                } else {
-                    0
-                };
-
-                img.put_pixel(x, y, Rgba([r, g, b, alpha]));
-            }
-        }
-
-        Self {
-            source_image: DynamicImage::ImageRgba8(img),
-        }
+        let master = image::load_from_memory(FORGE_BRAND_ICON)
+            .expect("embedded Forge brand icon must be a valid PNG");
+        let source_image = master.resize_exact(size, size, FilterType::Lanczos3);
+        Self { source_image }
     }
 
     /// Get the source image dimensions
