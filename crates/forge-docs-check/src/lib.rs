@@ -13,6 +13,7 @@
 //! Every expectation is derived from the filesystem via [`discovery::Workspace`],
 //! so the checker never carries a hand-maintained list that could itself rot.
 
+pub mod apiblock;
 pub mod checks;
 pub mod discovery;
 
@@ -87,5 +88,6 @@ pub fn run_all_checks(ws: &Workspace) -> Report {
     report.extend(checks::counts::check(ws));
     report.extend(checks::cli_commands::check(ws));
     report.extend(checks::forge_docs::check(ws));
+    report.extend(apiblock::check(ws));
     report
 }

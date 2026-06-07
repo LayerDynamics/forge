@@ -10,25 +10,10 @@
 //! SDK module *should* have a page is a generation/policy concern (Phase 2),
 //! not drift — flagging intentionally-internal modules would make CI noisy.
 
-use crate::checks::read_optional;
+use crate::checks::{read_optional, HOOK_PLUMBING};
 use crate::discovery::Workspace;
 use crate::Finding;
 use regex::Regex;
-
-/// Generic hook/handler plumbing emitted into every extensibility-enabled SDK
-/// module. These are not part of a module's documented surface, so neither
-/// direction should require them.
-const HOOK_PLUMBING: &[&str] = &[
-    "invokeHandler",
-    "hasHandler",
-    "listHandlers",
-    "onAfter",
-    "onBefore",
-    "onError",
-    "registerHandler",
-    "removeAllHooks",
-    "removeHandler",
-];
 
 pub fn check(ws: &Workspace) -> Vec<Finding> {
     let api_dir = ws.docs_dir().join("api");
