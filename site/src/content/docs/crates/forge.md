@@ -106,6 +106,36 @@ forge icon validate <app-dir> # Validate icon requirements
 - Size: 1024x1024 pixels (minimum 512x512)
 - Shape: Square (1:1 aspect ratio)
 
+### `forge smelt`
+
+Ahead-of-time compile an app's TypeScript to JavaScript:
+
+```bash
+forge smelt <app-dir> [--out <dir>] [--embed]
+```
+
+- `--out <dir>` - Output directory for the compiled `.js` tree (defaults next to the source).
+- `--embed` - Also write the bootstrap shim for embedding the app into a standalone binary.
+
+`forge build` runs smelt automatically, so production bundles ship compiled JavaScript with no launch-time transpile. See [forge-smelt](/docs/crates/forge-smelt) for details.
+
+### `forge docs`
+
+Generate API documentation from extension TypeScript/Rust source:
+
+```bash
+forge docs <app-dir>                 # Document an app's src/main.ts
+forge docs --extension fs            # Document a single extension
+forge docs --all-extensions          # Document every runtime extension
+```
+
+Options:
+
+- `--output, -o <dir>` - Output directory (default: `docs`).
+- `--format, -f <astro|html|both>` - Output format (default: `astro`).
+
+The extension list is discovered from `crates/ext_*` (no hardcoded list), so new extensions are documented automatically.
+
 ## Key Types
 
 ### Framework

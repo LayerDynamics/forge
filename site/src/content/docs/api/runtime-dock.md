@@ -280,6 +280,57 @@ setMenu([
 ]);
 ```
 
+### info()
+
+Get dock extension information.
+
+**Returns:** `ExtensionInfo`
+
+---
+
+### nextMenuEvent()
+
+Wait for the next dock-menu item click (pull-based). Resolves when a menu item that has an `id` is clicked, or `null` if the event channel is unavailable (for example, another caller is already awaiting). Most apps should use [`onMenuItemClick`](#onmenuitemclicklistener) instead of polling directly.
+
+**Returns:** `Promise<MenuClickEvent | null>`
+
+**Platform:** macOS only (always resolves `null` on other platforms)
+
+---
+
+### onMenuItemClick(listener)
+
+Register a listener for dock-menu item clicks. The listener is invoked with the clicked item's `id` (the `id` you set on the corresponding `MenuItem`). Items without an `id` do not emit events.
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `listener` | `MenuItemClickListener` | Called with `(id, event)` when a menu item is clicked |
+
+**Returns:** `() => void` - an unsubscribe function that removes the listener
+
+**Platform:** macOS only (no events fire on other platforms)
+
+**Example:**
+
+```typescript
+import { setMenu, onMenuItemClick } from "runtime:dock";
+
+setMenu([
+  { id: "new-window", label: "New Window" },
+  { type: "separator" },
+  { id: "preferences", label: "Preferences..." },
+]);
+
+const off = onMenuItemClick((id) => {
+  if (id === "new-window") openWindow();
+  if (id === "preferences") openPreferences();
+});
+// later, to stop listening:
+off();
+```
+
 ## Type Definitions
 
 ### BounceType
@@ -318,6 +369,23 @@ interface MenuItem {
   /** Item type */
   type?: "normal" | "checkbox" | "separator";
 }
+```
+
+### MenuClickEvent
+
+```typescript
+interface MenuClickEvent {
+  /** The `id` of the clicked menu item. */
+  id: string;
+  /** Click time in epoch milliseconds. */
+  timestamp_ms: number;
+}
+```
+
+### MenuItemClickListener
+
+```typescript
+type MenuItemClickListener = (id: string, event: MenuClickEvent) => void;
 ```
 
 ## Lifecycle Hooks
