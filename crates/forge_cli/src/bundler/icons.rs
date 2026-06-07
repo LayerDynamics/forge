@@ -18,6 +18,8 @@
 //! - Or specify path in manifest: `[bundle] icon = "path/to/icon"`
 
 use anyhow::{bail, Context, Result};
+use image::{imageops::FilterType, DynamicImage, ImageFormat};
+// `Rgba`/`RgbaImage` are only used by the Windows-only `save_wide` below.
 #[cfg(windows)]
 use image::{Rgba, RgbaImage};
 use std::fs;
