@@ -20,6 +20,11 @@ anyhow = "1"
 toml = "0.8"
 # Match SDK exports, doc headings, count phrases, and CLI usage strings.
 regex = "1"
+# Introspect the real `forge` CLI surface (the clap command model exposed by
+# `forge_cli::cli`) to generate the CLI reference and gate it against drift —
+# the docs and the parser are the same model, so they cannot diverge.
+clap = "4"
+forge_cli = { path = "../forge_cli" }
 
 [dev-dependencies]
 # Drift-rule unit tests build throwaway crate/doc trees on disk.

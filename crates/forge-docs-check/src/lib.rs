@@ -15,6 +15,7 @@
 
 pub mod apiblock;
 pub mod checks;
+pub mod clidoc;
 pub mod cratepage;
 pub mod discovery;
 pub mod exampleblock;
@@ -95,5 +96,6 @@ pub fn run_all_checks(ws: &Workspace) -> Report {
     report.extend(apiblock::check(ws));
     report.extend(exampleblock::check(ws));
     report.extend(extindex::check(ws));
+    report.extend(clidoc::check(ws));
     report
 }

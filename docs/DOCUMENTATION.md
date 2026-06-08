@@ -108,8 +108,10 @@ integration test (`cargo test --workspace`).
 | `api-drift` | a `sdk/runtime.*.ts` export is undocumented, or a documented `### method(` no longer exists |
 | `api-block` | a `<!-- forge:api -->` signature block is stale |
 | `count` | a `<!-- forge:count:* -->` marker (or a count phrase) disagrees with the real workspace counts |
-| `cli-command` | a `forge` subcommand is missing from `crates/forge.md` |
+| `cli-command` | a `forge` subcommand (from the clap model) is missing from `crates/forge.md` |
+| `cli-doc` | the `<!-- forge:cli -->` reference in `crates/forge.md` is stale vs. the `forge_cli` clap model |
 | `example-block` | an example page's `<!-- forge:example -->` block doesn't match the app's `runtime:*` imports |
+| `ext-index` | the extension index/table in `architecture.md` is missing a real `ext_*` extension |
 
 ### Fixing a red gate
 
@@ -120,6 +122,7 @@ make docs-api       # refresh <!-- forge:api --> signature blocks from the SDK
 make docs-counts    # refresh <!-- forge:count:* --> numbers
 make docs-crates    # generate a page for any crate that lacks one
 make docs-examples  # refresh <!-- forge:example --> module lists
+make docs-cli       # refresh the <!-- forge:cli --> reference from the clap model
 make docs-check     # the baseline-aware gate (what CI runs)
 make docs-report    # list ALL current drift (not just new)
 ```
