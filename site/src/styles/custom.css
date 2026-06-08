@@ -4,23 +4,25 @@
 
 /* Starlight custom styles */
 :root {
-  --sl-color-accent-low: #001a33;
-  --sl-color-accent: #0066cc;
-  --sl-color-accent-high: #b3d4ff;
+  /* Ember accent + warm-neutral grays drawn from the Forge logo
+     (black anvil on a copper/amber forge-glow). */
+  --sl-color-accent-low: #3a1c08;
+  --sl-color-accent: #ed8936;
+  --sl-color-accent-high: #fcdcbc;
   --sl-color-white: #ffffff;
-  --sl-color-gray-1: #eceef5;
-  --sl-color-gray-2: #c0c4d2;
-  --sl-color-gray-3: #888da4;
-  --sl-color-gray-4: #545968;
-  --sl-color-gray-5: #363a4a;
-  --sl-color-gray-6: #252833;
-  --sl-color-black: #17191e;
+  --sl-color-gray-1: #eeebe5;
+  --sl-color-gray-2: #c6c1b8;
+  --sl-color-gray-3: #8d877c;
+  --sl-color-gray-4: #57514a;
+  --sl-color-gray-5: #383330;
+  --sl-color-gray-6: #211e1b;
+  --sl-color-black: #100e0c;
 }
 
 :root[data-theme='light'] {
-  --sl-color-accent-low: #b3d4ff;
-  --sl-color-accent: #0066cc;
-  --sl-color-accent-high: #003366;
+  --sl-color-accent-low: #fcebd5;
+  --sl-color-accent: #b85619;
+  --sl-color-accent-high: #5c2e08;
 }
 
 /* Code block styling */
@@ -31,7 +33,7 @@
 /* Landing page styles */
 .landing-hero {
   @apply relative overflow-hidden;
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+  background: linear-gradient(135deg, #050505 0%, #0a0a0c 100%);
 }
 
 .landing-hero::before {
@@ -41,13 +43,13 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: radial-gradient(ellipse at top, rgba(0, 102, 204, 0.15) 0%, transparent 70%);
+  background: radial-gradient(ellipse at top, rgba(237, 137, 54, 0.15) 0%, transparent 70%);
   pointer-events: none;
 }
 
 .gradient-text {
   @apply bg-clip-text text-transparent;
-  background-image: linear-gradient(135deg, #0066cc 0%, #00b4d8 100%);
+  background-image: linear-gradient(135deg, #ed8936 0%, #f59e0b 100%);
 }
 
 .feature-card {
