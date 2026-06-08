@@ -1,6 +1,6 @@
 [package]
 name = "forge-docs-check"
-version = "0.1.0-alpha.1"
+version = "1.0.0"
 edition = "2021"
 description = "Forge Docs Check - fails the build when the documentation site drifts from the code"
 license = "MIT"

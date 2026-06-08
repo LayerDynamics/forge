@@ -1,6 +1,6 @@
 [package]
 name = "ext_weld"
-version = "0.1.0-alpha.1"
+version = "1.0.0"
 edition = "2021"
 description = "Forge Weld extension - code generation and TypeScript binding utilities"
 license = "MIT"
