@@ -21,6 +21,10 @@ export default defineConfig({
         src: './src/assets/logo.svg',
         replacesTitle: false,
       },
+      // Brand favicon (Forge emblem on the ember plate). Starlight injects the
+      // primary <link> for this; the head[] entries below add the .ico fallback
+      // for legacy browsers and the apple-touch-icon for iOS home screens.
+      favicon: '/favicon.svg',
       expressiveCode: {
         shiki: {
           // Custom language grammars
@@ -74,6 +78,22 @@ export default defineConfig({
           attrs: {
             property: 'og:image',
             content: 'https://forge-deno.com/og-image.png',
+          },
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'icon',
+            href: '/favicon.ico',
+            sizes: '16x16 32x32 48x48',
+          },
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'apple-touch-icon',
+            href: '/apple-touch-icon.png',
+            sizes: '180x180',
           },
         },
       ],

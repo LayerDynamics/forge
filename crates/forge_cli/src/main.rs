@@ -1049,7 +1049,7 @@ fn cmd_sign(artifact_path: &Path, identity: Option<&str>) -> Result<()> {
 fn cmd_icon_create(output_path: &Path) -> Result<()> {
     use bundler::{IconProcessor, RECOMMENDED_ICON_SIZE};
 
-    println!("Creating placeholder icon at {}", output_path.display());
+    println!("Creating Forge-branded icon at {}", output_path.display());
 
     // Check if file already exists
     if output_path.exists() {
@@ -1064,14 +1064,15 @@ fn cmd_icon_create(output_path: &Path) -> Result<()> {
     let processor = IconProcessor::create_placeholder(RECOMMENDED_ICON_SIZE);
     processor.save(output_path)?;
 
-    println!("\nPlaceholder icon created!");
+    println!("\nForge-branded icon created!");
     println!("  Path: {}", output_path.display());
     println!(
         "  Size: {}x{} pixels",
         RECOMMENDED_ICON_SIZE, RECOMMENDED_ICON_SIZE
     );
     println!();
-    println!("IMPORTANT: Replace this placeholder with your actual app icon before release.");
+    println!("IMPORTANT: This is the Forge brand icon, provided as a starting point.");
+    println!("Replace it with your own app icon before release — do not ship the Forge logo.");
     println!();
     println!("Icon Requirements:");
     println!("  • Format: PNG with transparency (RGBA)");
