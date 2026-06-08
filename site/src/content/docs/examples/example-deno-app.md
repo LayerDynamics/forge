@@ -1,7 +1,7 @@
 ---
 title: "example-deno-app"
 description: Minimal Forge app demonstrating basic window creation and IPC
-slug: examples/example-deno-app
+slug: docs/examples/example-deno-app
 ---
 
 The simplest Forge app - demonstrates basic window creation and IPC communication.

@@ -1,7 +1,7 @@
 ---
 title: "ext_protocol"
 description: Custom protocol handler extension providing the runtime:protocol module.
-slug: crates/ext-protocol
+slug: docs/crates/ext-protocol
 ---
 
 The `ext_protocol` crate provides custom URL protocol handling for Forge applications through the `runtime:protocol` module.

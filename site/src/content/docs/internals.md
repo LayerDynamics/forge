@@ -1,7 +1,7 @@
 ---
 title: Implementation Reference
 description: Detailed implementation reference with file paths and line numbers for Forge internals.
-slug: internals
+slug: docs/internals
 ---
 
 This document provides a detailed implementation reference for Forge contributors, with specific file paths and line numbers for all major components.

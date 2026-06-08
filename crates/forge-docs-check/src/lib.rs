@@ -93,6 +93,7 @@ pub fn run_all_checks(ws: &Workspace) -> Report {
     report.extend(checks::counts::check(ws));
     report.extend(checks::cli_commands::check(ws));
     report.extend(checks::forge_docs::check(ws));
+    report.extend(checks::slug_prefix::check(ws));
     report.extend(apiblock::check(ws));
     report.extend(exampleblock::check(ws));
     report.extend(extindex::check(ws));

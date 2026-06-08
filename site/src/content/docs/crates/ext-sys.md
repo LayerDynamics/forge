@@ -1,7 +1,7 @@
 ---
 title: "ext_sys"
 description: System operations extension providing the runtime:sys module.
-slug: crates/ext-sys
+slug: docs/crates/ext-sys
 ---
 
 The `ext_sys` crate provides system-level operations for Forge applications through the `runtime:sys` module.

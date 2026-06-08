@@ -1,7 +1,7 @@
 ---
 title: "developer-toolkit"
 description: Full-featured developer tools with code signing, crypto, and shell integration
-slug: examples/developer-toolkit
+slug: docs/examples/developer-toolkit
 ---
 
 A comprehensive developer toolkit demonstrating advanced Forge extension capabilities.

@@ -1,7 +1,7 @@
 ---
 title: "ext_signals"
 description: OS signal handling extension providing the runtime:signals module.
-slug: crates/ext-signals
+slug: docs/crates/ext-signals
 ---
 
 The `ext_signals` crate provides OS signal subscription and handling for Forge applications through the `runtime:signals` module.

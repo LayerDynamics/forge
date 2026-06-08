@@ -1,7 +1,7 @@
 ---
 title: "ext_console"
 description: "Console capture extension for Forge (runtime:console)"
-slug: crates/ext-console
+slug: docs/crates/ext-console
 ---
 
 Console capture extension for Forge (`runtime:console`).

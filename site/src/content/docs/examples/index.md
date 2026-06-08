@@ -1,7 +1,7 @@
 ---
 title: "Examples"
 description: Sample applications demonstrating Forge capabilities
-slug: examples
+slug: docs/examples
 ---
 
 Forge includes several example applications demonstrating different framework capabilities. Each example is a complete, runnable app you can use as a starting point for your own projects.

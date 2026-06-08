@@ -1,7 +1,7 @@
 ---
 title: "ext_trace"
 description: Lightweight application tracing extension providing the runtime:trace module.
-slug: crates/ext-trace
+slug: docs/crates/ext-trace
 ---
 
 The `ext_trace` crate provides lightweight application-level tracing for Forge applications through the `runtime:trace` module.

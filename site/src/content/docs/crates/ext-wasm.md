@@ -1,7 +1,7 @@
 ---
 title: "ext_wasm"
 description: WebAssembly runtime extension providing the runtime:wasm module.
-slug: crates/ext-wasm
+slug: docs/crates/ext-wasm
 ---
 
 The `ext_wasm` crate provides comprehensive WebAssembly support for Forge applications through the `runtime:wasm` module, enabling you to load and execute WASM modules with full WASI support.

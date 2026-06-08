@@ -1,7 +1,7 @@
 ---
 title: "ext_bundler"
 description: App packaging and icons extension providing the forge:bundler module.
-slug: crates/ext-bundler
+slug: docs/crates/ext-bundler
 ---
 
 The `ext_bundler` crate provides app packaging, icon management, and manifest utilities for Forge applications through the `forge:bundler` module.

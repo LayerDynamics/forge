@@ -1,7 +1,7 @@
 ---
 title: "weather-app"
 description: Weather app demonstrating runtime:net and system notifications
-slug: examples/weather-app
+slug: docs/examples/weather-app
 ---
 
 A weather application demonstrating network requests and system integration.

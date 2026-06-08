@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 description: Forge SDK development roadmap - planned modules, features, and improvements.
-slug: roadmap
+slug: docs/roadmap
 ---
 
 This document outlines the Forge SDK development roadmap, including planned extension modules, features, and improvements to bring Forge to feature parity with Electron and Tauri.

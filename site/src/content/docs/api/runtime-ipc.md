@@ -1,7 +1,7 @@
 ---
 title: "runtime:ipc"
 description: Inter-process communication between Deno and window renderers.
-slug: api/runtime-ipc
+slug: docs/api/runtime-ipc
 ---
 
 The `runtime:ipc` module provides inter-process communication (IPC) between your Deno application and window renderers (WebViews).

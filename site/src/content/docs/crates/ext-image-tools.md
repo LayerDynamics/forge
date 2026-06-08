@@ -1,7 +1,7 @@
 ---
 title: "ext_image_tools"
 description: Image manipulation extension providing the runtime:image_tools module for PNG, SVG, WebP, and ICO operations.
-slug: crates/ext-image-tools
+slug: docs/crates/ext-image-tools
 ---
 
 The `ext_image_tools` crate provides image manipulation capabilities for Forge applications through the `runtime:image_tools` module.
@@ -270,4 +270,4 @@ enum ImageToolsErrorCode {
 
 - [runtime:fs](/docs/crates/ext-fs) - File system operations
 - [runtime:dock](/docs/crates/ext-dock) - Set custom dock icons (macOS)
-- [forge_cli bundler](/docs/crates/forge-cli) - Uses icons during app bundling
+- [forge_cli bundler](/docs/crates/forge) - Uses icons during app bundling

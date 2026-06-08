@@ -1,7 +1,7 @@
 ---
 title: "ext_weld"
 description: Code generation extension providing the forge:weld module.
-slug: crates/ext-weld
+slug: docs/crates/ext-weld
 ---
 
 The `ext_weld` crate exposes forge-weld code generation capabilities as a runtime module for Forge applications through the `forge:weld` module.

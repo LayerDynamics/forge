@@ -1,7 +1,7 @@
 ---
 title: "ext_database"
 description: Full-featured SQLite database extension providing the runtime:database module.
-slug: crates/ext-database
+slug: docs/crates/ext-database
 ---
 
 The `ext_database` crate provides comprehensive SQLite database capabilities for Forge applications through the `runtime:database` module.

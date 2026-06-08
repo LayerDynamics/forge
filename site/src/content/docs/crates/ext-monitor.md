@@ -1,7 +1,7 @@
 ---
 title: "ext_monitor"
 description: System monitoring extension providing the runtime:monitor module.
-slug: crates/ext-monitor
+slug: docs/crates/ext-monitor
 ---
 
 The `ext_monitor` crate provides comprehensive system and runtime monitoring for Forge applications through the `runtime:monitor` module. Built on the [`sysinfo`](https://docs.rs/sysinfo) crate for cross-platform system information access.

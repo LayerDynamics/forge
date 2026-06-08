@@ -1,7 +1,7 @@
 ---
 title: "ext_timers"
 description: Timer functionality extension providing the runtime:timers module.
-slug: crates/ext-timers
+slug: docs/crates/ext-timers
 ---
 
 The `ext_timers` crate provides timer and delay functionality for Forge applications through the `runtime:timers` module.

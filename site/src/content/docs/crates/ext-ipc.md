@@ -1,7 +1,7 @@
 ---
 title: "ext_ipc"
 description: Inter-process communication extension providing the runtime:ipc module.
-slug: crates/ext-ipc
+slug: docs/crates/ext-ipc
 ---
 
 The `ext_ipc` crate provides inter-process communication (IPC) between the Deno runtime and WebView renderers through the `runtime:ipc` module.

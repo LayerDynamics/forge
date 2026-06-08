@@ -1,7 +1,7 @@
 ---
 title: "ext_storage"
 description: SQLite key-value storage extension providing the runtime:storage module.
-slug: crates/ext-storage
+slug: docs/crates/ext-storage
 ---
 
 The `ext_storage` crate provides persistent key-value storage backed by SQLite for Forge applications through the `runtime:storage` module.

@@ -1,7 +1,7 @@
 ---
 title: "nextjs-app"
 description: Next.js-style SSR patterns with server-side data fetching
-slug: examples/nextjs-app
+slug: docs/examples/nextjs-app
 ---
 
 A demonstration of Next.js-style server-side rendering patterns in Forge.

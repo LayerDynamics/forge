@@ -1,7 +1,7 @@
 ---
 title: "ext_dock"
 description: macOS Dock customization extension providing the runtime:dock module.
-slug: crates/ext-dock
+slug: docs/crates/ext-dock
 ---
 
 The `ext_dock` crate provides macOS Dock customization APIs for Forge applications through the `runtime:dock` module.

@@ -1,7 +1,7 @@
 ---
 title: "runtime:os_compat"
 description: "Operating system compatibility information for cross-platform Forge applications"
-slug: api/runtime-os_compat
+slug: docs/api/runtime-os_compat
 ---
 
 Operating system compatibility utilities for Forge applications. Query runtime environment information including OS type, architecture, and platform-specific path separators.

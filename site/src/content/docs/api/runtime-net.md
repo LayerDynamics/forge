@@ -1,7 +1,7 @@
 ---
 title: "runtime:net"
 description: HTTP networking, WebSocket connections, and streaming capabilities with capability-based access control.
-slug: api/runtime-net
+slug: docs/api/runtime-net
 ---
 
 The `runtime:net` module provides HTTP networking, WebSocket connections, and streaming capabilities with capability-based access control.

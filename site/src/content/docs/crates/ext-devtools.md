@@ -1,7 +1,7 @@
 ---
 title: "ext_devtools"
 description: Developer tools control extension for the Forge runtime.
-slug: crates/ext-devtools
+slug: docs/crates/ext-devtools
 ---
 
 The `ext_devtools` crate provides a simple API for controlling browser DevTools through the `runtime:devtools` module. Built as a lightweight wrapper around [ext_window](/docs/crates/ext-window), it offers programmatic control over the DevTools panel used for debugging WebView windows.

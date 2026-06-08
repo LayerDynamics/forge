@@ -1,7 +1,7 @@
 ---
 title: "ext_log"
 description: Structured logging extension providing the runtime:log module.
-slug: crates/ext-log
+slug: docs/crates/ext-log
 ---
 
 The `ext_log` crate provides structured logging functionality for Forge applications through the `runtime:log` module.

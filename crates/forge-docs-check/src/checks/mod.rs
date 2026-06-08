@@ -6,6 +6,7 @@ pub mod cli_commands;
 pub mod counts;
 pub mod crate_pages;
 pub mod forge_docs;
+pub mod slug_prefix;
 
 use std::path::Path;
 

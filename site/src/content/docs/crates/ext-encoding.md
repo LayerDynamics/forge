@@ -1,7 +1,7 @@
 ---
 title: "ext_encoding"
 description: TextEncoder/TextDecoder extension providing Web-standard encoding APIs.
-slug: crates/ext-encoding
+slug: docs/crates/ext-encoding
 ---
 
 The `ext_encoding` crate provides standard Web TextEncoder and TextDecoder APIs for Forge applications through the `runtime:encoding` module.

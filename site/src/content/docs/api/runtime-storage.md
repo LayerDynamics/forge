@@ -1,7 +1,7 @@
 ---
 title: "runtime:storage"
 description: Persistent key-value storage backed by SQLite with automatic JSON serialization.
-slug: api/runtime-storage
+slug: docs/api/runtime-storage
 ---
 
 The `runtime:storage` module provides persistent key-value storage for Forge applications, backed by SQLite with automatic JSON serialization and ACID compliance.

@@ -1,7 +1,7 @@
 ---
 title: "runtime:window"
 description: Window management, dialogs, menus, and system tray.
-slug: api/runtime-window
+slug: docs/api/runtime-window
 ---
 
 The `runtime:window` module provides comprehensive window management including creation, manipulation, dialogs, menus, and system tray icons.

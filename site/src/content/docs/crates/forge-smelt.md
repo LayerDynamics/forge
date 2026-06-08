@@ -1,7 +1,7 @@
 ---
 title: "forge-smelt"
 description: "Forge Smelt - ahead-of-time TypeScript to JavaScript compiler for Forge apps"
-slug: crates/forge-smelt
+slug: docs/crates/forge-smelt
 ---
 
 # forge-smelt — ahead-of-time TypeScript → JavaScript compiler for Forge apps

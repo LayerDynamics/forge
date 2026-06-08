@@ -1,7 +1,7 @@
 ---
 title: "runtime:signals"
 description: "Subscribe to OS signals (Unix only) for Forge applications"
-slug: api/runtime-signals
+slug: docs/api/runtime-signals
 ---
 
 Subscribe to operating system signals for Forge applications. Allows handling of signals like SIGTERM, SIGINT, and SIGHUP for graceful shutdown and process management.

@@ -1,7 +1,7 @@
 ---
 title: "ext_os_compat"
 description: OS compatibility helpers extension providing the runtime:os_compat module.
-slug: crates/ext-os-compat
+slug: docs/crates/ext-os-compat
 ---
 
 The `ext_os_compat` crate provides cross-platform OS compatibility utilities for Forge applications through the `runtime:os_compat` module.

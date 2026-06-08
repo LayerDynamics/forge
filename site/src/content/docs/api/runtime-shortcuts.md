@@ -1,7 +1,7 @@
 ---
 title: "runtime:shortcuts"
 description: "Global keyboard shortcuts for Forge applications"
-slug: api/runtime-shortcuts
+slug: docs/api/runtime-shortcuts
 ---
 
 Global keyboard shortcuts for Forge applications with hotkey registration, event handling, and persistence across restarts.

@@ -1,7 +1,7 @@
 ---
 title: "runtime:sys"
 description: System-level operations including environment, clipboard, notifications, and system information.
-slug: api/runtime-sys
+slug: docs/api/runtime-sys
 ---
 
 The `runtime:sys` module provides system-level operations including environment, clipboard, notifications, and system information.

@@ -1,7 +1,7 @@
 ---
 title: Getting Started
 description: Learn how to build your first Forge desktop app with TypeScript and Deno.
-slug: getting-started
+slug: docs/getting-started
 ---
 
 Forge is an Electron-like desktop application framework using Rust and Deno. Build cross-platform desktop apps with TypeScript/JavaScript while leveraging native system capabilities through a secure, capability-based API.

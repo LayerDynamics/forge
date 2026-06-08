@@ -1,7 +1,7 @@
 ---
 title: "runtime:lock"
 description: "Named resource locking for coordinating concurrent access in Forge applications"
-slug: api/runtime-lock
+slug: docs/api/runtime-lock
 ---
 
 Named resource locking for Forge applications. Coordinate access to shared resources across async operations using token-based lock acquisition.

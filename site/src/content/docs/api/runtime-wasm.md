@@ -1,7 +1,7 @@
 ---
 title: "runtime:wasm"
 description: WebAssembly module loading, instantiation, and execution with WASI support.
-slug: api/runtime-wasm
+slug: docs/api/runtime-wasm
 ---
 
 The `runtime:wasm` module provides WebAssembly support including module compilation, instantiation, function calls, memory access, and WASI integration.

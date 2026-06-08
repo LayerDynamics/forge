@@ -1,7 +1,7 @@
 ---
 title: "forge-weld-macro"
 description: Procedural macros for annotating Rust ops and structs with TypeScript metadata.
-slug: crates/forge-weld-macro
+slug: docs/crates/forge-weld-macro
 ---
 
 The `forge-weld-macro` crate provides procedural macros for annotating Rust code with metadata used for TypeScript code generation.

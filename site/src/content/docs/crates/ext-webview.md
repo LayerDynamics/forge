@@ -1,7 +1,7 @@
 ---
 title: "ext_webview"
 description: Lightweight WebView creation and management extension for the Forge runtime.
-slug: crates/ext-webview
+slug: docs/crates/ext-webview
 ---
 
 The `ext_webview` crate provides a simple API for creating and controlling WebView windows through the `runtime:webview` module. Built as a lightweight wrapper around [ext_window](/docs/crates/ext-window), it offers a streamlined interface for common WebView operations.

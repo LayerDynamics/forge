@@ -1,7 +1,7 @@
 ---
 title: "ext_process"
 description: "Child process spawning and management for Forge applications"
-slug: crates/ext-process
+slug: docs/crates/ext-process
 ---
 
 # ext_process

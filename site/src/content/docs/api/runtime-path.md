@@ -1,7 +1,7 @@
 ---
 title: "runtime:path"
 description: "Cross-platform path manipulation utilities for Forge applications"
-slug: api/runtime-path
+slug: docs/api/runtime-path
 ---
 
 Cross-platform path manipulation utilities for Forge applications. All operations handle forward slashes on Unix and backslashes on Windows automatically.

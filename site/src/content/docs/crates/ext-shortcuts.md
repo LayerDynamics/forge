@@ -1,7 +1,7 @@
 ---
 title: "ext_shortcuts"
 description: Global keyboard shortcuts extension providing the runtime:shortcuts module.
-slug: crates/ext-shortcuts
+slug: docs/crates/ext-shortcuts
 ---
 
 The `ext_shortcuts` crate provides global keyboard shortcut registration for Forge applications through the `runtime:shortcuts` module.

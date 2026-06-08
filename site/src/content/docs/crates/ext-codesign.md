@@ -1,7 +1,7 @@
 ---
 title: "ext_codesign"
 description: Code signing extension providing the runtime:codesign module for signing and verifying app bundles.
-slug: crates/ext-codesign
+slug: docs/crates/ext-codesign
 ---
 
 The `ext_codesign` crate provides cross-platform code signing capabilities for Forge applications through the `runtime:codesign` module.
@@ -168,5 +168,5 @@ trait CodesignCapabilityChecker: Send + Sync + 'static {
 
 ## Related
 
-- [forge_cli bundler](/docs/crates/forge-cli) - Uses codesign during app bundling
+- [forge_cli bundler](/docs/crates/forge) - Uses codesign during app bundling
 - [runtime:fs](/docs/crates/ext-fs) - File system operations

@@ -1,7 +1,7 @@
 ---
 title: "ext_updater"
 description: Auto-update functionality extension providing the runtime:updater module.
-slug: crates/ext-updater
+slug: docs/crates/ext-updater
 ---
 
 The `ext_updater` crate provides automatic update functionality for Forge applications through the `runtime:updater` module.

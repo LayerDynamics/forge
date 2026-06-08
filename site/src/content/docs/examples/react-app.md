@@ -1,7 +1,7 @@
 ---
 title: "react-app"
 description: React + TypeScript starter for building Forge applications
-slug: examples/react-app
+slug: docs/examples/react-app
 ---
 
 A minimal React + TypeScript starter demonstrating how to integrate React with Forge.

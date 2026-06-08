@@ -1,7 +1,7 @@
 ---
 title: "ext_web_inspector"
 description: WebView DevTools extension providing the runtime:web_inspector module for debugging and inspection.
-slug: crates/ext-web-inspector
+slug: docs/crates/ext-web-inspector
 ---
 
 The `ext_web_inspector` crate provides WebView debugging and inspection capabilities for Forge applications through the `runtime:web_inspector` module.

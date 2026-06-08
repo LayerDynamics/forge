@@ -1,7 +1,7 @@
 ---
 title: "ext_etcher"
 description: Documentation generation extension providing the runtime:etcher module for building docs from code.
-slug: crates/ext-etcher
+slug: docs/crates/ext-etcher
 ---
 
 The `ext_etcher` crate provides documentation generation capabilities for Forge applications through the `runtime:etcher` module.

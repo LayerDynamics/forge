@@ -1,7 +1,7 @@
 ---
 title: "forge-weld"
 description: Code generation and binding utilities for Rust↔TypeScript integration.
-slug: crates/forge-weld
+slug: docs/crates/forge-weld
 ---
 
 The `forge-weld` crate provides the "glue" between Rust deno_core ops and TypeScript. It generates TypeScript type definitions, init modules, and handles the build process for Forge extensions.

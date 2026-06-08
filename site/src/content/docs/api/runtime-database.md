@@ -1,7 +1,7 @@
 ---
 title: "runtime:database"
 description: "Full-featured SQLite database access for Forge applications"
-slug: api/runtime-database
+slug: docs/api/runtime-database
 ---
 
 Full-featured SQLite database access for Forge applications with query execution, transactions, prepared statements, result streaming, and schema migrations.

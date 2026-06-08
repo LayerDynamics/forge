@@ -1,7 +1,7 @@
 ---
 title: "runtime:updater"
 description: "Application auto-update system for Forge applications"
-slug: api/runtime-updater
+slug: docs/api/runtime-updater
 ---
 
 Application auto-update system for Forge applications. Supports GitHub Releases and custom JSON manifest formats with check, download, verify, and install functionality.
