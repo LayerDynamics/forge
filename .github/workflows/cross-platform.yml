@@ -85,6 +85,11 @@ jobs:
         with:
           shared-key: xplat
           cache-all-crates: "true"
+          # The `v8` crate's build script downloads a large prebuilt static lib
+          # from GitHub releases into ~/.cargo/.rusty_v8; that download
+          # intermittently 504s. rust-cache doesn't cover that dir by default,
+          # so add it explicitly — fetched at most once, then reused per OS.
+          cache-directories: ~/.cargo/.rusty_v8
 
       # Debug profile keeps debug_assertions on, which compiles the
       # `#[cfg(any(debug_assertions, feature = "devtools"))]` DevTools paths.
