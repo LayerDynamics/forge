@@ -158,7 +158,7 @@
  *
  * const metadata = info();
  * console.log(`${metadata.name} v${metadata.version} - ${metadata.status}`);
- * // Output: ext_debugger v0.1.0-alpha.1 - active
+ * // Output: ext_debugger v1.0.0 - active
  * ```
  */
 export interface ExtensionInfo {
@@ -786,7 +786,7 @@ const ops = core.ops;
  * console.log(`Debugger extension: ${metadata.name} v${metadata.version}`);
  * console.log(`Status: ${metadata.status}`);
  * // Output:
- * // Debugger extension: ext_debugger v0.1.0-alpha.1
+ * // Debugger extension: ext_debugger v1.0.0
  * // Status: active
  * ```
  */

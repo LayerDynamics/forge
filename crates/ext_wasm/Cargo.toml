@@ -1,6 +1,6 @@
 [package]
 name = "ext_wasm"
-version = "0.1.0-alpha.1"
+version = "1.0.0"
 edition = "2021"
 description = "WebAssembly extension for Forge apps"
 license = "MIT"

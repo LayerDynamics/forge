@@ -8,7 +8,7 @@ This document outlines the Forge SDK development roadmap, including planned exte
 
 ## Current State
 
-Forge currently has **<!-- forge:count:ext_crates -->37<!-- /forge:count --> implemented extension modules** (as of v0.1.0-alpha.1):
+Forge currently has **<!-- forge:count:ext_crates -->37<!-- /forge:count --> implemented extension modules** (as of v1.0.0):
 
 ### Core Extensions (Fully Implemented)
 
@@ -162,7 +162,7 @@ Core application management and lifecycle control.
 
 ## Phase 1: High Priority Modules
 
-> **Status update (v0.1.0-alpha.1):** Most modules in this section have since shipped and appear as **Complete** above — `runtime:screen` → `runtime:display`, `runtime:globalShortcut` → `runtime:shortcuts`, `runtime:autoUpdater` → `runtime:updater`, plus `runtime:database`. The detailed operation tables below are retained for reference. `runtime:theme` remains planned.
+> **Status update (v1.0.0):** Most modules in this section have since shipped and appear as **Complete** above — `runtime:screen` → `runtime:display`, `runtime:globalShortcut` → `runtime:shortcuts`, `runtime:autoUpdater` → `runtime:updater`, plus `runtime:database`. The detailed operation tables below are retained for reference. `runtime:theme` remains planned.
 
 ### runtime:screen - Display Information
 

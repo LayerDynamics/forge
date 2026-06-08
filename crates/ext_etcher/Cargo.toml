@@ -1,6 +1,6 @@
 [package]
 name = "ext_etcher"
-version = "0.1.0-alpha.1"
+version = "1.0.0"
 edition = "2021"
 description = "Forge Etch extension - documentation generation from TypeScript and Rust sources"
 license = "MIT"

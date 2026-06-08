@@ -299,7 +299,7 @@ Platform-specific behavior is handled by the underlying [wry](https://docs.rs/wr
 | Dependency | Version | Purpose |
 |-----------|---------|---------|
 | `deno_core` | 0.373 | Op definitions and runtime integration |
-| `ext_window` | 0.1.0-alpha.1 | Window management and command channel |
+| `ext_window` | 1.0.0 | Window management and command channel |
 | `tokio` | 1.x | Async oneshot channels for command responses |
 | `serde` | 1.x | Serialization framework |
 | `thiserror` | 2.x | Error type definitions |

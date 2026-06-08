@@ -5,6 +5,30 @@ All notable changes to Forge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-06-08
+
+First stable release — **Steel Donut**.
+
+### Added
+
+- `forge-smelt`: ahead-of-time TypeScript→JavaScript compiler for app source,
+  wired into `forge build` (bundles ship compiled JS) and exposed as `forge smelt`.
+- `forge-docs-check`: a documentation drift gate that fails CI when the docs site
+  drifts from the code (crate pages, API signatures, counts, CLI commands, example
+  module lists, the extension index, and the generated CLI reference), enforced via
+  CI, a pre-commit hook, and `cargo test`.
+- Generated CLI reference: the `forge` command reference is produced from the
+  `forge_cli` clap command model, so the docs cannot drift from the parser.
+- Forge brand icon shipped as the default scaffolded app icon.
+
+### Changed
+
+- Migrated the `forge` CLI to clap derive (generated `--help`/`--version`, real
+  error messages) while preserving the command/flag contract.
+- Documentation site rebranded to the Forge logo palette (black + ember/amber) and
+  mounted under `/docs/`.
+- Version bumped to 1.0.0 across all workspace crates.
+
 ## [0.1.0-alpha.1] - 2024-12-12
 
 ### Added
