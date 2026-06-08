@@ -1,7 +1,7 @@
 ---
 title: "ext_net"
 description: Network operations extension providing the runtime:net module.
-slug: crates/ext-net
+slug: docs/crates/ext-net
 ---
 
 The `ext_net` crate provides HTTP fetch and network operations for Forge applications through the `runtime:net` module.

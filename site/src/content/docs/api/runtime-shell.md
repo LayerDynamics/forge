@@ -1,7 +1,7 @@
 ---
 title: "runtime:shell"
 description: Shell integration, command execution, and desktop environment interaction for Forge applications.
-slug: api/runtime-shell
+slug: docs/api/runtime-shell
 ---
 
 The `runtime:shell` module provides comprehensive shell integration and command execution capabilities, allowing Forge applications to interact with the operating system shell and desktop environment.

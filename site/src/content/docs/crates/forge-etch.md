@@ -1,7 +1,7 @@
 ---
 title: "forge-etch"
 description: "Documentation generator for Forge framework extensions"
-slug: crates/forge-etch
+slug: docs/crates/forge-etch
 ---
 
 Documentation generator for Forge framework extensions. Parses TypeScript sources and forge-weld IR to generate comprehensive API documentation.

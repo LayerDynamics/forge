@@ -1,7 +1,7 @@
 ---
 title: "ext_svelte"
 description: SvelteKit adapter extension providing the runtime:svelte module for SSR and ISR support.
-slug: crates/ext-svelte
+slug: docs/crates/ext-svelte
 ---
 
 The `ext_svelte` crate provides SvelteKit integration for Forge applications through the `runtime:svelte` module.

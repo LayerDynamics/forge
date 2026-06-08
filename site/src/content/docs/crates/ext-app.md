@@ -1,7 +1,7 @@
 ---
 title: "ext_app"
 description: Application lifecycle extension providing the runtime:app module.
-slug: crates/ext-app
+slug: docs/crates/ext-app
 ---
 
 The `ext_app` crate provides application lifecycle management for Forge applications through the `runtime:app` module.

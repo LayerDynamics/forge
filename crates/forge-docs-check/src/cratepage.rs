@@ -90,7 +90,7 @@ fn crate_source(krate: &CrateInfo) -> Option<String> {
 pub fn render_crate_page(krate: &CrateInfo, description: &str, body: &str) -> String {
     let stem = krate.crate_page_stem();
     format!(
-        "---\ntitle: \"{}\"\ndescription: \"{}\"\nslug: crates/{}\n---\n\n{}\n",
+        "---\ntitle: \"{}\"\ndescription: \"{}\"\nslug: docs/crates/{}\n---\n\n{}\n",
         krate.package_name,
         description.replace('"', "\\\""),
         stem,

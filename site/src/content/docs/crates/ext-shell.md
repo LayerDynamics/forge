@@ -1,7 +1,7 @@
 ---
 title: "ext_shell - Shell Integration and Execution"
 description: Shell integration and command execution for Forge applications
-slug: crates/ext-shell
+slug: docs/crates/ext-shell
 ---
 
 The `ext_shell` crate provides comprehensive shell integration and command execution through the `runtime:shell` module. Bridge your Forge applications with the operating system shell and desktop environment.

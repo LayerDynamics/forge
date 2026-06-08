@@ -1,7 +1,7 @@
 ---
 title: "runtime:image_tools"
 description: "Image manipulation and format conversion for Forge applications"
-slug: api/runtime-image_tools
+slug: docs/api/runtime-image_tools
 ---
 
 Image manipulation and format conversion utilities for Forge applications. Process PNG, SVG, and WebP images with operations for loading, saving, converting between formats, and applying transformations.

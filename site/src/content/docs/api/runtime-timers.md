@@ -1,7 +1,7 @@
 ---
 title: "runtime:timers"
 description: "Timer functions for Forge applications - setTimeout, setInterval, and friends"
-slug: api/runtime-timers
+slug: docs/api/runtime-timers
 ---
 
 Timer functions for scheduling code execution in Forge applications. Provides the familiar `setTimeout`, `setInterval`, `clearTimeout`, and `clearInterval` APIs.

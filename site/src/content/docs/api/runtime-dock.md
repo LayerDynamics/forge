@@ -1,7 +1,7 @@
 ---
 title: "runtime:dock"
 description: "macOS dock customization for Forge applications - badges, bounce, icons, and menus"
-slug: api/runtime-dock
+slug: docs/api/runtime-dock
 ---
 
 macOS dock icon customization for Forge applications. Control dock icon badges, bounce animations, visibility, custom icons, and right-click menus.

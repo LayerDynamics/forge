@@ -1,7 +1,7 @@
 ---
 title: "ext_path - Path Manipulation"
 description: Cross-platform path manipulation utilities for Forge applications
-slug: crates/ext-path
+slug: docs/crates/ext-path
 ---
 
 The `ext_path` crate provides pure string-based path manipulation utilities through the `runtime:path` module. All operations work consistently across platforms without requiring filesystem access or permissions.

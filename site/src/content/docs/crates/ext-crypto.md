@@ -1,7 +1,7 @@
 ---
 title: "ext_crypto"
 description: Cryptographic operations extension providing the runtime:crypto module.
-slug: crates/ext-crypto
+slug: docs/crates/ext-crypto
 ---
 
 The `ext_crypto` crate provides cryptographic operations for Forge applications through the `runtime:crypto` module.

@@ -1,7 +1,7 @@
 ---
 title: "ext_lock"
 description: Named async lock extension providing the runtime:lock module.
-slug: crates/ext-lock
+slug: docs/crates/ext-lock
 ---
 
 The `ext_lock` crate provides named asynchronous locks for Forge applications through the `runtime:lock` module.

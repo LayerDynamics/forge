@@ -49,10 +49,10 @@ export default defineConfig({
         {
           label: 'Getting Started',
           items: [
-            'getting-started',
-            'architecture',
-            'internals',
-            'roadmap',
+            'docs/getting-started',
+            'docs/architecture',
+            'docs/internals',
+            'docs/roadmap',
           ],
         },
         {

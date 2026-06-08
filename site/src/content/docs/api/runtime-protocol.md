@@ -1,7 +1,7 @@
 ---
 title: "runtime:protocol"
 description: "Custom URL protocol handler for deep linking in Forge applications"
-slug: api/runtime-protocol
+slug: docs/api/runtime-protocol
 ---
 
 Custom URL protocol handler for deep linking in Forge applications. Register custom URL schemes (like `myapp://`) to enable launching your app from browsers, emails, and other applications.

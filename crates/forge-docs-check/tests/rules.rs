@@ -310,6 +310,34 @@ fn cli_doc_flags_stale_region_and_passes_when_current() {
     );
 }
 
+#[test]
+fn slug_prefix_flags_root_slug_and_passes_under_docs() {
+    // Docs are served under /docs/, so a page slug must start with `docs/`.
+    let fx = Fixture::new();
+    fx.write(
+        "site/src/content/docs/crates/forge.md",
+        "---\ntitle: forge\nslug: crates/forge\n---\n# forge\n",
+    );
+    let ws = fx.discover();
+    assert!(
+        any_contains(&checks::slug_prefix::check(&ws), "crates/forge"),
+        "a root-level slug must be flagged: {:?}",
+        messages(&checks::slug_prefix::check(&ws))
+    );
+
+    // Same page mounted under docs/ passes.
+    fx.write(
+        "site/src/content/docs/crates/forge.md",
+        "---\ntitle: forge\nslug: docs/crates/forge\n---\n# forge\n",
+    );
+    let ws = fx.discover();
+    assert!(
+        checks::slug_prefix::check(&ws).is_empty(),
+        "a docs/-prefixed slug must pass: {:?}",
+        messages(&checks::slug_prefix::check(&ws))
+    );
+}
+
 /// Sanity: discovery distinguishes extension crates and maps page stems.
 #[test]
 fn discovery_classifies_crates() {

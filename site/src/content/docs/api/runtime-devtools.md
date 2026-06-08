@@ -1,7 +1,7 @@
 ---
 title: "runtime:devtools"
 description: "Browser DevTools control for debugging Forge WebView windows"
-slug: api/runtime-devtools
+slug: docs/api/runtime-devtools
 ---
 
 Browser DevTools control extension for Forge applications. Open, close, and check the state of DevTools panels for WebView windows, enabling programmatic control over the debugging experience.

@@ -1,7 +1,7 @@
 ---
 title: "ext_fs"
 description: "Filesystem operations for Forge applications"
-slug: crates/ext-fs
+slug: docs/crates/ext-fs
 ---
 
 # Filesystem Operations
@@ -532,4 +532,4 @@ const path = ".\\data\\config.json";
 - [ext_path](./ext-path.md) - Path manipulation utilities
 - [ext_storage](./ext-storage.md) - Persistent key-value storage
 - [ext_process](./ext-process.md) - Child process management
-- [Permissions Guide](/guides/permissions) - Configuring app permissions
+- [Permissions Guide](/docs/internals) - Configuring app permissions

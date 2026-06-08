@@ -1,7 +1,7 @@
 ---
 title: "wasm-forge-example"
 description: WebAssembly integration with compile, instantiate, and memory operations
-slug: examples/wasm-forge-example
+slug: docs/examples/wasm-forge-example
 ---
 
 A demonstration of WebAssembly integration in Forge applications.

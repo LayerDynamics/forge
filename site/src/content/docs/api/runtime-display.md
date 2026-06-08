@@ -1,7 +1,7 @@
 ---
 title: "runtime:display"
 description: "Display and monitor information for Forge applications"
-slug: api/runtime-display
+slug: docs/api/runtime-display
 ---
 
 Display and monitor information for Forge applications. Provides monitor enumeration, cursor position tracking, and display change event subscriptions.

@@ -1,7 +1,7 @@
 ---
 title: "runtime:log"
 description: "Structured logging for Forge applications with host and browser output"
-slug: api/runtime-log
+slug: docs/api/runtime-log
 ---
 
 Structured logging for Forge applications with dual output capabilities. Log to the host terminal via the Rust tracing system and/or forward logs to browser DevTools via IPC.

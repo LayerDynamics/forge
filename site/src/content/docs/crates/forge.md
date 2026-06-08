@@ -1,7 +1,7 @@
 ---
 title: "forge"
 description: Command-line interface for scaffolding, building, and bundling Forge apps.
-slug: crates/forge
+slug: docs/crates/forge
 ---
 
 The `forge` CLI (crate name `forge_cli`, binary `forge`, path `crates/forge_cli`) is the command-line interface for Forge. It provides commands for creating, developing, building, and distributing Forge applications.

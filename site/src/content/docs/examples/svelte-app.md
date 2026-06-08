@@ -1,7 +1,7 @@
 ---
 title: "svelte-app"
 description: Secure vault application with SvelteKit, encryption, and file storage
-slug: examples/svelte-app
+slug: docs/examples/svelte-app
 ---
 
 A comprehensive secure vault application demonstrating advanced Forge capabilities with SvelteKit frontend.

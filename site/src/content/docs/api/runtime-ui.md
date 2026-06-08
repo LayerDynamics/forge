@@ -1,12 +1,12 @@
 ---
 title: "runtime:ui (Deprecated)"
 description: This module has been consolidated into runtime:window.
-slug: api/runtime-ui
+slug: docs/api/runtime-ui
 ---
 
-> **⚠️ Deprecated**: The `runtime:ui` module has been consolidated into [`runtime:window`](/api/runtime-window). All functionality documented below is now available through `runtime:window`.
+> **⚠️ Deprecated**: The `runtime:ui` module has been consolidated into [`runtime:window`](/docs/api/runtime-window). All functionality documented below is now available through `runtime:window`.
 
-Please use [`runtime:window`](/api/runtime-window) for window operations, dialogs, menus, and system tray functionality. For inter-process communication, see [`runtime:ipc`](/api/runtime-ipc).
+Please use [`runtime:window`](/docs/api/runtime-window) for window operations, dialogs, menus, and system tray functionality. For inter-process communication, see [`runtime:ipc`](/docs/api/runtime-ipc).
 
 ---
 
@@ -34,7 +34,7 @@ The APIs remain largely the same, with some namespace changes:
 
 ## Legacy Documentation
 
-The following documents the legacy `runtime:ui` API for reference. **Use [`runtime:window`](/api/runtime-window) for new code.**
+The following documents the legacy `runtime:ui` API for reference. **Use [`runtime:window`](/docs/api/runtime-window) for new code.**
 
 ## Basic Window Operations
 

@@ -1,7 +1,7 @@
 ---
 title: "todo-app"
 description: Todo list demonstrating file persistence with runtime:fs
-slug: examples/todo-app
+slug: docs/examples/todo-app
 ---
 
 A todo list application demonstrating file system persistence and IPC patterns.

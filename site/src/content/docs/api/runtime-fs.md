@@ -1,7 +1,7 @@
 ---
 title: "runtime:fs"
 description: File system operations with capability-based access control.
-slug: api/runtime-fs
+slug: docs/api/runtime-fs
 ---
 
 The `runtime:fs` module provides file system operations with capability-based access control.

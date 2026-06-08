@@ -1,7 +1,7 @@
 ---
 title: "system-monitor"
 description: System monitor demonstrating multi-window, tray icons, and process APIs
-slug: examples/system-monitor
+slug: docs/examples/system-monitor
 ---
 
 A system resource monitor demonstrating advanced Forge capabilities.

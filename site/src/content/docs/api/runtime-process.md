@@ -1,7 +1,7 @@
 ---
 title: "runtime:process"
 description: Child process spawning and management capabilities.
-slug: api/runtime-process
+slug: docs/api/runtime-process
 ---
 
 The `runtime:process` module provides child process spawning and management capabilities.

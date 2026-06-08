@@ -1,7 +1,7 @@
 ---
 title: "runtime:crypto"
 description: Cryptographic operations including random generation, hashing, HMAC, and symmetric encryption.
-slug: api/runtime-crypto
+slug: docs/api/runtime-crypto
 ---
 
 The `runtime:crypto` module provides cryptographic operations for Forge applications, powered by the [ring](https://github.com/briansmith/ring) cryptography library.

@@ -1,7 +1,7 @@
 ---
 title: "text-editor"
 description: Text editor demonstrating file dialogs, clipboard, and context menus
-slug: examples/text-editor
+slug: docs/examples/text-editor
 ---
 
 A simple text editor demonstrating file operations and UI integration.

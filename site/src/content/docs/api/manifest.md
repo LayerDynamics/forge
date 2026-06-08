@@ -1,7 +1,7 @@
 ---
 title: Manifest Reference
 description: The manifest.app.toml file defines your Forge application's metadata, defaults, bundle settings, and permissions.
-slug: api/manifest
+slug: docs/api/manifest
 ---
 
 The manifest file defines your Forge application's metadata, default window configuration, bundling options, and permissions (capabilities).

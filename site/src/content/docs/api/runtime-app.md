@@ -1,7 +1,7 @@
 ---
 title: "runtime:app"
 description: Application lifecycle management, metadata, and system integration for Forge applications.
-slug: api/runtime-app
+slug: docs/api/runtime-app
 ---
 
 The `runtime:app` module provides application lifecycle management, metadata access, and system integration capabilities for Forge applications.

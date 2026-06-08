@@ -1,7 +1,7 @@
 ---
 title: "forge-runtime"
 description: Main runtime binary that embeds Deno and manages windows.
-slug: crates/forge-runtime
+slug: docs/crates/forge-runtime
 ---
 
 The `forge-runtime` crate is the main runtime executable that runs Forge applications. It embeds the Deno runtime and manages native windows, IPC, and system integration.

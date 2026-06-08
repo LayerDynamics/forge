@@ -1,7 +1,7 @@
 ---
 title: "ext_window"
 description: Advanced window management extension providing the runtime:window module.
-slug: crates/ext-window
+slug: docs/crates/ext-window
 ---
 
 The `ext_window` crate provides comprehensive window management for Forge applications through the `runtime:window` module. It offers full control over windows, dialogs, menus, and system tray.

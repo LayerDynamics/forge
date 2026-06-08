@@ -1,7 +1,7 @@
 ---
 title: "ext_display"
 description: Display and monitor information extension providing the runtime:display module.
-slug: crates/ext-display
+slug: docs/crates/ext-display
 ---
 
 The `ext_display` crate provides display and monitor information for Forge applications through the `runtime:display` module.

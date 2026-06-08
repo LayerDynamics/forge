@@ -1,12 +1,12 @@
 ---
 title: Architecture
 description: An overview of Forge's architecture and how its components interact.
-slug: architecture
+slug: docs/architecture
 ---
 
 This document provides an overview of Forge's architecture, explaining how the runtime works and how components interact.
 
-> **For Contributors:** See the [Implementation Reference](/internals) for detailed file paths and line numbers.
+> **For Contributors:** See the [Implementation Reference](/docs/internals) for detailed file paths and line numbers.
 
 ## Overview
 

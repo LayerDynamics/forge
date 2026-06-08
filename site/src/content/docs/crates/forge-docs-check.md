@@ -1,7 +1,7 @@
 ---
 title: "forge-docs-check"
 description: "Forge Docs Check - fails the build when the documentation site drifts from the code"
-slug: crates/forge-docs-check
+slug: docs/crates/forge-docs-check
 ---
 
 # forge-docs-check

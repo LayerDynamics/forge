@@ -1,7 +1,7 @@
 ---
 title: "ext_debugger"
 description: V8 Inspector Protocol debugging extension providing the runtime:debugger module.
-slug: crates/ext-debugger
+slug: docs/crates/ext-debugger
 ---
 
 The `ext_debugger` crate provides comprehensive debugging capabilities for Forge applications through the `runtime:debugger` module, implementing a complete Chrome DevTools Protocol (CDP) client for V8 runtime introspection.

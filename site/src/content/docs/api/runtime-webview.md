@@ -1,7 +1,7 @@
 ---
 title: "runtime:webview"
 description: "Lightweight WebView creation and management for Forge applications"
-slug: api/runtime-webview
+slug: docs/api/runtime-webview
 ---
 
 Lightweight WebView creation and management extension for Forge applications. Provides a streamlined interface for creating and controlling WebView windows without requiring direct window management.
