@@ -36,6 +36,19 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      # The `v8` crate's build script downloads a large prebuilt static lib from
+      # GitHub releases into ~/.cargo/.rusty_v8 (NOT covered by the cargo cache
+      # above). That download intermittently 504s and fails the job. Cache it
+      # separately with a prefix restore-key so the binary survives Cargo.lock
+      # changes (the v8 version rarely moves) and is fetched at most once.
+      - name: Cache rusty_v8 prebuilt
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/.rusty_v8/
+          key: ${{ runner.os }}-rusty_v8-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rusty_v8-
+
       - name: Run cargo check
         run: cargo check --workspace
 
@@ -62,6 +75,15 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      # See the check job: cache the v8 prebuilt to dodge GitHub-releases 504s.
+      - name: Cache rusty_v8 prebuilt
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/.rusty_v8/
+          key: ${{ runner.os }}-rusty_v8-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rusty_v8-
 
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
@@ -112,6 +134,15 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.lock') }}
+
+      # See the check job: cache the v8 prebuilt to dodge GitHub-releases 504s.
+      - name: Cache rusty_v8 prebuilt
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/.rusty_v8/
+          key: ${{ runner.os }}-rusty_v8-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rusty_v8-
 
       - name: Run clippy
         run: cargo clippy --workspace -- -D warnings

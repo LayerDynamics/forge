@@ -250,9 +250,29 @@ fn counts_marker_is_authoritative() {
 fn cli_command_flags_missing_subcommand() {
     let mut fx = Fixture::new();
     fx.add_crate("forge_cli");
+    // The clap command model is the source of truth (post-P5.2 migration).
+    // Includes doc comments, attributes, and a struct variant with nested
+    // braces to exercise the brace-matching parser.
     fx.write(
         "crates/forge_cli/src/main.rs",
-        "fn usage() { eprintln!(\"forge <dev|build|smelt> [options]\"); }\n",
+        r#"#[derive(Subcommand)]
+enum Commands {
+    /// Run an app
+    Dev {
+        app_dir: PathBuf,
+    },
+    /// Build assets
+    Build {
+        app_dir: PathBuf,
+    },
+    /// AOT compile
+    Smelt {
+        app_dir: PathBuf,
+        #[arg(long, short)]
+        out: Option<PathBuf>,
+    },
+}
+"#,
     );
     // forge.md documents dev and build but not smelt.
     fx.write(
