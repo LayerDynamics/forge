@@ -52,6 +52,14 @@ fn main() -> Result<ExitCode> {
         return Ok(ExitCode::SUCCESS);
     }
 
+    // `--write-cli`: regenerate the `<!-- forge:cli -->` CLI reference in
+    // crates/forge.md from the forge_cli clap model, then exit.
+    if std::env::args().any(|a| a == "--write-cli") {
+        let written = forge_docs_check::clidoc::write_all(&ws)?;
+        report_written("CLI reference", &written, &ws.root);
+        return Ok(ExitCode::SUCCESS);
+    }
+
     let report = run_all_checks(&ws);
 
     println!("{}", report.render());
