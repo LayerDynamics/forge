@@ -824,7 +824,7 @@ onError("verify", (error) => {
 
 ```typescript
 import { configure, check, formatBytes } from "runtime:updater";
-import { showDialog } from "runtime:ui";
+import { dialog } from "runtime:window";
 
 async function checkForUpdatesOnStartup() {
   try {
@@ -835,15 +835,14 @@ async function checkForUpdatesOnStartup() {
 
     const update = await check();
     if (update) {
-      const response = await showDialog({
-        type: "question",
+      const button = await dialog.message({
+        kind: "info",
         title: "Update Available",
-        message: `Version ${update.version} is available. Would you like to download it?`,
-        detail: update.release_notes || `Download size: ${formatBytes(update.size_bytes)}`,
+        message: `Version ${update.version} is available (${formatBytes(update.size_bytes)}). Would you like to download it?`,
         buttons: ["Download", "Later"],
       });
 
-      if (response.button === 0) {
+      if (button === 0) {
         // User clicked "Download"
         openUpdateWindow();
       }
