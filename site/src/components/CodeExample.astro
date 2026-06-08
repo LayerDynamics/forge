@@ -1,10 +1,10 @@
 ---
 const mainTsCode = `<span class="comment">// Your app's entry point</span>
-<span class="keyword">import</span> &#123; openWindow, windowEvents &#125; <span class="keyword">from</span> <span class="string">"runtime:ui"</span>;
+<span class="keyword">import</span> &#123; createWindow, windowEvents &#125; <span class="keyword">from</span> <span class="string">"runtime:window"</span>;
 <span class="keyword">import</span> &#123; readTextFile &#125; <span class="keyword">from</span> <span class="string">"runtime:fs"</span>;
 
 <span class="comment">// Open a window with native WebView</span>
-<span class="keyword">const</span> win = <span class="keyword">await</span> openWindow(&#123;
+<span class="keyword">const</span> win = <span class="keyword">await</span> createWindow(&#123;
   url: <span class="string">"app://index.html"</span>,
   title: <span class="string">"My Forge App"</span>,
   width: <span class="number">900</span>,
@@ -64,8 +64,8 @@ const indexHtmlCode = `<span class="tag">&lt;script&gt;</span>
     <div class="host-modules">
       <h3>Host Modules</h3>
       <div class="modules-grid">
-        <a href="/docs/api/runtime-ui/" class="module-badge">
-          <code>runtime:ui</code>
+        <a href="/docs/api/runtime-window/" class="module-badge">
+          <code>runtime:window</code>
           <span>Windows, Dialogs, Menus</span>
         </a>
         <a href="/docs/api/runtime-fs/" class="module-badge">
