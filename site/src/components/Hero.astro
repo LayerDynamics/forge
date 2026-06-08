@@ -17,6 +17,8 @@
   </nav>
 
   <div class="hero-content">
+    <img src="/forge-mark.png" alt="Forge" class="hero-logo" width="120" height="120" />
+
     <div class="badge">
       <span class="badge-icon">🍩</span>
       <span>Steel Donut Release - v1.0.0p</span>
@@ -125,6 +127,21 @@
     text-align: center;
     position: relative;
     z-index: 10;
+  }
+
+  .hero-logo {
+    width: 120px;
+    height: 120px;
+    margin-bottom: 1.75rem;
+    border-radius: 28px;
+    filter: drop-shadow(0 10px 40px rgba(237, 137, 54, 0.4));
+  }
+
+  @media (max-width: 640px) {
+    .hero-logo {
+      width: 96px;
+      height: 96px;
+    }
   }
 
   .badge {
